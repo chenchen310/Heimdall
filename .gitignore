@@ -1,0 +1,43 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+.Python
+*.egg-info/
+.eggs/
+
+# --- uv / virtualenv ---
+.venv/
+# uv.lock IS committed on purpose (reproducible installs) — do not ignore it.
+
+# --- Tooling caches ---
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Secrets / config ---
+.env
+.env.*
+!.env.example
+
+# --- Local data & caches (regenerable; never commit market data) ---
+# Convention: all fetched data lives under data/ and is gitignored.
+data/
+*.duckdb
+*.duckdb.wal
+*.parquet
+*.sqlite
+*.sqlite3
+.cache/
+requests_cache.sqlite
+
+# --- Reports / generated artifacts ---
+reports/
+*.html
+!docs/**/*.html
+
+# --- OS / editor ---
+.DS_Store
+.idea/
+.vscode/
