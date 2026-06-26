@@ -28,6 +28,7 @@ when you add paid data sources or the optional AI report layer.
 ## Documentation
 
 - [CLAUDE.md](CLAUDE.md) — architecture overview, commands, and conventions (start here)
+- [docs/功能說明.md](docs/功能說明.md) — 繁體中文使用者功能總覽（逐一說明每個分頁怎麼用）
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — canonical schema, `DataProvider` contract, storage, caching
 - [docs/ROADMAP.md](docs/ROADMAP.md) — phased build plan (Phase 0 → 6)
 - [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) — data-vendor ladder, budget thresholds, Taiwan (FinMind)
