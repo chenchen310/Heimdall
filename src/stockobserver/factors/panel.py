@@ -18,8 +18,8 @@ from typing import cast
 import pandas as pd
 
 from stockobserver.data.base import DataProvider
+from stockobserver.factors.metrics import snapshot_row
 from stockobserver.factors.scoring import factor_scores
-from stockobserver.screener.snapshot import snapshot_row
 
 
 @dataclass(frozen=True)

@@ -11,7 +11,7 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from stockobserver.screener.snapshot import _latest_annual, _revenue_growth_yoy
+from stockobserver.factors.metrics import _latest_annual, _revenue_growth_yoy
 
 
 def _fundamentals() -> pd.DataFrame:
