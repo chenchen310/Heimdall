@@ -47,9 +47,7 @@ def parse_symbol(symbol: str) -> Symbol:
     schema violations loudly rather than guessing a market.
     """
     if "." not in symbol:
-        raise SymbolError(
-            f"{symbol!r} is not canonical; expected TICKER.MARKET (e.g. AAPL.US)"
-        )
+        raise SymbolError(f"{symbol!r} is not canonical; expected TICKER.MARKET (e.g. AAPL.US)")
     ticker, _, market = symbol.rpartition(".")
     ticker, market = ticker.strip().upper(), market.strip().upper()
     if not ticker:

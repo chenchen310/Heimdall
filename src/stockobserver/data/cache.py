@@ -65,9 +65,7 @@ def _write(path: Path, df: pd.DataFrame) -> None:
     df.to_parquet(path, index=False)
 
 
-def _missing_ranges(
-    cached: pd.DataFrame, start: date, end: date
-) -> list[tuple[date, date]]:
+def _missing_ranges(cached: pd.DataFrame, start: date, end: date) -> list[tuple[date, date]]:
     """Head/tail gaps in ``[start, end]`` not already covered by ``cached``.
 
     Assumes the cache is contiguous between its min and max date (true for EOD

@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from stockobserver.factors.indicators import sma
+from stockobserver.factors.indicators import macd, rsi, sma
 
-__all__ = ["sma"]
+__all__ = ["sma", "rsi", "macd"]

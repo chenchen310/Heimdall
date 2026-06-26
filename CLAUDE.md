@@ -2,10 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Status:** Phase 0 complete — the data layer (canonical schema, `DataProvider` ABC, yfinance
-> provider, DuckDB/Parquet delta cache) and one honest end-to-end backtest are implemented and tested
-> (`uv run python -m stockobserver.backtest.demo`). Next is **Phase 1** (fundamentals/macro providers,
-> snapshot table, screener, Streamlit UI) — see `docs/ROADMAP.md`. The UI is not built yet.
+> **Status:** Phase 1 complete. On top of Phase 0 (data layer + honest backtest), the project now has
+> SEC EDGAR (point-in-time fundamentals) + FRED (macro) providers, the **snapshot table**, the
+> declarative `{field, op, value}` **screener** (saved screens in SQLite), and a **Streamlit UI**
+> (screener + candlestick/RSI/MACD chart pages). Build a snapshot, then run the app (see commands).
+> Next is **Phase 2** (single-strategy backtest UI) — see `docs/ROADMAP.md`.
 
 ## What this is
 
@@ -31,10 +32,13 @@ uv sync --all-extras
 # Install a single feature area instead (extras: data, backtest, analytics, ui, personas)
 uv sync --extra data --extra ui
 
-# Run the Phase 0 vertical-slice backtest (writes a quantstats tear sheet to reports/)
+# Phase 0 vertical-slice backtest (writes a quantstats tear sheet to reports/)
 uv run python -m stockobserver.backtest.demo
 uv run python -m stockobserver.backtest.demo --symbol MSFT.US --fast 20 --slow 50
-uv run streamlit run src/stockobserver/ui/app.py   # (Phase 1+, not built yet)
+
+# Phase 1: build the screener snapshot (set SEC_EDGAR_USER_AGENT in .env first), then run the UI
+uv run python -m stockobserver.screener.build
+uv run streamlit run src/stockobserver/ui/app.py   # screener + chart pages
 
 # Tests
 uv run pytest                                # whole suite

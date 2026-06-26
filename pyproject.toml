@@ -98,9 +98,17 @@ module = [
     "pandas_ta.*",
     "fredapi.*",
     "duckdb.*",
+    "streamlit.*",
+    "plotly.*",
 ]
 ignore_missing_imports = true
 follow_imports = "skip"
+
+# UI is a thin Streamlit shell over typed core modules; Streamlit's decorators are
+# untyped, so strict-checking it is noise. Logic lives in (type-checked) core.
+[[tool.mypy.overrides]]
+module = ["stockobserver.ui.*"]
+ignore_errors = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

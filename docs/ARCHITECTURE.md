@@ -33,18 +33,24 @@ lets us swap data vendors and add Taiwan without rewrites.
 Store **raw** prices immutably; expose an **adjusted** view for backtests. Never overwrite raw history
 with re-adjusted numbers.
 
-### Canonical fundamentals (point-in-time)
+### Canonical fundamentals (point-in-time, **tidy long** — one metric value per row)
 
 | column          | type   | notes                                                            |
 | --------------- | ------ | ---------------------------------------------------------------- |
 | `symbol`        | str    | canonical                                                        |
-| `statement`     | enum   | `income` / `balance` / `cashflow` / `ratios`                     |
-| `period`        | enum   | `annual` / `quarter` / `ttm`                                     |
+| `metric`        | str    | canonical metric name (`revenue`, `net_income`, `equity`, …)     |
+| `statement`     | enum   | `income` / `balance` / `cashflow`                                |
+| `period`        | enum   | `annual` / `quarter`                                             |
 | `fiscal_end`    | date   | end of the fiscal period                                         |
 | `filed_at`      | date   | **availability/filing date — this is what prevents look-ahead**  |
+| `value`         | float  | metric value in `currency` (or shares for share counts)          |
 | `currency`      | str    | reporting currency                                               |
-| `line_items`    | mapping| canonical metric name → value                                    |
 | `provider`      | str    | source tag                                                       |
+| `fetched_at`    | date   | retrieval time (provenance)                                      |
+
+Tidy-long (vs a `line_items` mapping) so the snapshot builder and DuckDB can filter/aggregate metrics
+directly. "Latest" means the **max `fiscal_end`** among rows with `filed_at ≤ as_of` (a 10-K reports
+several comparative years under one filing date).
 
 > **Critical:** strategies and factors must key off `filed_at`, never `fiscal_end`. A Q2 result that
 > ends June but is filed in August is not knowable in July. See `.claude/rules/data-discipline.md`.

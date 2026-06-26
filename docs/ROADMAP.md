@@ -24,15 +24,23 @@ De-risk the whole vertical slice before building breadth.
 **Done:** `uv run python -m stockobserver.backtest.demo` produces a tear sheet; 15 tests pass,
 mypy/ruff clean. Deferred to Phase 1: `data/state.py` (SQLite app state) — not needed by the slice.
 
-## Phase 1 — Data layer + basic screener (MVP UI)  ← **NEXT**
+## Phase 1 — Data layer + basic screener (MVP UI)  ✅ **DONE**
 
-- Add `SecEdgarProvider` (point-in-time fundamentals) + `FredProvider` (macro).
-- Build the **snapshot table** and the declarative `{field,op,value}` screener over US large/mid caps.
-- Streamlit: screener page (filter builder + results table) + per-stock chart page (Plotly
-  candlestick + MA/RSI/MACD).
-- **Done when:** you can screen US stocks by fundamental + technical criteria in the browser.
+- [x] `SecEdgarProvider` (point-in-time fundamentals, golden-tested) + `FredProvider` (macro, sibling
+  `MacroProvider`). `data/state.py` (SQLite) added for saved screens.
+- [x] **Snapshot table** (`screener/snapshot.py`, `screener.build`) — point-in-time fundamentals
+  (max fiscal-end filed ≤ as-of) + technicals + derived ratios; one row per symbol.
+- [x] Declarative `{field, op, value}` **screener** (`screener/model.py`, `engine.py`) with saved
+  screens; RSI/MACD added to `factors/indicators.py`.
+- [x] **Streamlit UI** (`ui/`): screener page (editable predicates, presets, save/load) + chart page
+  (Plotly candlestick + SMA/RSI/MACD). Headless-tested via `AppTest`.
 
-## Phase 2 — Single-strategy backtesting
+**Done:** build a snapshot then screen/chart in the browser; 34 tests pass, mypy/ruff clean.
+Known limits (Phase 3+): multi-class share counts (e.g. META) and a few alternate XBRL equity tags
+resolve to NaN and are simply excluded; TTM/quarterly fundamentals and a survivorship-aware universe
+are deferred.
+
+## Phase 2 — Single-strategy backtesting  ← **NEXT**
 
 - `vectorbt` engine wrapping common strategies (MA crossover, breakout, RSI mean-reversion) with
   costs/slippage; parameter-sweep UI; entry/stop/target/risk-reward viz (Morgan Stanley setup);

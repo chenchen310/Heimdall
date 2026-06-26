@@ -51,3 +51,15 @@ class DataProvider(ABC):
 
     def get_earnings_dates(self, symbol: str) -> pd.DataFrame:
         raise NotSupported(f"{self.name} does not serve earnings dates")
+
+
+class MacroProvider(ABC):
+    """Macro time-series source (e.g. FRED). Series are not symbol-keyed, so this
+    is a sibling of :class:`DataProvider` rather than one of its methods.
+    """
+
+    @abstractmethod
+    def get_series(
+        self, series_id: str, start: date | None = None, end: date | None = None
+    ) -> pd.DataFrame:
+        """Return a canonical macro series: columns ``[series_id, date, value]``."""

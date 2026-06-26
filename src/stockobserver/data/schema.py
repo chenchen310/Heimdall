@@ -26,6 +26,26 @@ OHLCV_COLUMNS: list[str] = [
 
 PRICE_COLUMNS: list[str] = ["open", "high", "low", "close", "adj_close"]
 
+# --- Canonical fundamentals (tidy long: one metric value per row) -----------
+# Point-in-time: every row carries ``filed_at`` (when the value became knowable);
+# downstream code keys off it, never ``fiscal_end``. See data-discipline.md.
+FUNDAMENTALS_COLUMNS: list[str] = [
+    "symbol",  # canonical TICKER.MARKET
+    "metric",  # canonical metric name (e.g. "revenue", "net_income")
+    "statement",  # income / balance / cashflow
+    "period",  # annual / quarter
+    "fiscal_end",  # end of the fiscal period
+    "filed_at",  # SEC filing/availability date — the point-in-time key
+    "value",  # numeric value in `currency` (or shares for share counts)
+    "currency",  # reporting currency
+    "provider",  # source tag (provenance)
+    "fetched_at",  # retrieval time (provenance)
+]
+
+
+# --- Canonical macro series (FRED etc.) -------------------------------------
+MACRO_COLUMNS: list[str] = ["series_id", "date", "value"]
+
 
 class SchemaError(ValueError):
     """Raised when a DataFrame does not conform to a canonical schema."""
@@ -55,3 +75,19 @@ def validate_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     if out["date"].duplicated().any():
         raise SchemaError("OHLCV contains duplicate dates for one symbol")
     return out
+
+
+def validate_fundamentals(df: pd.DataFrame) -> pd.DataFrame:
+    """Validate a canonical tidy-long fundamentals frame.
+
+    The load-bearing check is that every row carries ``filed_at`` — without it
+    a value has no knowable-as-of date and cannot be used point-in-time.
+    """
+    missing = [c for c in FUNDAMENTALS_COLUMNS if c not in df.columns]
+    if missing:
+        raise SchemaError(f"fundamentals frame missing columns: {missing}")
+    if df.empty:
+        return df
+    if df["filed_at"].isna().any():
+        raise SchemaError("fundamentals rows must all carry filed_at (point-in-time)")
+    return df.sort_values(["metric", "filed_at"]).reset_index(drop=True)
