@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import pandas as pd
 import pytest
 
 from stockobserver.data.base import NotSupported
 from stockobserver.data.providers.fmp import (
     FmpProvider,
+    _normalize_earnings,
     _normalize_fundamentals,
     _normalize_ohlcv,
 )
-from stockobserver.data.schema import FUNDAMENTALS_COLUMNS, OHLCV_COLUMNS
+from stockobserver.data.schema import EARNINGS_COLUMNS, FUNDAMENTALS_COLUMNS, OHLCV_COLUMNS
 from stockobserver.data.symbols import Symbol
 
 _STATEMENTS = {
@@ -88,6 +90,31 @@ def test_normalize_ohlcv_sorted_and_adjusted() -> None:
     assert df["date"].is_monotonic_increasing
     assert df.iloc[0]["adj_close"] == 9.4
     assert df["symbol"].unique().tolist() == ["X.US"]
+
+
+def test_normalize_earnings() -> None:
+    raw = [
+        {
+            "date": "2024-11-01",
+            "eps": None,
+            "epsEstimated": 1.3,
+            "revenue": None,
+            "revenueEstimated": 120,
+        },
+        {
+            "date": "2024-08-01",
+            "eps": 1.1,
+            "epsEstimated": 1.2,
+            "revenue": 108,
+            "revenueEstimated": 110,
+        },
+    ]
+    df = _normalize_earnings(raw, Symbol("X", "US"))
+    assert list(df.columns) == EARNINGS_COLUMNS
+    assert df["symbol"].unique().tolist() == ["X.US"]
+    # FMP leaves eps null for not-yet-reported dates → flagged future
+    assert bool(df.loc[df["date"] == pd.Timestamp("2024-11-01"), "is_future"].iloc[0]) is True
+    assert bool(df.loc[df["date"] == pd.Timestamp("2024-08-01"), "is_future"].iloc[0]) is False
 
 
 def test_provider_requires_key(monkeypatch: pytest.MonkeyPatch) -> None:

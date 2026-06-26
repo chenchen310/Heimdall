@@ -8,7 +8,12 @@ import pandas as pd
 import streamlit as st
 
 from stockobserver.data.cache import CachedProvider
-from stockobserver.data.providers import SecEdgarProvider, YFinanceProvider
+from stockobserver.data.providers import (
+    FmpProvider,
+    FredProvider,
+    SecEdgarProvider,
+    YFinanceProvider,
+)
 from stockobserver.screener.snapshot import load_snapshot
 
 
@@ -20,6 +25,16 @@ def price_provider() -> CachedProvider:
 @st.cache_resource
 def fundamentals_provider() -> SecEdgarProvider:
     return SecEdgarProvider()
+
+
+@st.cache_resource
+def macro_provider() -> FredProvider:
+    return FredProvider()
+
+
+@st.cache_resource
+def fmp_provider() -> FmpProvider:
+    return FmpProvider()
 
 
 @st.cache_data(ttl=3600, show_spinner=False)

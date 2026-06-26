@@ -46,6 +46,17 @@ FUNDAMENTALS_COLUMNS: list[str] = [
 # --- Canonical macro series (FRED etc.) -------------------------------------
 MACRO_COLUMNS: list[str] = ["series_id", "date", "value"]
 
+# --- Canonical earnings calendar (estimates vs actuals; paid sources) -------
+EARNINGS_COLUMNS: list[str] = [
+    "symbol",
+    "date",
+    "eps_actual",
+    "eps_estimate",
+    "revenue_actual",
+    "revenue_estimate",
+    "is_future",
+]
+
 
 class SchemaError(ValueError):
     """Raised when a DataFrame does not conform to a canonical schema."""

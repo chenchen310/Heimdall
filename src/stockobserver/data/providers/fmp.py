@@ -19,6 +19,7 @@ import requests
 
 from stockobserver.data.base import DataProvider, NotSupported, ProviderError
 from stockobserver.data.schema import (
+    EARNINGS_COLUMNS,
     FUNDAMENTALS_COLUMNS,
     OHLCV_COLUMNS,
     validate_fundamentals,
@@ -107,7 +108,7 @@ class FmpProvider(DataProvider):
     def get_earnings_dates(self, symbol: str) -> pd.DataFrame:
         sym = parse_symbol(symbol)
         raw = self._get(f"historical/earning_calendar/{sym.ticker}")
-        return pd.DataFrame(raw)
+        return _normalize_earnings(raw, sym)
 
 
 def _filed_at(row: dict[str, Any]) -> Any:
@@ -177,6 +178,26 @@ def _normalize_ohlcv(raw: dict[str, Any], sym: Symbol) -> pd.DataFrame:
         if col not in df.columns:
             df[col] = float("nan")
     return validate_ohlcv(df[OHLCV_COLUMNS])
+
+
+def _normalize_earnings(raw: list[dict[str, Any]], sym: Symbol) -> pd.DataFrame:
+    """FMP ``earning_calendar`` → canonical earnings frame (pure). FMP leaves
+    ``eps`` null for not-yet-reported dates, which marks the future rows."""
+    if not raw:
+        return pd.DataFrame(columns=EARNINGS_COLUMNS)
+    df = pd.DataFrame(raw)
+    out = pd.DataFrame(
+        {
+            "symbol": sym.canonical,
+            "date": pd.to_datetime(df["date"]),
+            "eps_actual": df.get("eps"),
+            "eps_estimate": df.get("epsEstimated"),
+            "revenue_actual": df.get("revenue"),
+            "revenue_estimate": df.get("revenueEstimated"),
+        }
+    )
+    out["is_future"] = out["eps_actual"].isna()
+    return out[EARNINGS_COLUMNS]
 
 
 __all__ = ["FmpProvider"]
