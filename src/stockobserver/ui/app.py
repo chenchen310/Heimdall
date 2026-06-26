@@ -15,8 +15,13 @@ st.set_page_config(page_title="Stock Observer", page_icon="📉", layout="wide")
 from stockobserver.ui import (  # noqa: E402  (after set_page_config)
     backtest_page,
     chart_page,
+    earnings_page,
+    etf_page,
     factors_page,
     fundamental_page,
+    macro_page,
+    risk_page,
+    rotation_page,
     screener_page,
     technical_page,
 )
@@ -26,8 +31,13 @@ PAGES = {
     "Chart": chart_page.render,
     "Fundamental": fundamental_page.render,
     "Technical": technical_page.render,
+    "Risk": risk_page.render,
+    "Earnings": earnings_page.render,
     "Backtest": backtest_page.render,
     "Factors": factors_page.render,
+    "Macro": macro_page.render,
+    "Rotation": rotation_page.render,
+    "ETF Portfolio": etf_page.render,
 }
 
 st.sidebar.title("📉 Stock Observer")

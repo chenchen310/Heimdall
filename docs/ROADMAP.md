@@ -83,17 +83,24 @@ historical index constituents) needs a paid source and is still deferred.
 AI-written report button; 67 tests pass, mypy/ruff clean. (FMP/AI paths are gated and unit-tested via
 golden fixtures / a mock client — no live key needed.)
 
-## Phase 5 — Risk, macro & sector rotation  ← **NEXT**
+## Phase 5 — Risk, macro & sector rotation  ✅ **DONE**
 
-- Bridgewater risk memo (vol, Beta, max drawdown, VaR/CVaR via `riskfolio-lib`/`quantstats`,
-  correlations, recession stress test, hedging).
-- JPM earnings module (consensus vs whisper, KPIs, options-implied vol, earnings trade plans).
-- Two Sigma macro outlook (FRED indicators, Fed policy, breadth, sentiment).
-- Citadel sector rotation (relative-strength 1/3/6m, ETF recs, offense/defense).
-- Vanguard ETF construction (`PyPortfolioOpt`).
-- **Done when:** the full persona set works for US.
+- [x] Bridgewater **risk** (`analytics/risk.py`): annualized vol, Beta + correlation vs benchmark,
+  max drawdown, historical VaR/CVaR, downside vol, Sharpe, ATR-style recession stress, liquidity.
+- [x] Citadel sector **rotation** (`analytics/rotation.py`): 1/3/6-month relative-strength ranking
+  across the 11 SPDR sector ETFs, offense/defense tilt, leaders/laggards. Free data.
+- [x] Vanguard **ETF construction** (`analytics/portfolio_opt.py`): max-Sharpe / min-volatility via
+  PyPortfolioOpt (HRP skipped pending a PyPortfolioOpt/scipy fix).
+- [x] Two Sigma **macro** (`analytics/macro.py`): key FRED indicators, signals, regime read —
+  gated on `FRED_API_KEY`, degrades gracefully.
+- [x] JPM **earnings** (`analytics/earnings.py` + canonical earnings schema): beat rate, surprise
+  history, next-quarter consensus — gated on `FMP_API_KEY` (estimates are paid data).
+- [x] 5 UI pages + 5 persona templates; UI now has 11 pages.
 
-## Phase 6 — Taiwan market support
+**Done:** the full 8-persona set works for US; 78 tests pass, mypy/ruff clean. Risk/rotation/ETF run
+on free data; macro/earnings are key-gated and unit-tested via mocks/golden fixtures.
+
+## Phase 6 — Taiwan market support  ← **NEXT**
 
 Cheap because of the Phase 0 design: one `FinMindProvider` mapped to canonical, `.TW/.TWO` router
 entry, TWD handling, TW-specific data (institutional flows, margin balances, monthly revenue).
