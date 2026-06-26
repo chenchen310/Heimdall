@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from stockobserver.factors.indicators import atr, macd, rsi, sma
+from stockobserver.factors.indicators import atr, bollinger, macd, rsi, sma
 
 
 def _close() -> pd.Series:
@@ -37,3 +37,9 @@ def test_atr_named_and_nonnegative() -> None:
     out = atr(c + 1.0, c - 1.0, c, 14)
     assert out.name == "atr_14"
     assert (out.dropna() >= 0).all()
+
+
+def test_bollinger_bands_ordered() -> None:
+    upper, mid, lower = bollinger(_close(), 20)
+    valid = upper.notna()
+    assert (upper[valid] >= mid[valid]).all() and (mid[valid] >= lower[valid]).all()

@@ -16,12 +16,16 @@ from stockobserver.ui import (  # noqa: E402  (after set_page_config)
     backtest_page,
     chart_page,
     factors_page,
+    fundamental_page,
     screener_page,
+    technical_page,
 )
 
 PAGES = {
     "Screener": screener_page.render,
     "Chart": chart_page.render,
+    "Fundamental": fundamental_page.render,
+    "Technical": technical_page.render,
     "Backtest": backtest_page.render,
     "Factors": factors_page.render,
 }

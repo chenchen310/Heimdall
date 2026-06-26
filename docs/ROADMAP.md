@@ -67,16 +67,23 @@ pass, mypy/ruff clean. **Caveat:** over a *current* universe results carry survi
 surfaced as an optimistic-upper-bound warning. A true survivorship-free universe (delisted names /
 historical index constituents) needs a paid source and is still deferred.
 
-## Phase 4 — Fundamental & technical dashboards  ← **NEXT**
+## Phase 4 — Fundamental & technical dashboards  ✅ **DONE**
 
-- Swap in **FMP Premium** as primary provider (drop-in `DataProvider`).
-- Goldman fundamental dashboard (rating/target, revenue structure, profitability, balance sheet, FCF,
-  moat, valuation snapshot, bull/bear, scenarios).
-- Full Morgan Stanley technical dashboard (S/R, Fibonacci, ATR, Bollinger, patterns, trade setups).
-- **(Optional, parallel) AI report layer** can start here: `personas/` renders computed payloads
-  through the Claude API.
+- [x] **FMP** drop-in provider (`data/providers/fmp.py`) — normalizes to the same canonical schema as
+  EDGAR; gated on `FMP_API_KEY`, golden-tested. (Dashboards run on free EDGAR by default.)
+- [x] Goldman **fundamental dashboard** (`analytics/fundamental.py`, `ui/fundamental_page.py`):
+  rating box, revenue/margin history, FCF, valuation snapshot, bull/bear, PE-band scenarios.
+- [x] Morgan Stanley **technical dashboard** (`analytics/technical.py`, `ui/technical_page.py`):
+  trend, S/R, Fibonacci, ATR, Bollinger, MA cross, trade-setup plan + chart.
+- [x] **Optional AI-report layer** (`personas/`): Claude API client (`claude-opus-4-8`), Goldman +
+  Morgan Stanley prompt templates, `render_report`. Decoupled (core never imports it) and gated on
+  `ANTHROPIC_API_KEY` + the `personas` extra; the UI degrades gracefully without them.
 
-## Phase 5 — Risk, macro & sector rotation
+**Done:** rich per-stock fundamental & technical dashboards in the browser, with an optional
+AI-written report button; 67 tests pass, mypy/ruff clean. (FMP/AI paths are gated and unit-tested via
+golden fixtures / a mock client — no live key needed.)
+
+## Phase 5 — Risk, macro & sector rotation  ← **NEXT**
 
 - Bridgewater risk memo (vol, Beta, max drawdown, VaR/CVaR via `riskfolio-lib`/`quantstats`,
   correlations, recession stress test, hedging).

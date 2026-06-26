@@ -2,13 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Status:** Phase 3 complete. Adds the **multi-factor** layer (RenTech lens): value/quality/
-> momentum/growth scoring with cross-sectional 0–100 composites, a point-in-time factor **panel**,
-> IC + quantile **validation**, and a `bt` **portfolio backtest** (top-N vs equal-weight benchmark,
-> honest costs) — on a Streamlit **Factors page** (ranking + portfolio backtest). Portfolio results
-> over a *current* universe carry **survivorship bias** (flagged as optimistic upper bounds). UI now
-> has Screener / Chart / Backtest / Factors pages. Next is **Phase 4** (fundamental & technical
-> dashboards; optional AI reports) — see `docs/ROADMAP.md`.
+> **Status:** Phase 4 complete. Adds computed **dashboards** — Goldman fundamental (rating box,
+> revenue/margin history, bull/bear, scenarios) and Morgan Stanley technical (trading-plan box, S/R,
+> Fibonacci, ATR/Bollinger, trade setup) in `analytics/` — plus the **optional, decoupled AI-report
+> layer** (`personas/`, Claude API via the `personas` extra, gated on `ANTHROPIC_API_KEY`) and the
+> **FMP** drop-in provider (gated on `FMP_API_KEY`, normalizes to the same canonical schema). UI now
+> has 6 pages (Screener / Chart / Fundamental / Technical / Backtest / Factors). Next is **Phase 5**
+> (risk, macro, earnings, sector rotation, ETF construction) — see `docs/ROADMAP.md`.
 
 ## What this is
 

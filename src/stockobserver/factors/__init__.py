@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from stockobserver.factors.indicators import atr, macd, rsi, sma
+from stockobserver.factors.indicators import atr, bollinger, macd, rsi, sma
 from stockobserver.factors.panel import PanelData, build_panel
 from stockobserver.factors.scoring import (
     DEFAULT_WEIGHTS,
@@ -21,6 +21,7 @@ __all__ = [
     "rsi",
     "macd",
     "atr",
+    "bollinger",
     "factor_scores",
     "FACTORS",
     "FACTOR_NAMES",

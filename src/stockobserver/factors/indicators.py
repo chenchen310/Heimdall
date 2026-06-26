@@ -35,6 +35,17 @@ def rsi(close: pd.Series, length: int = 14) -> pd.Series:
     return cast("pd.Series", out)
 
 
+def bollinger(
+    close: pd.Series, length: int = 20, mult: float = 2.0
+) -> tuple[pd.Series, pd.Series, pd.Series]:
+    """Bollinger Bands as ``(upper, mid, lower)`` (mid = SMA)."""
+    mid = sma(close, length)
+    std = close.rolling(length).std()
+    upper = (mid + mult * std).rename(f"bb_upper_{length}")
+    lower = (mid - mult * std).rename(f"bb_lower_{length}")
+    return upper, mid.rename(f"bb_mid_{length}"), lower
+
+
 def atr(high: pd.Series, low: pd.Series, close: pd.Series, length: int = 14) -> pd.Series:
     """Average True Range — volatility, used for stop placement in trade setups."""
     out = ta.atr(high=high, low=low, close=close, length=length)
