@@ -77,7 +77,51 @@ def _technicals(ohlcv: pd.DataFrame) -> dict[str, float]:
         "rsi_14": float(rsi(close, 14).iloc[-1]),
         "ret_3m": ret(63),
         "ret_6m": ret(126),
+        "ret_12m": ret(252),
         "pct_above_sma_200": _safe_div(price, float(s200)) - 1.0,
+    }
+
+
+def snapshot_row(
+    symbol: str, ohlcv: pd.DataFrame, fund: pd.DataFrame, as_of: date
+) -> dict[str, object]:
+    """One snapshot row: technicals (from ``ohlcv``) + point-in-time fundamentals.
+
+    Reused by both the cross-section builder and the historical factor panel, so
+    the metrics are computed identically in both places.
+    """
+    f = _latest_annual(fund, as_of)
+    tech = _technicals(ohlcv)
+    revenue, net_income = f.get("revenue", float("nan")), f.get("net_income", float("nan"))
+    equity = f.get("equity", float("nan"))
+    shares = f.get("shares_outstanding", float("nan"))
+    fcf = f.get("cfo", float("nan")) - f.get("capex", float("nan"))
+    market_cap = tech["price"] * shares if pd.notna(shares) else float("nan")
+
+    return {
+        "symbol": symbol,
+        "as_of": pd.Timestamp(as_of),
+        "currency": "USD",
+        **tech,
+        "market_cap": market_cap,
+        "revenue": revenue,
+        "net_income": net_income,
+        "eps_diluted": f.get("eps_diluted", float("nan")),
+        "equity": equity,
+        "shares_outstanding": shares,
+        "fcf": fcf,
+        "pe": _safe_div(market_cap, net_income) if net_income > 0 else float("nan"),
+        "ps": _safe_div(market_cap, revenue),
+        "fcf_yield": _safe_div(fcf, market_cap),
+        "net_margin": _safe_div(net_income, revenue),
+        "gross_margin": _safe_div(f.get("gross_profit", float("nan")), revenue),
+        "operating_margin": _safe_div(f.get("operating_income", float("nan")), revenue),
+        "roe": _safe_div(net_income, equity),
+        "debt_to_equity": _safe_div(f.get("liabilities", float("nan")), equity),
+        "revenue_growth_yoy": _revenue_growth_yoy(fund, as_of),
+        "fundamentals_asof": fund.loc[fund["filed_at"] <= pd.Timestamp(as_of), "filed_at"].max()
+        if not fund.empty
+        else pd.NaT,
     }
 
 
@@ -97,44 +141,7 @@ def build_snapshot(
         if ohlcv.empty:
             continue
         fund = fundamentals.get_fundamentals(symbol, "all", "annual")
-        f = _latest_annual(fund, as_of)
-        tech = _technicals(ohlcv)
-
-        revenue, net_income = f.get("revenue", float("nan")), f.get("net_income", float("nan"))
-        equity = f.get("equity", float("nan"))
-        shares = f.get("shares_outstanding", float("nan"))
-        fcf = f.get("cfo", float("nan")) - f.get("capex", float("nan"))
-        market_cap = tech["price"] * shares if pd.notna(shares) else float("nan")
-
-        rows.append(
-            {
-                "symbol": symbol,
-                "as_of": pd.Timestamp(as_of),
-                "currency": "USD",
-                **tech,
-                "market_cap": market_cap,
-                "revenue": revenue,
-                "net_income": net_income,
-                "eps_diluted": f.get("eps_diluted", float("nan")),
-                "equity": equity,
-                "shares_outstanding": shares,
-                "fcf": fcf,
-                "pe": _safe_div(market_cap, net_income) if net_income > 0 else float("nan"),
-                "ps": _safe_div(market_cap, revenue),
-                "fcf_yield": _safe_div(fcf, market_cap),
-                "net_margin": _safe_div(net_income, revenue),
-                "gross_margin": _safe_div(f.get("gross_profit", float("nan")), revenue),
-                "operating_margin": _safe_div(f.get("operating_income", float("nan")), revenue),
-                "roe": _safe_div(net_income, equity),
-                "debt_to_equity": _safe_div(f.get("liabilities", float("nan")), equity),
-                "revenue_growth_yoy": _revenue_growth_yoy(fund, as_of),
-                "fundamentals_asof": fund.loc[
-                    fund["filed_at"] <= pd.Timestamp(as_of), "filed_at"
-                ].max()
-                if not fund.empty
-                else pd.NaT,
-            }
-        )
+        rows.append(snapshot_row(symbol, ohlcv, fund, as_of))
 
     return pd.DataFrame(rows)
 

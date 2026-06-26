@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from stockobserver.backtest.costs import DEFAULT_COSTS, ZERO_COSTS, Costs
 from stockobserver.backtest.engine import run_backtest
+from stockobserver.backtest.portfolio import PortfolioResult, backtest_portfolio
 from stockobserver.backtest.report import (
     drawdown_series,
     equity_curve,
@@ -24,6 +25,8 @@ __all__ = [
     "Strategy",
     "Param",
     "sweep",
+    "backtest_portfolio",
+    "PortfolioResult",
     "trade_setup",
     "TradeSetup",
     "equity_curve",

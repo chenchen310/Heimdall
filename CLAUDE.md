@@ -2,12 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Status:** Phase 2 complete. On top of Phase 0–1, there is now a **single-strategy backtest UI**:
-> three strategies (SMA crossover, Donchian breakout, RSI mean-reversion) behind a registry, a
-> parameter **sweep** (heatmap), an ATR **trade setup** (entry/stop/targets/R:R), headline metrics +
-> equity/drawdown charts, and a downloadable quantstats tear sheet — all cost-aware, next-bar-open
-> fills. `uv run streamlit run src/stockobserver/ui/app.py` → Screener / Chart / Backtest pages.
-> Next is **Phase 3** (multi-factor scoring + portfolio backtesting) — see `docs/ROADMAP.md`.
+> **Status:** Phase 3 complete. Adds the **multi-factor** layer (RenTech lens): value/quality/
+> momentum/growth scoring with cross-sectional 0–100 composites, a point-in-time factor **panel**,
+> IC + quantile **validation**, and a `bt` **portfolio backtest** (top-N vs equal-weight benchmark,
+> honest costs) — on a Streamlit **Factors page** (ranking + portfolio backtest). Portfolio results
+> over a *current* universe carry **survivorship bias** (flagged as optimistic upper bounds). UI now
+> has Screener / Chart / Backtest / Factors pages. Next is **Phase 4** (fundamental & technical
+> dashboards; optional AI reports) — see `docs/ROADMAP.md`.
 
 ## What this is
 

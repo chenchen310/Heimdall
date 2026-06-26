@@ -15,6 +15,7 @@ st.set_page_config(page_title="Stock Observer", page_icon="📉", layout="wide")
 from stockobserver.ui import (  # noqa: E402  (after set_page_config)
     backtest_page,
     chart_page,
+    factors_page,
     screener_page,
 )
 
@@ -22,6 +23,7 @@ PAGES = {
     "Screener": screener_page.render,
     "Chart": chart_page.render,
     "Backtest": backtest_page.render,
+    "Factors": factors_page.render,
 }
 
 st.sidebar.title("📉 Stock Observer")

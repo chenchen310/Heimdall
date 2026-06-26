@@ -100,6 +100,8 @@ module = [
     "duckdb.*",
     "streamlit.*",
     "plotly.*",
+    "bt.*",
+    "alphalens.*",
 ]
 ignore_missing_imports = true
 follow_imports = "skip"

@@ -52,18 +52,22 @@ are deferred.
 **Done:** any single entry/exit strategy is validated with realistic costs in the browser; 44 tests
 pass, mypy/ruff clean. (TTM fundamentals & survivorship-aware universes still deferred to Phase 3.)
 
-## Phase 3 — Multi-factor scoring + portfolio backtesting  ← **NEXT**
+## Phase 3 — Multi-factor scoring + portfolio backtesting  ✅ **DONE**
 
-## Phase 3 — Multi-factor scoring + portfolio backtesting
+- [x] value/quality/momentum/growth scoring (`factors/scoring.py`): cross-sectional z-score →
+  0–100 composite with configurable weights. (Sentiment deferred — needs analyst data from FMP.)
+- [x] Point-in-time factor **panel** (`factors/panel.py`) reusing `screener.snapshot_row`; rank **IC**
+  + quantile spread (`factors/validate.py`), with an optional `alphalens-reloaded` path.
+- [x] `bt` **portfolio backtester** (`backtest/portfolio.py`): top-N by composite, periodic
+  rebalance, commissions, vs an equal-weight benchmark; **Factors** UI page (`ui/factors_page.py`).
+- [x] Honesty: selection uses only data filed/observed ≤ the rebalance date.
 
-- Compute value/quality/momentum/growth/sentiment; cross-sectional normalization → 0–100 composite.
-- `alphalens-reloaded` factor validation; `bt` portfolio backtester with periodic rebalancing (CAGR,
-  max drawdown, Sharpe); top-N ranking (RenTech persona).
-- **This is where survivorship / point-in-time bias matters most** — see `.claude/rules/`.
-- **Done when:** factor-weighted portfolios report honest long-term stats over a survivorship-aware
-  universe.
+**Done:** factor portfolios report long-term stats (CAGR/maxDD/Sharpe) against a benchmark; 56 tests
+pass, mypy/ruff clean. **Caveat:** over a *current* universe results carry survivorship bias —
+surfaced as an optimistic-upper-bound warning. A true survivorship-free universe (delisted names /
+historical index constituents) needs a paid source and is still deferred.
 
-## Phase 4 — Fundamental & technical dashboards
+## Phase 4 — Fundamental & technical dashboards  ← **NEXT**
 
 - Swap in **FMP Premium** as primary provider (drop-in `DataProvider`).
 - Goldman fundamental dashboard (rating/target, revenue structure, profitability, balance sheet, FCF,
