@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from stockobserver.factors.indicators import macd, rsi, sma
+from stockobserver.factors.indicators import atr, macd, rsi, sma
 
 
 def _close() -> pd.Series:
@@ -30,3 +30,10 @@ def test_macd_returns_three_aligned_series() -> None:
     line, signal, hist = macd(_close())
     assert (line.name, signal.name, hist.name) == ("macd", "macd_signal", "macd_hist")
     assert len(line) == len(signal) == len(hist) == 300
+
+
+def test_atr_named_and_nonnegative() -> None:
+    c = _close()
+    out = atr(c + 1.0, c - 1.0, c, 14)
+    assert out.name == "atr_14"
+    assert (out.dropna() >= 0).all()

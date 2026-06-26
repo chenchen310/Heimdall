@@ -40,12 +40,19 @@ Known limits (Phase 3+): multi-class share counts (e.g. META) and a few alternat
 resolve to NaN and are simply excluded; TTM/quarterly fundamentals and a survivorship-aware universe
 are deferred.
 
-## Phase 2 — Single-strategy backtesting  ← **NEXT**
+## Phase 2 — Single-strategy backtesting  ✅ **DONE**
 
-- `vectorbt` engine wrapping common strategies (MA crossover, breakout, RSI mean-reversion) with
-  costs/slippage; parameter-sweep UI; entry/stop/target/risk-reward viz (Morgan Stanley setup);
-  quantstats output.
-- **Done when:** any single entry/exit strategy can be validated with realistic costs.
+- [x] Strategy registry (`backtest/strategies.py`) over the `vectorbt` engine: SMA crossover,
+  Donchian breakout, RSI mean-reversion — all cost-aware, next-bar-open fills.
+- [x] Parameter **sweep** (`backtest/sweep.py`) → heatmap; invalid combos yield NaN, not errors.
+- [x] ATR **trade setup** (`backtest/setup.py`): entry/stop/targets/R:R (Morgan Stanley lens).
+- [x] Metrics + equity/drawdown (`backtest/report.py`) and a downloadable quantstats tear sheet,
+  surfaced on the Streamlit **Backtest page** (`ui/backtest_page.py`).
+
+**Done:** any single entry/exit strategy is validated with realistic costs in the browser; 44 tests
+pass, mypy/ruff clean. (TTM fundamentals & survivorship-aware universes still deferred to Phase 3.)
+
+## Phase 3 — Multi-factor scoring + portfolio backtesting  ← **NEXT**
 
 ## Phase 3 — Multi-factor scoring + portfolio backtesting
 

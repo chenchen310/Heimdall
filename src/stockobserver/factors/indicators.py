@@ -35,6 +35,15 @@ def rsi(close: pd.Series, length: int = 14) -> pd.Series:
     return cast("pd.Series", out)
 
 
+def atr(high: pd.Series, low: pd.Series, close: pd.Series, length: int = 14) -> pd.Series:
+    """Average True Range — volatility, used for stop placement in trade setups."""
+    out = ta.atr(high=high, low=low, close=close, length=length)
+    if out is None:
+        out = _empty(close.index, f"atr_{length}")
+    out.name = f"atr_{length}"
+    return cast("pd.Series", out)
+
+
 def macd(
     close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9
 ) -> tuple[pd.Series, pd.Series, pd.Series]:

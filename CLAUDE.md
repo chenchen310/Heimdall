@@ -2,11 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Status:** Phase 1 complete. On top of Phase 0 (data layer + honest backtest), the project now has
-> SEC EDGAR (point-in-time fundamentals) + FRED (macro) providers, the **snapshot table**, the
-> declarative `{field, op, value}` **screener** (saved screens in SQLite), and a **Streamlit UI**
-> (screener + candlestick/RSI/MACD chart pages). Build a snapshot, then run the app (see commands).
-> Next is **Phase 2** (single-strategy backtest UI) — see `docs/ROADMAP.md`.
+> **Status:** Phase 2 complete. On top of Phase 0–1, there is now a **single-strategy backtest UI**:
+> three strategies (SMA crossover, Donchian breakout, RSI mean-reversion) behind a registry, a
+> parameter **sweep** (heatmap), an ATR **trade setup** (entry/stop/targets/R:R), headline metrics +
+> equity/drawdown charts, and a downloadable quantstats tear sheet — all cost-aware, next-bar-open
+> fills. `uv run streamlit run src/stockobserver/ui/app.py` → Screener / Chart / Backtest pages.
+> Next is **Phase 3** (multi-factor scoring + portfolio backtesting) — see `docs/ROADMAP.md`.
 
 ## What this is
 
