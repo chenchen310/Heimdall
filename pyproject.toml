@@ -59,6 +59,7 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.5",
     "mypy>=1.10",
+    "pandas-stubs>=2.2",
     "pre-commit>=3.7",
 ]
 
@@ -85,6 +86,21 @@ python_version = "3.12"
 packages = ["stockobserver"]
 strict = true
 plugins = ["pydantic.mypy"]
+
+# Genuinely untyped third-party libs — treat as Any (don't follow their source,
+# so strict mode doesn't flag their untyped calls). pandas/numpy are typed
+# (numpy ships py.typed; pandas via the pandas-stubs dev dep).
+[[tool.mypy.overrides]]
+module = [
+    "yfinance.*",
+    "vectorbt.*",
+    "quantstats.*",
+    "pandas_ta.*",
+    "fredapi.*",
+    "duckdb.*",
+]
+ignore_missing_imports = true
+follow_imports = "skip"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -22,8 +22,8 @@ htmlcov/
 !.env.example
 
 # --- Local data & caches (regenerable; never commit market data) ---
-# Convention: all fetched data lives under data/ and is gitignored.
-data/
+# Root-anchored so it ignores the top-level cache dir, NOT src/stockobserver/data/.
+/data/
 *.duckdb
 *.duckdb.wal
 *.parquet
@@ -33,7 +33,7 @@ data/
 requests_cache.sqlite
 
 # --- Reports / generated artifacts ---
-reports/
+/reports/
 *.html
 !docs/**/*.html
 

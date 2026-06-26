@@ -2,9 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Status:** Scaffolding only. The architecture, conventions, and commands below are the agreed
-> design; implementation begins at **Phase 0** (see `docs/ROADMAP.md`). Commands that require source
-> code are marked _(Phase 0+)_.
+> **Status:** Phase 0 complete — the data layer (canonical schema, `DataProvider` ABC, yfinance
+> provider, DuckDB/Parquet delta cache) and one honest end-to-end backtest are implemented and tested
+> (`uv run python -m stockobserver.backtest.demo`). Next is **Phase 1** (fundamentals/macro providers,
+> snapshot table, screener, Streamlit UI) — see `docs/ROADMAP.md`. The UI is not built yet.
 
 ## What this is
 
@@ -30,9 +31,10 @@ uv sync --all-extras
 # Install a single feature area instead (extras: data, backtest, analytics, ui, personas)
 uv sync --extra data --extra ui
 
-# Run anything inside the project env
-uv run python -m stockobserver ...          # (Phase 0+)
-uv run streamlit run src/stockobserver/ui/app.py   # (Phase 1+)
+# Run the Phase 0 vertical-slice backtest (writes a quantstats tear sheet to reports/)
+uv run python -m stockobserver.backtest.demo
+uv run python -m stockobserver.backtest.demo --symbol MSFT.US --fast 20 --slow 50
+uv run streamlit run src/stockobserver/ui/app.py   # (Phase 1+, not built yet)
 
 # Tests
 uv run pytest                                # whole suite

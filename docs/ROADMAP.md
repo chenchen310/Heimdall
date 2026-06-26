@@ -9,21 +9,22 @@ honesty** — not the UI. They are de-risked first, on purpose.
 
 ---
 
-## Phase 0 — Foundation + one honest backtest  ← **NEXT**
+## Phase 0 — Foundation + one honest backtest  ✅ **DONE**
 
 De-risk the whole vertical slice before building breadth.
 
-- `uv` env on Python 3.12; pre-commit, ruff, mypy, pytest wired.
-- `DataProvider` ABC + canonical schema + `TICKER.MARKET` router (`src/stockobserver/data/`).
-- `YFinanceProvider` + DuckDB/Parquet **delta cache** (`CachedProvider`).
-- **Vertical slice:** pull `AAPL.US` → SMA(20/50) crossover with `pandas-ta` → backtest in `vectorbt`
-  **with commissions + slippage, next-bar fills** → `quantstats` tear sheet.
-- One **known-answer** backtest test to lock down look-ahead behavior.
+- [x] `uv` env on Python 3.12; pre-commit, ruff, mypy (strict), pytest wired.
+- [x] `DataProvider` ABC + canonical schema + `TICKER.MARKET` router (`src/stockobserver/data/`).
+- [x] `YFinanceProvider` + DuckDB/Parquet **delta cache** (`CachedProvider`).
+- [x] **Vertical slice:** pull `AAPL.US` → SMA(20/50) crossover with `pandas-ta` → backtest in
+  `vectorbt` **with commissions + slippage, next-bar-open fills** → `quantstats` tear sheet
+  (`src/stockobserver/backtest/demo.py`).
+- [x] **Known-answer** backtest test locking down look-ahead (`tests/test_backtest_known_answer.py`).
 
-**Done when:** `uv run python -m stockobserver.backtest.demo` produces a tear sheet and the
-known-answer test passes.
+**Done:** `uv run python -m stockobserver.backtest.demo` produces a tear sheet; 15 tests pass,
+mypy/ruff clean. Deferred to Phase 1: `data/state.py` (SQLite app state) — not needed by the slice.
 
-## Phase 1 — Data layer + basic screener (MVP UI)
+## Phase 1 — Data layer + basic screener (MVP UI)  ← **NEXT**
 
 - Add `SecEdgarProvider` (point-in-time fundamentals) + `FredProvider` (macro).
 - Build the **snapshot table** and the declarative `{field,op,value}` screener over US large/mid caps.
