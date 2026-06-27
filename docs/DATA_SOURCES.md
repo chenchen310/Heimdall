@@ -30,12 +30,23 @@ Decision reference for which vendor feeds what, and when to pay. All vendors are
 factor data, and Vanguard ETF modules. The ~$88/mo FMP Premium + Polygon Starter combo covers
 essentially every persona for US.
 
-## Taiwan (Phase 6)
+## Taiwan (Phase 6) ✅ implemented
+
+`FinMindProvider` (`data/providers/finmind.py`) serves the `.TW`/`.TWO` markets; the market router
+(`data/router.py`) sends Taiwan fundamentals there while US stays on EDGAR. Prices route to yfinance
+for both markets (it returns **adjusted** TW closes, which matters for honest backtests).
 
 - **FinMind** — recommended TW source. Open-source, 75+ datasets (TWSE+TPEX prices, financials, cash
-  flow, **monthly revenue**, institutional flows, margin data). Free 300 req/hr (600 registered);
-  paid Backer ≈ US$14/mo, Sponsor ≈ US$31/mo unlock adjusted prices/real-time/bulk. Python SDK
-  (`FinMind.data.DataLoader`).
+  flow, **monthly revenue**, institutional flows, margin data). We call the v4 REST API directly
+  (`api/v4/data`) — no SDK dependency. **Works anonymously** at a low hourly quota; set
+  `FINMIND_TOKEN` for a higher limit and fuller financial-statement history (the free tier skips some
+  year-end balance sheets, so ROE/leverage can be NaN for older years).
+- **Two cadence traps** handled in the provider (and pinned by `tests/test_finmind.py`): the income
+  statement is **standalone-quarterly** (annual = sum of 4 quarters) while the cash-flow statement is
+  **cumulative YTD** (annual = year-end value, never summed); the balance sheet is point-in-time
+  (year-end). FinMind carries no filing date, so `filed_at` is synthesized as fiscal-end + ~90 days
+  (TW annual-report deadline) to stay point-in-time. FinMind's free prices are **unadjusted**, hence
+  the yfinance price routing above.
 - **EODHD `.TW`** — works if already subscribed; **verify TPEX (OTC) + TW fundamentals depth before
   relying on it.**
 - **TWSE/TPEX OpenAPI** — free, authoritative, but raw (Big5 encoding quirks).

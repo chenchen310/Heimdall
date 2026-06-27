@@ -9,21 +9,25 @@ technical (Morgan Stanley), risk (Bridgewater), earnings (JPM), sector rotation 
 multi-factor (RenTech), ETF portfolio (Vanguard), and macro (Two Sigma). Each is a **computed
 dashboard**; an AI-written narrative report on top is an **optional** add-on.
 
-> **Status: scaffolding.** This repo currently contains the architecture, docs, and project skeleton.
-> No engine is implemented yet. Implementation starts at Phase 0 — see [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status: Phases 0–6 complete.** All 8 persona dashboards work for the **US** market, and **Taiwan**
+> (`.TW`/`.TWO`) is live via FinMind behind a market router. 11 Streamlit pages; an English / 繁體中文
+> toggle; ~88 tests, mypy strict, ruff clean. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
-## Quickstart (once Phase 0 lands)
+## Quickstart
 
 Requires [`uv`](https://docs.astral.sh/uv/). Python 3.12 is pinned and provisioned by uv.
 
 ```bash
-uv sync --all-extras          # set up the environment
-uv run pytest                 # run tests
-uv run streamlit run src/heimdall/ui/app.py   # launch the app (Phase 1+)
+uv sync --all-extras                              # set up the environment
+uv run pytest                                     # run tests
+uv run python -m heimdall.screener.build          # build the US screener snapshot
+uv run python -m heimdall.screener.build --market tw   # …or a Taiwan snapshot
+uv run streamlit run src/heimdall/ui/app.py       # launch the app
 ```
 
-No API keys are needed to start (yfinance + SEC EDGAR + FRED are free). Copy `.env.example` to `.env`
-when you add paid data sources or the optional AI report layer.
+No API keys are needed to start — yfinance (US + TW prices), SEC EDGAR (US fundamentals), FRED
+(macro), and FinMind (Taiwan) are all free. Copy `.env.example` to `.env` for higher quotas
+(`FINMIND_TOKEN`), paid sources (`FMP_API_KEY`), or the optional AI report layer (`ANTHROPIC_API_KEY`).
 
 ## Documentation
 

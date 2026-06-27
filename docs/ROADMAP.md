@@ -100,11 +100,26 @@ golden fixtures / a mock client — no live key needed.)
 **Done:** the full 8-persona set works for US; 78 tests pass, mypy/ruff clean. Risk/rotation/ETF run
 on free data; macro/earnings are key-gated and unit-tested via mocks/golden fixtures.
 
-## Phase 6 — Taiwan market support  ← **NEXT**
+## Phase 6 — Taiwan market support  ✅ **DONE**
 
-Cheap because of the Phase 0 design: one `FinMindProvider` mapped to canonical, `.TW/.TWO` router
-entry, TWD handling, TW-specific data (institutional flows, margin balances, monthly revenue).
-Screener/backtester/dashboards work unchanged.
+Cheap because of the Phase 0 design — the canonical schema meant nothing downstream changed:
+
+- [x] `FinMindProvider` (`data/providers/finmind.py`) — TWSE `.TW` + TPEX `.TWO`, normalized to the
+  **same** canonical schema. Prices, annual fundamentals (aggregated from FinMind's quarterly feed —
+  income summed, cash flow taken year-end, balance point-in-time), and **monthly revenue (月營收)**.
+  Free/key-less by default; `FINMIND_TOKEN` raises the quota. Golden-tested (`tests/test_finmind.py`).
+- [x] **Market router** (`data/router.py`, `RoutingProvider`) — dispatches by the `TICKER.MARKET`
+  suffix: US fundamentals → EDGAR, Taiwan → FinMind; prices → yfinance for both (adjusted TW closes).
+- [x] **Point-in-time discipline:** FinMind has no filing date, so `filed_at` is synthesized as
+  fiscal-end + ~90 days (TW annual-report deadline); income/cash-flow cadence traps handled so annual
+  figures are correct.
+- [x] TWD carried throughout; a small TW universe (`TW_UNIVERSE`) + `screener.build --market tw`; the
+  Goldman fundamental dashboard works for Taiwan with an added monthly-revenue panel.
+
+**Done:** `2330.TW` charts, backtests, screens, and shows a full fundamental dashboard + monthly
+revenue; 88 tests pass, mypy/ruff clean. Adjusted TW prices come from yfinance (FinMind free prices
+are unadjusted); some older free-tier balance sheets are sparse (ROE/leverage NaN those years) —
+`FINMIND_TOKEN` fills them.
 
 ---
 

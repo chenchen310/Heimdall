@@ -36,6 +36,28 @@ DEFAULT_UNIVERSE: list[str] = [
     "CSCO.US",
 ]
 
+# Small liquid Taiwan universe (Phase 6) — TWSE large caps. Prices via yfinance,
+# fundamentals via FinMind (both keyed off the .TW market suffix by the router).
+TW_UNIVERSE: list[str] = [
+    "2330.TW",  # TSMC
+    "2317.TW",  # Hon Hai (Foxconn)
+    "2454.TW",  # MediaTek
+    "2308.TW",  # Delta Electronics
+    "2412.TW",  # Chunghwa Telecom
+    "2882.TW",  # Cathay Financial
+    "2881.TW",  # Fubon Financial
+    "2303.TW",  # UMC
+    "3008.TW",  # Largan Precision
+    "1301.TW",  # Formosa Plastics
+]
+
+# Named universes for the snapshot builder's --market flag.
+UNIVERSES: dict[str, list[str]] = {
+    "us": DEFAULT_UNIVERSE,
+    "tw": TW_UNIVERSE,
+    "all": DEFAULT_UNIVERSE + TW_UNIVERSE,
+}
+
 
 def build_snapshot(
     symbols: list[str],
