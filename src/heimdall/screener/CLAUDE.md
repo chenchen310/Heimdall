@@ -16,6 +16,9 @@ symbol per date, holding fundamental + technical + factor fields in canonical un
 model.py       # Predicate, Screen dataclasses/pydantic; operators
 engine.py      # evaluate(screen, snapshot) -> ranked DataFrame
 store.py       # save/load screens via data.state
+snapshot.py    # build the snapshot table (build_row is fault-tolerant per symbol)
+universe.py    # whole-market universes: VTI (~3.4k US) + all TWSE/TPEX (~2.1k TW), disk-cached
+build.py       # CLI: resumable, checkpointed snapshot build (--market us|tw|all|vti|tw-all)
 ```
 
 ## Notes
