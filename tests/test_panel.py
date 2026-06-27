@@ -7,9 +7,9 @@ from datetime import date
 import numpy as np
 import pandas as pd
 
-from stockobserver.data.base import DataProvider
-from stockobserver.data.schema import FUNDAMENTALS_COLUMNS, OHLCV_COLUMNS
-from stockobserver.factors.panel import build_panel
+from heimdall.data.base import DataProvider
+from heimdall.data.schema import FUNDAMENTALS_COLUMNS, OHLCV_COLUMNS
+from heimdall.factors.panel import build_panel
 
 _DATES = pd.bdate_range("2022-01-03", periods=300)
 _TRENDS = {"A.US": 0.002, "B.US": 0.0, "C.US": -0.001}  # up / flat / down

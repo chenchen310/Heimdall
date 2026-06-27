@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from stockobserver.analytics.fundamental import fundamental_report
+from heimdall.analytics.fundamental import fundamental_report
 
 # Two fiscal years; revenue grows 1000 -> 1200 (20% YoY).
 _YEARS = {

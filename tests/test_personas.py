@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from stockobserver.personas.client import PersonaError, generate
-from stockobserver.personas.render import render_report
+from heimdall.personas.client import PersonaError, generate
+from heimdall.personas.render import render_report
 
 
 class _Block:

@@ -1,4 +1,4 @@
-# Stock Observer
+# Heimdall
 
 A personal platform for **screening stocks, timing entries/exits, and backtesting strategies** —
 US-first, Taiwan-ready. Built as a Python monolith: a provider-agnostic data layer, a two-engine
@@ -19,7 +19,7 @@ Requires [`uv`](https://docs.astral.sh/uv/). Python 3.12 is pinned and provision
 ```bash
 uv sync --all-extras          # set up the environment
 uv run pytest                 # run tests
-uv run streamlit run src/stockobserver/ui/app.py   # launch the app (Phase 1+)
+uv run streamlit run src/heimdall/ui/app.py   # launch the app (Phase 1+)
 ```
 
 No API keys are needed to start (yfinance + SEC EDGAR + FRED are free). Copy `.env.example` to `.env`

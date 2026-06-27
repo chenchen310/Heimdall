@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from stockobserver.factors.indicators import atr, bollinger, macd, rsi, sma
+from heimdall.factors.indicators import atr, bollinger, macd, rsi, sma
 
 
 def _close() -> pd.Series:

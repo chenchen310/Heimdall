@@ -22,7 +22,7 @@ htmlcov/
 !.env.example
 
 # --- Local data & caches (regenerable; never commit market data) ---
-# Root-anchored so it ignores the top-level cache dir, NOT src/stockobserver/data/.
+# Root-anchored so it ignores the top-level cache dir, NOT src/heimdall/data/.
 /data/
 *.duckdb
 *.duckdb.wal

@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from stockobserver.analytics.rotation import sector_rotation
+from heimdall.analytics.rotation import sector_rotation
 
 
 def _ohlcv(drift: float, n: int = 160) -> pd.DataFrame:

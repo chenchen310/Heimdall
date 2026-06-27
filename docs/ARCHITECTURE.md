@@ -57,7 +57,7 @@ several comparative years under one filing date).
 
 ## 2. The `DataProvider` ABC
 
-`src/stockobserver/data/base.py` (Phase 0) defines the interface every source implements:
+`src/heimdall/data/base.py` (Phase 0) defines the interface every source implements:
 
 ```python
 class DataProvider(ABC):
@@ -139,7 +139,7 @@ portfolio backtester read the **same point-in-time** scores.
 
 ## 7. Optional persona / AI report layer
 
-`src/stockobserver/personas/` is the only module allowed to call an LLM, and **nothing in the core
+`src/heimdall/personas/` is the only module allowed to call an LLM, and **nothing in the core
 imports it**. Contract: a persona function receives a fully-computed payload (dict of the numbers its
 dashboard already shows) plus the persona prompt template, calls the Claude API, and returns text.
 The platform is fully usable with this module absent or `ANTHROPIC_API_KEY` unset. See the

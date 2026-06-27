@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from stockobserver.factors.validate import information_coefficient, quantile_spread
+from heimdall.factors.validate import information_coefficient, quantile_spread
 
 
 def _panel(sign: float) -> pd.DataFrame:

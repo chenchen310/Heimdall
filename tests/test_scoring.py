@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from stockobserver.factors.scoring import FACTOR_NAMES, factor_scores
+from heimdall.factors.scoring import FACTOR_NAMES, factor_scores
 
 
 def _cross() -> pd.DataFrame:

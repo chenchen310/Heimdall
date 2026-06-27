@@ -5,15 +5,15 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from stockobserver.data.base import NotSupported
-from stockobserver.data.providers.fmp import (
+from heimdall.data.base import NotSupported
+from heimdall.data.providers.fmp import (
     FmpProvider,
     _normalize_earnings,
     _normalize_fundamentals,
     _normalize_ohlcv,
 )
-from stockobserver.data.schema import EARNINGS_COLUMNS, FUNDAMENTALS_COLUMNS, OHLCV_COLUMNS
-from stockobserver.data.symbols import Symbol
+from heimdall.data.schema import EARNINGS_COLUMNS, FUNDAMENTALS_COLUMNS, OHLCV_COLUMNS
+from heimdall.data.symbols import Symbol
 
 _STATEMENTS = {
     "income": [
