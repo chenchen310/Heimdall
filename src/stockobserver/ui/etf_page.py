@@ -11,16 +11,17 @@ from stockobserver.analytics import optimize_portfolio, prices_wide
 from stockobserver.data.symbols import SymbolError, parse_symbol
 from stockobserver.ui._data import get_ohlcv
 from stockobserver.ui._personas import ai_report
+from stockobserver.ui.i18n import t
 
 
 def render() -> None:
-    st.header("🧺 ETF portfolio — Vanguard lens")
-    tickers = st.text_input("ETF basket (comma-separated)", "SPY.US,TLT.US,GLD.US,QQQ.US,VEA.US")
+    st.header(t("🧺 ETF portfolio — Vanguard lens"))
+    tickers = st.text_input(t("ETF basket (comma-separated)"), "SPY.US,TLT.US,GLD.US,QQQ.US,VEA.US")
     c1, c2 = st.columns(2)
-    method = c1.selectbox("Method", ["max_sharpe", "min_volatility"])
-    years = c2.slider("Years of history", 1, 10, 3)
+    method = c1.selectbox(t("Method"), ["max_sharpe", "min_volatility"])
+    years = c2.slider(t("Years of history"), 1, 10, 3)
 
-    if not st.button("Optimize"):
+    if not st.button(t("Optimize")):
         return
     symbols = [s.strip() for s in tickers.split(",") if s.strip()]
     try:
@@ -35,7 +36,7 @@ def render() -> None:
     with st.spinner("Fetching prices and optimizing…"):
         wide = prices_wide({s: get_ohlcv(s, start, end) for s in symbols})
         if wide.shape[1] < 2:
-            st.error("Need at least 2 ETFs with overlapping history.")
+            st.error(t("Need at least 2 ETFs with overlapping history."))
             return
         try:
             pw = optimize_portfolio(wide, method)
@@ -47,9 +48,9 @@ def render() -> None:
     cols[0].metric("Expected return", f"{pw.expected_return:.1%}")
     cols[1].metric("Volatility", f"{pw.volatility:.1%}")
     cols[2].metric("Sharpe", f"{pw.sharpe:.2f}")
-    st.subheader("Weights")
+    st.subheader(t("Weights"))
     st.bar_chart(pd.Series(pw.weights))
-    st.caption("History-optimized weights are noisy — a starting point, not gospel.")
+    st.caption(t("History-optimized weights are noisy — a starting point, not gospel."))
 
     payload = {
         "method": pw.method,

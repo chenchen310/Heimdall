@@ -25,6 +25,7 @@ from stockobserver.backtest.strategies import STRATEGIES, Param, Strategy
 from stockobserver.backtest.sweep import sweep
 from stockobserver.data.symbols import SymbolError, parse_symbol
 from stockobserver.ui._data import get_ohlcv
+from stockobserver.ui.i18n import t
 
 
 def _num(container: object, name: str, p: Param, key: str) -> float:
@@ -64,12 +65,12 @@ def _frange(p: Param, lo: float, hi: float, step: float) -> list[float]:
 
 
 def render() -> None:
-    st.header("🧪 Backtest")
+    st.header(t("🧪 Backtest"))
     c1, c2, c3 = st.columns([1, 1, 1])
-    symbol = c1.text_input("Symbol (TICKER.MARKET)", "AAPL.US")
-    years = c2.slider("Years of history", 1, 15, 8)
+    symbol = c1.text_input(t("Symbol (TICKER.MARKET)"), "AAPL.US")
+    years = c2.slider(t("Years of history"), 1, 15, 8)
     strat_key = c3.selectbox(
-        "Strategy", list(STRATEGIES), format_func=lambda k: STRATEGIES[k].label
+        t("Strategy"), list(STRATEGIES), format_func=lambda k: STRATEGIES[k].label
     )
     strat = STRATEGIES[strat_key]
 
@@ -79,17 +80,17 @@ def render() -> None:
         st.error(str(exc))
         return
 
-    st.caption("Parameters")
+    st.caption(t("Parameters"))
     params = _param_row(strat, "bt")
     cc1, cc2 = st.columns(2)
-    fee_bps = cc1.number_input("Commission (bps)", 0.0, 100.0, 10.0, step=1.0)
-    slip_bps = cc2.number_input("Slippage (bps)", 0.0, 100.0, 5.0, step=1.0)
+    fee_bps = cc1.number_input(t("Commission (bps)"), 0.0, 100.0, 10.0, step=1.0)
+    slip_bps = cc2.number_input(t("Slippage (bps)"), 0.0, 100.0, 5.0, step=1.0)
     costs = Costs(fees=fee_bps / 1e4, slippage=slip_bps / 1e4)
 
     end = date.today()
     ohlcv = get_ohlcv(symbol, end - timedelta(days=365 * years + 60), end)
     if ohlcv.empty:
-        st.warning(f"No price data for {symbol}.")
+        st.warning(t("No price data for {symbol}.").format(symbol=symbol))
         return
 
     try:
@@ -108,7 +109,7 @@ def render() -> None:
     cols[3].metric("Max drawdown", f"{m['max_drawdown']:.1%}")
     cols[4].metric("Win rate", f"{m['win_rate']:.0%}")
     cols[5].metric("Trades", f"{int(m['n_trades'])}")
-    st.caption("Costs and next-bar-open fills applied — treat as an optimistic upper bound.")
+    st.caption(t("Costs and next-bar-open fills applied — treat as an optimistic upper bound."))
 
     # --- equity + drawdown --------------------------------------------------
     eq, dd = equity_curve(pf), drawdown_series(pf)
@@ -135,8 +136,8 @@ def render() -> None:
 
 
 def _trade_setup_panel(ohlcv: object) -> None:
-    with st.expander("📐 Trade setup (ATR-based)"):
-        mult = st.slider("ATR stop multiple", 1.0, 5.0, 2.0, step=0.5)
+    with st.expander(t("📐 Trade setup (ATR-based)")):
+        mult = st.slider(t("ATR stop multiple"), 1.0, 5.0, 2.0, step=0.5)
         s = trade_setup(ohlcv, atr_mult=mult)  # type: ignore[arg-type]
         a, b, c, d = st.columns(4)
         a.metric("Entry", f"{s.entry:.2f}")
@@ -149,13 +150,13 @@ def _trade_setup_panel(ohlcv: object) -> None:
 def _sweep_panel(
     ohlcv: object, strat_key: str, strat: Strategy, params: dict[str, float], costs: Costs
 ) -> None:
-    with st.expander("🔬 Parameter sweep"):
+    with st.expander(t("🔬 Parameter sweep")):
         names = list(strat.params)
         chosen = st.multiselect(
-            "Sweep up to 2 parameters", names, default=names[:2], max_selections=2
+            t("Sweep up to 2 parameters"), names, default=names[:2], max_selections=2
         )
         metric = st.selectbox(
-            "Metric", ["sharpe", "total_return", "cagr", "max_drawdown", "n_trades"]
+            t("Metric"), ["sharpe", "total_return", "cagr", "max_drawdown", "n_trades"]
         )
         ranges: dict[str, list[float]] = {}
         for n in chosen:
@@ -167,7 +168,7 @@ def _sweep_panel(
             step = sc.number_input(f"{n} step", value=coarse, key=f"sw_st_{n}")
             ranges[n] = _frange(p, lo, hi, step)
 
-        if not chosen or not st.button("Run sweep"):
+        if not chosen or not st.button(t("Run sweep")):
             return
         combos = int(np.prod([len(v) for v in ranges.values()]))
         if combos > 400:
@@ -197,11 +198,11 @@ def _sweep_panel(
 
 
 def _tear_sheet_download(pf: object, symbol: str, label: str) -> None:
-    with st.expander("📄 Full quantstats tear sheet"):
-        if st.button("Generate tear sheet"):
-            with st.spinner("Building tear sheet…"):
+    with st.expander(t("📄 Full quantstats tear sheet")):
+        if st.button(t("Generate tear sheet")):
+            with st.spinner(t("Building tear sheet…")):
                 out = Path(tempfile.gettempdir()) / f"{symbol}_tearsheet.html"
                 tear_sheet(pf, out, title=f"{symbol} — {label}")  # type: ignore[arg-type]
                 st.download_button(
-                    "Download HTML", out.read_bytes(), file_name=out.name, mime="text/html"
+                    t("Download HTML"), out.read_bytes(), file_name=out.name, mime="text/html"
                 )

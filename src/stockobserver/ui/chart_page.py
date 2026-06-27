@@ -11,13 +11,14 @@ from plotly.subplots import make_subplots
 from stockobserver.data.symbols import SymbolError, parse_symbol
 from stockobserver.factors.indicators import macd, rsi, sma
 from stockobserver.ui._data import get_ohlcv
+from stockobserver.ui.i18n import t
 
 
 def render() -> None:
-    st.header("📈 Chart")
+    st.header(t("📈 Chart"))
     c1, c2 = st.columns([1, 2])
-    symbol = c1.text_input("Symbol (TICKER.MARKET)", "AAPL.US")
-    lookback = c2.slider("Lookback (days)", 90, 1500, 365)
+    symbol = c1.text_input(t("Symbol (TICKER.MARKET)"), "AAPL.US")
+    lookback = c2.slider(t("Lookback (days)"), 90, 1500, 365)
 
     try:
         parse_symbol(symbol)
@@ -28,7 +29,7 @@ def render() -> None:
     end = date.today()
     df = get_ohlcv(symbol, end - timedelta(days=lookback), end)
     if df.empty:
-        st.warning(f"No price data for {symbol}.")
+        st.warning(t("No price data for {symbol}.").format(symbol=symbol))
         return
 
     dates = df["date"]

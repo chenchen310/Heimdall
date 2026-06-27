@@ -11,6 +11,7 @@ from stockobserver.analytics import fundamental_report
 from stockobserver.data.symbols import SymbolError, parse_symbol
 from stockobserver.ui._data import get_fundamentals, get_ohlcv
 from stockobserver.ui._personas import ai_report
+from stockobserver.ui.i18n import t
 
 
 def _f(v: object, n: int = 3) -> float | None:
@@ -18,8 +19,8 @@ def _f(v: object, n: int = 3) -> float | None:
 
 
 def render() -> None:
-    st.header("🏛 Fundamental — Goldman lens")
-    symbol = st.text_input("Symbol (US filer, via EDGAR)", "AAPL.US")
+    st.header(t("🏛 Fundamental — Goldman lens"))
+    symbol = st.text_input(t("Symbol (US filer, via EDGAR)"), "AAPL.US")
     try:
         parse_symbol(symbol)
     except SymbolError as exc:
@@ -28,14 +29,14 @@ def render() -> None:
 
     fund = get_fundamentals(symbol)
     if fund.empty:
-        st.warning("No fundamentals — EDGAR covers US filers. Try AAPL.US, MSFT.US, KO.US …")
+        st.warning(t("No fundamentals — EDGAR covers US filers. Try AAPL.US, MSFT.US, KO.US …"))
         return
     px = get_ohlcv(symbol, date.today() - timedelta(days=10), date.today())
     price = float(px["adj_close"].iloc[-1]) if not px.empty else float("nan")
     rep = fundamental_report(symbol, fund, price)
 
     # --- Rating Summary Box ---
-    st.subheader("Rating Summary")
+    st.subheader(t("Rating Summary"))
     box = st.columns(5)
     box[0].metric("Rating", rep.rating)
     box[1].metric("Score", f"{rep.rating_score:.0f}/100" if pd.notna(rep.rating_score) else "n/a")
@@ -48,20 +49,20 @@ def render() -> None:
     if not hist.empty and "revenue" in hist:
         h = hist.copy()
         h.index = [d.year for d in h.index]
-        st.caption("Revenue by fiscal year")
+        st.caption(t("Revenue by fiscal year"))
         st.bar_chart(h["revenue"])
         margins = [m for m in ("gross_margin", "operating_margin", "net_margin") if m in h]
         if margins:
-            st.caption("Margins")
+            st.caption(t("Margins"))
             st.line_chart(h[margins])
 
     # --- bull / bear / scenarios ---
     left, right = st.columns(2)
-    left.subheader("Bull case")
+    left.subheader(t("Bull case"))
     left.markdown("\n".join(f"- {x}" for x in rep.bull) or "—")
-    right.subheader("Bear case")
+    right.subheader(t("Bear case"))
     right.markdown("\n".join(f"- {x}" for x in rep.bear) or "—")
-    st.caption("Scenarios — illustrative P/E bands (15× / 22× / 30× latest EPS)")
+    st.caption(t("Scenarios — illustrative P/E bands (15× / 22× / 30× latest EPS)"))
     st.write({k: round(v, 2) for k, v in rep.scenarios.items()})
 
     payload = {
