@@ -9,7 +9,7 @@ import streamlit as st
 
 from heimdall.analytics import fundamental_report
 from heimdall.data.symbols import SymbolError, parse_symbol
-from heimdall.ui._data import get_fundamentals, get_ohlcv
+from heimdall.ui._data import get_fundamentals, get_monthly_revenue, get_ohlcv
 from heimdall.ui._personas import ai_report
 from heimdall.ui.i18n import t
 
@@ -20,16 +20,21 @@ def _f(v: object, n: int = 3) -> float | None:
 
 def render() -> None:
     st.header(t("🏛 Fundamental — Goldman lens"))
-    symbol = st.text_input(t("Symbol (US filer, via EDGAR)"), "AAPL.US")
+    symbol = st.text_input(t("Symbol (e.g. AAPL.US, 2330.TW)"), "AAPL.US")
     try:
-        parse_symbol(symbol)
+        sym = parse_symbol(symbol)
     except SymbolError as exc:
         st.error(str(exc))
         return
 
     fund = get_fundamentals(symbol)
     if fund.empty:
-        st.warning(t("No fundamentals — EDGAR covers US filers. Try AAPL.US, MSFT.US, KO.US …"))
+        st.warning(
+            t(
+                "No fundamentals found. US filers come from EDGAR (e.g. AAPL.US); "
+                "Taiwan from FinMind (e.g. 2330.TW)."
+            )
+        )
         return
     px = get_ohlcv(symbol, date.today() - timedelta(days=10), date.today())
     price = float(px["adj_close"].iloc[-1]) if not px.empty else float("nan")
@@ -65,6 +70,9 @@ def render() -> None:
     st.caption(t("Scenarios — illustrative P/E bands (15× / 22× / 30× latest EPS)"))
     st.write({k: round(v, 2) for k, v in rep.scenarios.items()})
 
+    if sym.market in ("TW", "TWO"):
+        _monthly_revenue_panel(symbol)
+
     payload = {
         "symbol": symbol,
         "price": _f(price, 2),
@@ -78,6 +86,20 @@ def render() -> None:
         "history": _history_records(hist),
     }
     ai_report("goldman", payload, symbol)
+
+
+def _monthly_revenue_panel(symbol: str) -> None:
+    """Taiwan monthly revenue (月營收) with YoY — a signature TW signal."""
+    mr = get_monthly_revenue(symbol, date.today() - timedelta(days=365 * 3 + 30), date.today())
+    if mr.empty:
+        return
+    st.subheader(t("Monthly revenue (TW)"))
+    s = mr.set_index("month")["revenue"]
+    yoy = s.pct_change(12).iloc[-1]
+    c1, c2 = st.columns(2)
+    c1.metric(t("Latest month revenue"), f"{s.iloc[-1] / 1e8:,.1f} 億")
+    c2.metric(t("YoY"), f"{yoy:+.1%}" if pd.notna(yoy) else "n/a")
+    st.bar_chart(s)
 
 
 def _history_records(hist: pd.DataFrame) -> list[dict[str, object]]:

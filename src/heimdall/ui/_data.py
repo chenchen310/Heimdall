@@ -7,24 +7,23 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
+from heimdall.data import router
+from heimdall.data.base import DataProvider
 from heimdall.data.cache import CachedProvider
-from heimdall.data.providers import (
-    FmpProvider,
-    FredProvider,
-    SecEdgarProvider,
-    YFinanceProvider,
-)
+from heimdall.data.providers import FinMindProvider, FmpProvider, FredProvider
 from heimdall.screener.snapshot import load_snapshot
 
 
 @st.cache_resource
 def price_provider() -> CachedProvider:
-    return CachedProvider(YFinanceProvider())
+    # yfinance serves US + Taiwan (adjusted); routed so a market can be repointed later.
+    return CachedProvider(router.price_provider())
 
 
 @st.cache_resource
-def fundamentals_provider() -> SecEdgarProvider:
-    return SecEdgarProvider()
+def fundamentals_provider() -> DataProvider:
+    # Routes by market: EDGAR for US, FinMind for Taiwan.
+    return router.fundamentals_provider()
 
 
 @st.cache_resource
@@ -37,6 +36,11 @@ def fmp_provider() -> FmpProvider:
     return FmpProvider()
 
 
+@st.cache_resource
+def finmind_provider() -> FinMindProvider:
+    return FinMindProvider()
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_ohlcv(symbol: str, start: date, end: date) -> pd.DataFrame:
     return price_provider().get_ohlcv(symbol, start, end)
@@ -45,6 +49,12 @@ def get_ohlcv(symbol: str, start: date, end: date) -> pd.DataFrame:
 @st.cache_data(ttl=86400, show_spinner=False)
 def get_fundamentals(symbol: str) -> pd.DataFrame:
     return fundamentals_provider().get_fundamentals(symbol, "all", "annual")
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def get_monthly_revenue(symbol: str, start: date, end: date) -> pd.DataFrame:
+    """Taiwan monthly revenue (月營收) — empty for non-TW symbols."""
+    return finmind_provider().monthly_revenue(symbol, start, end)
 
 
 @st.cache_data(ttl=300, show_spinner=False)

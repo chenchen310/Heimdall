@@ -3,8 +3,15 @@
 from __future__ import annotations
 
 from heimdall.data.providers.edgar import SecEdgarProvider
+from heimdall.data.providers.finmind import FinMindProvider
 from heimdall.data.providers.fmp import FmpProvider
 from heimdall.data.providers.fred import FredProvider
 from heimdall.data.providers.yfinance import YFinanceProvider
 
-__all__ = ["YFinanceProvider", "SecEdgarProvider", "FredProvider", "FmpProvider"]
+__all__ = [
+    "YFinanceProvider",
+    "SecEdgarProvider",
+    "FredProvider",
+    "FmpProvider",
+    "FinMindProvider",
+]

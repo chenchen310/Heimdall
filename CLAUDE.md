@@ -2,12 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Status:** Phase 5 complete — the full **8-persona set** works for US. On top of Phases 0–4,
-> `analytics/` now has Bridgewater **risk** (vol/Beta/VaR/CVaR/drawdown/stress), Citadel sector
-> **rotation** (relative strength), Vanguard **ETF construction** (PyPortfolioOpt), Two Sigma **macro**
-> (FRED, gated on `FRED_API_KEY`), and JPM **earnings** (FMP, gated on `FMP_API_KEY`) — each with an
-> optional persona AI report. UI now has 11 pages. Next is **Phase 6** (Taiwan support via FinMind +
-> the `.TW`/`.TWO` router) — see `docs/ROADMAP.md`.
+> **Status:** Phase 6 complete — the full **8-persona set** works for US, and **Taiwan** (`.TW`/`.TWO`)
+> is live. `data/` now has a `FinMindProvider` (TW prices, annual fundamentals aggregated from the
+> quarterly feed, monthly revenue) behind a market `RoutingProvider` (`data/router.py`): US
+> fundamentals → EDGAR, Taiwan → FinMind, prices → yfinance (adjusted) for both. Phases 0–5 stand:
+> `analytics/` has Bridgewater **risk**, Citadel **rotation**, Vanguard **ETF construction**, Two Sigma
+> **macro** (FRED-gated), JPM **earnings** (FMP-gated), each with an optional persona AI report; the UI
+> has 11 pages. The roadmap (`docs/ROADMAP.md`) is fully delivered — further work is breadth
+> (universes, paid providers) and polish.
 
 ## What this is
 

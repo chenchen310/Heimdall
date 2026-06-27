@@ -65,10 +65,14 @@ _ZH: dict[str, str] = {
     "No price data for {symbol}.": "{symbol} 沒有價格資料。",
     # --- fundamental ---
     "🏛 Fundamental — Goldman lens": "🏛 基本面 — Goldman 視角",
-    "Symbol (US filer, via EDGAR)": "代號（美股，資料來自 EDGAR）",
-    "No fundamentals — EDGAR covers US filers. Try AAPL.US, MSFT.US, KO.US …": (
-        "查無基本面 — EDGAR 僅涵蓋美股申報公司。可試 AAPL.US、MSFT.US、KO.US …"
+    "Symbol (e.g. AAPL.US, 2330.TW)": "代號（例如 AAPL.US、2330.TW）",
+    "No fundamentals found. US filers come from EDGAR (e.g. AAPL.US); "
+    "Taiwan from FinMind (e.g. 2330.TW).": (
+        "查無基本面。美股來自 EDGAR（例如 AAPL.US）；台股來自 FinMind（例如 2330.TW）。"
     ),
+    "Monthly revenue (TW)": "月營收（台股）",
+    "Latest month revenue": "最新月營收",
+    "YoY": "年增率",
     "Rating Summary": "評級摘要",
     "Revenue by fiscal year": "各會計年度營收",
     "Margins": "利潤率",
