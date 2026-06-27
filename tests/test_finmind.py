@@ -94,6 +94,7 @@ def _statements() -> dict[str, list[dict[str, object]]]:
                 "Revenue": [120, 130, 140, 150],
                 "IncomeAfterTaxes": [12, 12, 12, 14],
                 "EPS": [1, 1, 1, 2],
+                "PreTaxIncome": [13, 13, 13, 15],
             },
         )
         # An incomplete year (missing Q4) must NOT yield an annual figure.
@@ -104,6 +105,7 @@ def _statements() -> dict[str, list[dict[str, object]]]:
         + _cumulative(2023, "PropertyAndPlantAndEquipment", [-7, -15, -22, -30])
         + _cumulative(2024, "CashFlowsFromOperatingActivities", [30, 60, 90, 120])
         + _cumulative(2024, "PropertyAndPlantAndEquipment", [-10, -20, -30, -40])
+        + _cumulative(2024, "Depreciation", [20, 40, 60, 80])
     )
     balance = _balance(
         2023, {"TotalAssets": 280, "Liabilities": 90, "Equity": 180, "CashAndCashEquivalents": 45}
@@ -150,6 +152,9 @@ def test_fundamentals_aggregate_to_canonical_annual() -> None:
     assert val("cfo", 2024) == 120 and val("cfo", 2023) == 100
     # capex stored as a positive magnitude (FinMind reports it negative).
     assert val("capex", 2024) == 40
+    # new line items: pre-tax income (income, summed) and D&A (cash flow, year-end).
+    assert val("pretax_income", 2024) == 54  # 13+13+13+15
+    assert val("dep_amort", 2024) == 80  # cumulative year-end, never the sum
     # Balance is the year-end snapshot.
     assert val("equity", 2024) == 200 and val("liabilities", 2024) == 100
     # shares = annual net income / annual EPS (par-independent): 50 / 5 = 10.

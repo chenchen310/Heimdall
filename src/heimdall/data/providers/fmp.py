@@ -38,6 +38,8 @@ FMP_FIELDS: dict[str, dict[str, str]] = {
         "net_income": "netIncome",
         "eps_diluted": "epsdiluted",
         "shares_outstanding": "weightedAverageShsOutDil",
+        "interest_expense": "interestExpense",
+        "pretax_income": "incomeBeforeTax",
     },
     "balance": {
         "assets": "totalAssets",
@@ -49,6 +51,7 @@ FMP_FIELDS: dict[str, dict[str, str]] = {
     "cashflow": {
         "cfo": "operatingCashFlow",
         "capex": "capitalExpenditure",
+        "dep_amort": "depreciationAndAmortization",
     },
 }
 _STATEMENT_PATH = {

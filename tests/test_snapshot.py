@@ -14,7 +14,7 @@ import pytest
 
 from heimdall.data.base import DataProvider, NotSupported, ProviderError
 from heimdall.data.schema import OHLCV_COLUMNS
-from heimdall.factors.metrics import _latest_annual, _revenue_growth_yoy
+from heimdall.factors.metrics import _latest_annual, _revenue_growth_yoy, snapshot_row
 from heimdall.screener.snapshot import build_row
 
 
@@ -111,3 +111,63 @@ def test_build_row_degrades_to_price_only_when_fundamentals_missing() -> None:
 def test_build_row_returns_none_without_prices() -> None:
     empty = pd.DataFrame(columns=OHLCV_COLUMNS)
     assert build_row("X.US", _Prices(empty), _NoFundamentals(), date(2024, 4, 1)) is None
+
+
+def _fund_two_years() -> pd.DataFrame:
+    rows = []
+
+    def add(metric: str, end: str, filed: str, value: float) -> None:
+        rows.append(
+            {
+                "symbol": "X.US",
+                "metric": metric,
+                "statement": "income",
+                "period": "annual",
+                "fiscal_end": pd.Timestamp(end),
+                "filed_at": pd.Timestamp(filed),
+                "value": float(value),
+                "currency": "USD",
+                "provider": "test",
+                "fetched_at": pd.Timestamp("2024-03-01"),
+            }
+        )
+
+    latest = {
+        "revenue": 1000, "net_income": 100, "operating_income": 150, "pretax_income": 125,
+        "eps_diluted": 2.0, "gross_profit": 400, "equity": 500, "liabilities": 300,
+        "shares_outstanding": 50, "cash": 100, "long_term_debt": 200, "cfo": 180,
+        "capex": 80, "dep_amort": 50, "interest_expense": 30,
+    }  # fmt: skip
+    for m, v in latest.items():
+        add(m, "2023-12-31", "2024-02-15", v)
+    for m, v in {"revenue": 800, "eps_diluted": 1.6, "shares_outstanding": 55}.items():
+        add(m, "2022-12-31", "2023-02-15", v)
+    return pd.DataFrame(rows)
+
+
+def _ohlcv_at(price: float, n: int = 60) -> pd.DataFrame:
+    df = _ohlcv(n)
+    df["adj_close"] = float(price)  # flat → snapshot price = `price`
+    return df
+
+
+def test_snapshot_row_derived_metrics_known_answer() -> None:
+    # price 40 × 50 shares = market_cap 2000; values chosen to verify by hand.
+    m = snapshot_row("X.US", _ohlcv_at(40.0), _fund_two_years(), date(2024, 6, 1))
+    assert m["market_cap"] == pytest.approx(2000)
+    assert m["ebitda"] == pytest.approx(200)  # operating_income 150 + D&A 50
+    assert m["net_debt"] == pytest.approx(100)  # debt 200 − cash 100
+    assert m["ev"] == pytest.approx(2100)  # mktcap 2000 + net_debt 100
+    assert m["fcf"] == pytest.approx(100)  # cfo 180 − capex 80
+    assert m["fcf_margin"] == pytest.approx(0.10)
+    assert m["operating_margin"] == pytest.approx(0.15)
+    assert m["ev_ebitda"] == pytest.approx(10.5)
+    assert m["ev_fcf"] == pytest.approx(21.0)
+    assert m["interest_coverage"] == pytest.approx(5.0)  # EBIT 150 / interest 30
+    assert m["net_debt_to_ebitda"] == pytest.approx(0.5)
+    assert m["roic"] == pytest.approx(0.20)  # NOPAT 150×(100/125)=120 / IC 600
+    assert m["eps_growth_yoy"] == pytest.approx(0.25)  # 2.0 / 1.6 − 1
+    assert m["peg"] == pytest.approx(0.8)  # pe 20 / (25)
+    # shares 55 → 50: net buyback, negative dilution.
+    assert m["share_dilution_yoy"] == pytest.approx(50 / 55 - 1)
+    assert m["buyback_yield"] == pytest.approx(1 - 50 / 55)
