@@ -25,6 +25,8 @@ _STATEMENTS = {
             "netIncome": 260,
             "epsdiluted": 2.6,
             "weightedAverageShsOutDil": 100,
+            "interestExpense": 20,
+            "incomeBeforeTax": 320,
         }
     ],
     "balance": [
@@ -44,6 +46,7 @@ _STATEMENTS = {
             "fillingDate": "2024-02-01",
             "operatingCashFlow": 300,
             "capitalExpenditure": -50,
+            "depreciationAndAmortization": 40,
         }
     ],
 }
@@ -54,6 +57,8 @@ def test_normalize_fundamentals_to_canonical() -> None:
     assert list(df.columns) == FUNDAMENTALS_COLUMNS
     assert df["provider"].unique().tolist() == ["fmp"]
     assert {"revenue", "net_income", "assets", "equity", "cfo", "capex"} <= set(df["metric"])
+    # new line items feeding interest coverage / ROIC / EBITDA
+    assert {"interest_expense", "pretax_income", "dep_amort"} <= set(df["metric"])
     assert df["filed_at"].notna().all()  # point-in-time invariant
     rev = df[df["metric"] == "revenue"].iloc[0]
     assert rev["value"] == 1200 and rev["period"] == "annual"

@@ -37,9 +37,27 @@ METRIC_SPECS: list[MetricSpec] = [
     ("operating_income", "income", ["OperatingIncomeLoss"], "USD"),
     ("net_income", "income", ["NetIncomeLoss"], "USD"),
     ("eps_diluted", "income", ["EarningsPerShareDiluted"], "USD/shares"),
+    ("interest_expense", "income", ["InterestExpense", "InterestExpenseNonoperating"], "USD"),
+    (
+        "pretax_income",
+        "income",
+        [
+            "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+            "IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments",
+        ],
+        "USD",
+    ),
     ("assets", "balance", ["Assets"], "USD"),
     ("liabilities", "balance", ["Liabilities"], "USD"),
-    ("equity", "balance", ["StockholdersEquity"], "USD"),
+    (
+        "equity",
+        "balance",
+        [
+            "StockholdersEquity",
+            "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+        ],
+        "USD",
+    ),
     ("cash", "balance", ["CashAndCashEquivalentsAtCarryingValue"], "USD"),
     ("long_term_debt", "balance", ["LongTermDebtNoncurrent", "LongTermDebt"], "USD"),
     (
@@ -49,7 +67,22 @@ METRIC_SPECS: list[MetricSpec] = [
         "shares",
     ),
     ("cfo", "cashflow", ["NetCashProvidedByUsedInOperatingActivities"], "USD"),
-    ("capex", "cashflow", ["PaymentsToAcquirePropertyPlantAndEquipment"], "USD"),
+    (
+        "capex",
+        "cashflow",
+        ["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets"],
+        "USD",
+    ),
+    (
+        "dep_amort",
+        "cashflow",
+        [
+            "DepreciationDepletionAndAmortization",
+            "DepreciationAmortizationAndAccretionNet",
+            "DepreciationAndAmortization",
+        ],
+        "USD",
+    ),
 ]
 
 _TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"

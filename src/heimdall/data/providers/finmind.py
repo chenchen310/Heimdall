@@ -56,11 +56,15 @@ _INCOME_FIELDS: dict[str, list[str]] = {
     "operating_income": ["OperatingIncome"],
     "net_income": ["IncomeAfterTaxes"],
     "eps_diluted": ["EPS"],
+    "pretax_income": ["PreTaxIncome"],
 }
 # Cash-flow lines are CUMULATIVE YTD -> the year-end value is the annual figure.
+# ``dep_amort`` ≈ depreciation (FinMind reports it separately from amortization;
+# depreciation dominates D&A for capital-intensive TW names — a conservative proxy).
 _CASHFLOW_FIELDS: dict[str, list[str]] = {
     "cfo": ["NetCashInflowFromOperatingActivities", "CashFlowsFromOperatingActivities"],
     "capex": ["PropertyAndPlantAndEquipment"],
+    "dep_amort": ["Depreciation"],
 }
 # Balance lines are point-in-time stocks -> the year-end value is the annual figure.
 _BALANCE_FIELDS: dict[str, list[str]] = {

@@ -28,15 +28,30 @@ def _latest_annual(fund: pd.DataFrame, as_of: date) -> dict[str, float]:
     return {str(m): float(v) for m, v in zip(latest["metric"], latest["value"], strict=True)}
 
 
-def _revenue_growth_yoy(fund: pd.DataFrame, as_of: date) -> float:
-    rev = fund[(fund["metric"] == "revenue") & (fund["filed_at"] <= pd.Timestamp(as_of))]
-    if rev.empty:
+def _growth_yoy(fund: pd.DataFrame, metric: str, as_of: date) -> float:
+    """YoY growth of an annual ``metric`` (latest vs prior fiscal year), point-in-time.
+
+    NaN when fewer than two years are known or the prior value is <= 0 — a percent
+    change off a non-positive base (e.g. a prior-year loss) is meaningless.
+    """
+    s = fund[(fund["metric"] == metric) & (fund["filed_at"] <= pd.Timestamp(as_of))]
+    if s.empty:
         return float("nan")
-    per_year = rev.sort_values(["fiscal_end", "filed_at"]).groupby("fiscal_end").tail(1)
+    per_year = s.sort_values(["fiscal_end", "filed_at"]).groupby("fiscal_end").tail(1)
     per_year = per_year.sort_values("fiscal_end")
     if len(per_year) < 2:
         return float("nan")
-    return _safe_div(per_year["value"].iloc[-1], per_year["value"].iloc[-2]) - 1.0
+    prev, last = float(per_year["value"].iloc[-2]), float(per_year["value"].iloc[-1])
+    return last / prev - 1.0 if prev > 0 else float("nan")
+
+
+def _revenue_growth_yoy(fund: pd.DataFrame, as_of: date) -> float:
+    return _growth_yoy(fund, "revenue", as_of)
+
+
+def _or0(x: float) -> float:
+    """Treat a missing line item as zero (e.g. a debt-free firm reports no debt tag)."""
+    return float(x) if pd.notna(x) else 0.0
 
 
 def _technicals(ohlcv: pd.DataFrame) -> dict[str, float]:
@@ -68,13 +83,32 @@ def snapshot_row(
     Reused by both the cross-section builder (``screener.snapshot``) and the
     historical factor panel (``factors.panel``) so the metrics are identical.
     """
+    nan = float("nan")
     f = _latest_annual(fund, as_of)
     tech = _technicals(ohlcv)
-    revenue, net_income = f.get("revenue", float("nan")), f.get("net_income", float("nan"))
-    equity = f.get("equity", float("nan"))
-    shares = f.get("shares_outstanding", float("nan"))
-    fcf = f.get("cfo", float("nan")) - f.get("capex", float("nan"))
-    market_cap = tech["price"] * shares if pd.notna(shares) else float("nan")
+    g = f.get
+
+    revenue, net_income = g("revenue", nan), g("net_income", nan)
+    operating_income = g("operating_income", nan)
+    pretax_income = g("pretax_income", nan)
+    equity, shares = g("equity", nan), g("shares_outstanding", nan)
+    cash, long_term_debt = g("cash", nan), g("long_term_debt", nan)
+    dep_amort, interest_expense = g("dep_amort", nan), g("interest_expense", nan)
+    fcf = g("cfo", nan) - g("capex", nan)
+    market_cap = tech["price"] * shares if pd.notna(shares) else nan
+
+    # Enterprise value & leverage. Missing debt/cash tags are treated as zero
+    # (a debt-free filer simply reports no debt concept) — see `_or0`.
+    net_debt = _or0(long_term_debt) - _or0(cash)
+    ev = market_cap + net_debt
+    ebitda = operating_income + dep_amort  # NaN unless both are reported
+    invested_capital = equity + _or0(long_term_debt) - _or0(cash)
+    # NOPAT = EBIT × (1 − effective tax), tax rate implied by net/pre-tax income.
+    nopat = operating_income * _safe_div(net_income, pretax_income) if pretax_income > 0 else nan
+
+    pe = _safe_div(market_cap, net_income) if net_income > 0 else nan
+    eps_growth = _growth_yoy(fund, "eps_diluted", as_of)
+    share_change = _growth_yoy(fund, "shares_outstanding", as_of)
 
     return {
         "symbol": symbol,
@@ -84,19 +118,36 @@ def snapshot_row(
         "market_cap": market_cap,
         "revenue": revenue,
         "net_income": net_income,
-        "eps_diluted": f.get("eps_diluted", float("nan")),
+        "eps_diluted": g("eps_diluted", nan),
+        "ebitda": ebitda,
         "equity": equity,
         "shares_outstanding": shares,
+        "net_debt": net_debt,
+        "ev": ev,
         "fcf": fcf,
-        "pe": _safe_div(market_cap, net_income) if net_income > 0 else float("nan"),
+        "pe": pe,
         "ps": _safe_div(market_cap, revenue),
+        "peg": _safe_div(pe, eps_growth * 100.0)
+        if pd.notna(eps_growth) and eps_growth > 0
+        else nan,
+        "ev_ebitda": _safe_div(ev, ebitda) if ebitda > 0 else nan,
+        "ev_fcf": _safe_div(ev, fcf) if fcf > 0 else nan,
         "fcf_yield": _safe_div(fcf, market_cap),
         "net_margin": _safe_div(net_income, revenue),
-        "gross_margin": _safe_div(f.get("gross_profit", float("nan")), revenue),
-        "operating_margin": _safe_div(f.get("operating_income", float("nan")), revenue),
+        "gross_margin": _safe_div(g("gross_profit", nan), revenue),
+        "operating_margin": _safe_div(operating_income, revenue),
+        "fcf_margin": _safe_div(fcf, revenue),
         "roe": _safe_div(net_income, equity),
-        "debt_to_equity": _safe_div(f.get("liabilities", float("nan")), equity),
+        "roic": _safe_div(nopat, invested_capital) if invested_capital > 0 else nan,
+        "debt_to_equity": _safe_div(g("liabilities", nan), equity),
+        "net_debt_to_ebitda": _safe_div(net_debt, ebitda) if ebitda > 0 else nan,
+        "interest_coverage": _safe_div(operating_income, interest_expense)
+        if interest_expense > 0
+        else nan,
         "revenue_growth_yoy": _revenue_growth_yoy(fund, as_of),
+        "eps_growth_yoy": eps_growth,
+        "share_dilution_yoy": share_change,  # +ve = dilution, −ve = net buybacks
+        "buyback_yield": -share_change if pd.notna(share_change) else nan,
         "fundamentals_asof": fund.loc[fund["filed_at"] <= pd.Timestamp(as_of), "filed_at"].max()
         if not fund.empty
         else pd.NaT,
