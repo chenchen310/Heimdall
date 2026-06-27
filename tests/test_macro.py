@@ -6,8 +6,8 @@ from datetime import date
 
 import pandas as pd
 
-from stockobserver.analytics.macro import macro_dashboard
-from stockobserver.data.base import MacroProvider
+from heimdall.analytics.macro import macro_dashboard
+from heimdall.data.base import MacroProvider
 
 # Inverted curve (-0.5) + restrictive policy (5.0) → late-cycle.
 _VALUES = {

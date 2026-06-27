@@ -1,7 +1,7 @@
 # Data Sources
 
 Decision reference for which vendor feeds what, and when to pay. All vendors are accessed through the
-`DataProvider` ABC, so swapping or adding one is local to `src/stockobserver/data/providers/`.
+`DataProvider` ABC, so swapping or adding one is local to `src/heimdall/data/providers/`.
 
 > Pricing gathered mid-2026 and is volatile — verify on official pages before subscribing. FMP quoted
 > prices are annual-commitment rates (month-to-month is higher).

@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from stockobserver.backtest.signals import breakout_signals, rsi_reversion_signals
-from stockobserver.factors.indicators import rsi
+from heimdall.backtest.signals import breakout_signals, rsi_reversion_signals
+from heimdall.factors.indicators import rsi
 
 
 def _ohlcv(close: list[float]) -> pd.DataFrame:
@@ -43,7 +43,7 @@ def test_rsi_reversion_obeys_crossing_invariant() -> None:
 
 
 def test_registry_strategies_run_with_defaults() -> None:
-    from stockobserver.backtest.strategies import STRATEGIES
+    from heimdall.backtest.strategies import STRATEGIES
 
     ohlcv = _ohlcv(list(100 + np.cumsum(np.random.default_rng(0).normal(0, 1, 260))))
     for strat in STRATEGIES.values():

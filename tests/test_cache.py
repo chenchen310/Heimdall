@@ -11,9 +11,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from stockobserver.data.base import DataProvider
-from stockobserver.data.cache import CachedProvider
-from stockobserver.data.schema import OHLCV_COLUMNS
+from heimdall.data.base import DataProvider
+from heimdall.data.cache import CachedProvider
+from heimdall.data.schema import OHLCV_COLUMNS
 
 
 class FakeProvider(DataProvider):

@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from stockobserver.analytics.risk import risk_report
+from heimdall.analytics.risk import risk_report
 
 
 def _ohlcv(close: pd.Series, volume: float) -> pd.DataFrame:

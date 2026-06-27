@@ -15,7 +15,7 @@ pytest.importorskip("streamlit.testing.v1")
 import streamlit as st  # noqa: E402
 from streamlit.testing.v1 import AppTest  # noqa: E402
 
-APP = str(Path(__file__).resolve().parents[1] / "src" / "stockobserver" / "ui" / "app.py")
+APP = str(Path(__file__).resolve().parents[1] / "src" / "heimdall" / "ui" / "app.py")
 
 
 def _write_snapshot(data_dir: Path) -> None:
@@ -34,7 +34,7 @@ def _write_snapshot(data_dir: Path) -> None:
 
 
 def test_screener_page_renders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("STOCKOBSERVER_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
     _write_snapshot(tmp_path)
     st.cache_data.clear()  # don't reuse a snapshot cached from another test/dir
 

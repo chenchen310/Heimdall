@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pandas as pd
 
-from stockobserver.data.providers.yfinance import _normalize
-from stockobserver.data.schema import OHLCV_COLUMNS
-from stockobserver.data.symbols import Symbol
+from heimdall.data.providers.yfinance import _normalize
+from heimdall.data.schema import OHLCV_COLUMNS
+from heimdall.data.symbols import Symbol
 
 
 def _raw_yf_frame() -> pd.DataFrame:

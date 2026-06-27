@@ -982,6 +982,92 @@ wheels = [
 ]
 
 [[package]]
+name = "heimdall"
+version = "0.0.0"
+source = { editable = "." }
+dependencies = [
+    { name = "duckdb" },
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "platformdirs" },
+    { name = "pyarrow" },
+    { name = "pydantic" },
+    { name = "python-dotenv" },
+    { name = "requests" },
+]
+
+[package.optional-dependencies]
+analytics = [
+    { name = "alphalens-reloaded" },
+    { name = "pyportfolioopt" },
+    { name = "quantstats" },
+    { name = "riskfolio-lib" },
+]
+backtest = [
+    { name = "bt" },
+    { name = "pandas-ta" },
+    { name = "vectorbt" },
+]
+data = [
+    { name = "fredapi" },
+    { name = "requests-cache" },
+    { name = "yfinance" },
+]
+personas = [
+    { name = "anthropic" },
+]
+ui = [
+    { name = "plotly" },
+    { name = "streamlit" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "mypy" },
+    { name = "pandas-stubs" },
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "alphalens-reloaded", marker = "extra == 'analytics'", specifier = ">=0.4.3" },
+    { name = "anthropic", marker = "extra == 'personas'", specifier = ">=0.34" },
+    { name = "bt", marker = "extra == 'backtest'", specifier = ">=1.1" },
+    { name = "duckdb", specifier = ">=1.0" },
+    { name = "fredapi", marker = "extra == 'data'", specifier = ">=0.5.2" },
+    { name = "numpy", specifier = ">=1.26" },
+    { name = "pandas", specifier = ">=2.2" },
+    { name = "pandas-ta", marker = "extra == 'backtest'", specifier = ">=0.3.14b0" },
+    { name = "platformdirs", specifier = ">=4.2" },
+    { name = "plotly", marker = "extra == 'ui'", specifier = ">=5.22" },
+    { name = "pyarrow", specifier = ">=16" },
+    { name = "pydantic", specifier = ">=2.6" },
+    { name = "pyportfolioopt", marker = "extra == 'analytics'", specifier = ">=1.5.5" },
+    { name = "python-dotenv", specifier = ">=1.0" },
+    { name = "quantstats", marker = "extra == 'analytics'", specifier = ">=0.0.62" },
+    { name = "requests", specifier = ">=2.31" },
+    { name = "requests-cache", marker = "extra == 'data'", specifier = ">=1.2" },
+    { name = "riskfolio-lib", marker = "extra == 'analytics'", specifier = ">=6.0" },
+    { name = "streamlit", marker = "extra == 'ui'", specifier = ">=1.35" },
+    { name = "vectorbt", marker = "extra == 'backtest'", specifier = ">=0.26" },
+    { name = "yfinance", marker = "extra == 'data'", specifier = ">=0.2.40" },
+]
+provides-extras = ["data", "backtest", "analytics", "ui", "personas"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "mypy", specifier = ">=1.10" },
+    { name = "pandas-stubs", specifier = ">=2.2" },
+    { name = "pre-commit", specifier = ">=3.7" },
+    { name = "pytest", specifier = ">=8.2" },
+    { name = "pytest-cov", specifier = ">=5.0" },
+    { name = "ruff", specifier = ">=0.5" },
+]
+
+[[package]]
 name = "highspy"
 version = "1.14.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3188,92 +3274,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/34/0e/2408735aca9e764643196212f9069912100151414dd617d39ffc72d77eee/statsmodels-0.14.6-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:3414e40c073d725007a6603a18247ab7af3467e1af4a5e5a24e4c27bc26673b4", size = 10337587, upload-time = "2025-12-05T23:13:37.597Z" },
     { url = "https://files.pythonhosted.org/packages/0f/36/4d44f7035ab3c0b2b6a4c4ebb98dedf36246ccbc1b3e2f51ebcd7ac83abb/statsmodels-0.14.6-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:a518d3f9889ef920116f9fa56d0338069e110f823926356946dae83bc9e33e19", size = 10363350, upload-time = "2025-12-05T23:13:53.08Z" },
     { url = "https://files.pythonhosted.org/packages/26/33/f1652d0c59fa51de18492ee2345b65372550501ad061daa38f950be390b6/statsmodels-0.14.6-cp314-cp314-win_amd64.whl", hash = "sha256:151b73e29f01fe619dbce7f66d61a356e9d1fe5e906529b78807df9189c37721", size = 9588010, upload-time = "2025-12-05T23:14:07.28Z" },
-]
-
-[[package]]
-name = "stockobserver"
-version = "0.0.0"
-source = { editable = "." }
-dependencies = [
-    { name = "duckdb" },
-    { name = "numpy" },
-    { name = "pandas" },
-    { name = "platformdirs" },
-    { name = "pyarrow" },
-    { name = "pydantic" },
-    { name = "python-dotenv" },
-    { name = "requests" },
-]
-
-[package.optional-dependencies]
-analytics = [
-    { name = "alphalens-reloaded" },
-    { name = "pyportfolioopt" },
-    { name = "quantstats" },
-    { name = "riskfolio-lib" },
-]
-backtest = [
-    { name = "bt" },
-    { name = "pandas-ta" },
-    { name = "vectorbt" },
-]
-data = [
-    { name = "fredapi" },
-    { name = "requests-cache" },
-    { name = "yfinance" },
-]
-personas = [
-    { name = "anthropic" },
-]
-ui = [
-    { name = "plotly" },
-    { name = "streamlit" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "mypy" },
-    { name = "pandas-stubs" },
-    { name = "pre-commit" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "alphalens-reloaded", marker = "extra == 'analytics'", specifier = ">=0.4.3" },
-    { name = "anthropic", marker = "extra == 'personas'", specifier = ">=0.34" },
-    { name = "bt", marker = "extra == 'backtest'", specifier = ">=1.1" },
-    { name = "duckdb", specifier = ">=1.0" },
-    { name = "fredapi", marker = "extra == 'data'", specifier = ">=0.5.2" },
-    { name = "numpy", specifier = ">=1.26" },
-    { name = "pandas", specifier = ">=2.2" },
-    { name = "pandas-ta", marker = "extra == 'backtest'", specifier = ">=0.3.14b0" },
-    { name = "platformdirs", specifier = ">=4.2" },
-    { name = "plotly", marker = "extra == 'ui'", specifier = ">=5.22" },
-    { name = "pyarrow", specifier = ">=16" },
-    { name = "pydantic", specifier = ">=2.6" },
-    { name = "pyportfolioopt", marker = "extra == 'analytics'", specifier = ">=1.5.5" },
-    { name = "python-dotenv", specifier = ">=1.0" },
-    { name = "quantstats", marker = "extra == 'analytics'", specifier = ">=0.0.62" },
-    { name = "requests", specifier = ">=2.31" },
-    { name = "requests-cache", marker = "extra == 'data'", specifier = ">=1.2" },
-    { name = "riskfolio-lib", marker = "extra == 'analytics'", specifier = ">=6.0" },
-    { name = "streamlit", marker = "extra == 'ui'", specifier = ">=1.35" },
-    { name = "vectorbt", marker = "extra == 'backtest'", specifier = ">=0.26" },
-    { name = "yfinance", marker = "extra == 'data'", specifier = ">=0.2.40" },
-]
-provides-extras = ["data", "backtest", "analytics", "ui", "personas"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "mypy", specifier = ">=1.10" },
-    { name = "pandas-stubs", specifier = ">=2.2" },
-    { name = "pre-commit", specifier = ">=3.7" },
-    { name = "pytest", specifier = ">=8.2" },
-    { name = "pytest-cov", specifier = ">=5.0" },
-    { name = "ruff", specifier = ">=0.5" },
 ]
 
 [[package]]

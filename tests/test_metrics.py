@@ -7,9 +7,9 @@ import math
 import numpy as np
 import pandas as pd
 
-from stockobserver.backtest.engine import run_backtest
-from stockobserver.backtest.report import quick_metrics, summary_metrics
-from stockobserver.backtest.signals import sma_crossover_signals
+from heimdall.backtest.engine import run_backtest
+from heimdall.backtest.report import quick_metrics, summary_metrics
+from heimdall.backtest.signals import sma_crossover_signals
 
 
 def _pf() -> object:

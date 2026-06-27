@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from stockobserver.data.providers.edgar import _normalize_companyfacts
-from stockobserver.data.schema import FUNDAMENTALS_COLUMNS
-from stockobserver.data.symbols import Symbol
+from heimdall.data.providers.edgar import _normalize_companyfacts
+from heimdall.data.schema import FUNDAMENTALS_COLUMNS
+from heimdall.data.symbols import Symbol
 
 
 def _fact(end: str, val: object, fp: str, filed: str, form: str = "10-K") -> dict[str, Any]:
