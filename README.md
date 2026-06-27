@@ -20,10 +20,18 @@ Requires [`uv`](https://docs.astral.sh/uv/). Python 3.12 is pinned and provision
 ```bash
 uv sync --all-extras                              # set up the environment
 uv run pytest                                     # run tests
-uv run python -m heimdall.screener.build          # build the US screener snapshot
-uv run python -m heimdall.screener.build --market tw   # …or a Taiwan snapshot
+uv run python -m heimdall.screener.build          # small US default (15 names)
+uv run python -m heimdall.screener.build --market vti     # whole US market (~3.4k, VTI holdings)
+uv run python -m heimdall.screener.build --market tw      # 10 Taiwan large caps (fast)
+uv run python -m heimdall.screener.build --market tw-all  # all TWSE+TPEX (~2.1k common stocks)
 uv run streamlit run src/heimdall/ui/app.py       # launch the app
 ```
+
+`--market vti` (~3,400 US) and `--market tw-all` (~2,130 Taiwan) pull the full constituent lists for
+the screener. Both are long, **resumable** one-time crawls on free providers — re-run to continue
+where it left off (names already built are skipped, prices are cached). For fundamentals at that
+scale, an `FMP_API_KEY` (US) or a free `FINMIND_TOKEN` (Taiwan) is strongly recommended — without one
+the free quota runs out partway and the rest of the snapshot is price-only.
 
 No API keys are needed to start — yfinance (US + TW prices), SEC EDGAR (US fundamentals), FRED
 (macro), and FinMind (Taiwan) are all free. Copy `.env.example` to `.env` for higher quotas

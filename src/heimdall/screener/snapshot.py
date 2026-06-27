@@ -13,7 +13,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from heimdall.data.base import DataProvider
+from heimdall.data.base import DataProvider, NotSupported, ProviderError
+from heimdall.data.schema import FUNDAMENTALS_COLUMNS
 from heimdall.data.store import data_root
 from heimdall.factors.metrics import snapshot_row
 
@@ -59,6 +60,31 @@ UNIVERSES: dict[str, list[str]] = {
 }
 
 
+def build_row(
+    symbol: str,
+    prices: DataProvider,
+    fundamentals: DataProvider,
+    as_of: date,
+) -> dict[str, object] | None:
+    """One snapshot row, or ``None`` if the symbol has no price data.
+
+    A symbol whose fundamentals a provider cannot serve (e.g. a VTI holding with
+    no SEC CIK) degrades to **price-only** — the row still carries technicals
+    rather than being dropped, which keeps the screener's universe wide. Network
+    and unexpected errors propagate so the caller can decide (the build CLI skips
+    and records them).
+    """
+    price_start = as_of - timedelta(days=500)  # enough history for SMA-200
+    ohlcv = prices.get_ohlcv(symbol, price_start, as_of)
+    if ohlcv.empty:
+        return None
+    try:
+        fund = fundamentals.get_fundamentals(symbol, "all", "annual")
+    except (ProviderError, NotSupported):
+        fund = pd.DataFrame(columns=FUNDAMENTALS_COLUMNS)
+    return snapshot_row(symbol, ohlcv, fund, as_of)
+
+
 def build_snapshot(
     symbols: list[str],
     prices: DataProvider,
@@ -67,16 +93,11 @@ def build_snapshot(
 ) -> pd.DataFrame:
     """Build the snapshot table for ``symbols`` as known on ``as_of`` (default today)."""
     as_of = as_of or date.today()
-    price_start = as_of - timedelta(days=500)  # enough history for SMA-200
-    rows: list[dict[str, object]] = []
-
-    for symbol in symbols:
-        ohlcv = prices.get_ohlcv(symbol, price_start, as_of)
-        if ohlcv.empty:
-            continue
-        fund = fundamentals.get_fundamentals(symbol, "all", "annual")
-        rows.append(snapshot_row(symbol, ohlcv, fund, as_of))
-
+    rows = [
+        row
+        for symbol in symbols
+        if (row := build_row(symbol, prices, fundamentals, as_of)) is not None
+    ]
     return pd.DataFrame(rows)
 
 

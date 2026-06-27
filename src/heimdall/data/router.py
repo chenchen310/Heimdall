@@ -57,11 +57,15 @@ def price_provider() -> DataProvider:
 
 
 def fundamentals_provider() -> DataProvider:
-    """Default fundamentals routing: EDGAR for US, FinMind for Taiwan."""
-    from heimdall.data.providers import FinMindProvider, SecEdgarProvider
+    """Default fundamentals routing: US → FMP if ``FMP_API_KEY`` is set (faster for
+    large universes), else free EDGAR; Taiwan → FinMind."""
+    import os
 
+    from heimdall.data.providers import FinMindProvider, FmpProvider, SecEdgarProvider
+
+    us: DataProvider = FmpProvider() if os.environ.get("FMP_API_KEY") else SecEdgarProvider()
     finmind = FinMindProvider()
-    return RoutingProvider({"US": SecEdgarProvider(), "TW": finmind, "TWO": finmind})
+    return RoutingProvider({"US": us, "TW": finmind, "TWO": finmind})
 
 
 __all__ = ["RoutingProvider", "price_provider", "fundamentals_provider"]
