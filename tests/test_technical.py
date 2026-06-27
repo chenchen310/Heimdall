@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from stockobserver.analytics.technical import technical_report
+from heimdall.analytics.technical import technical_report
 
 
 def _ohlcv(n: int = 260) -> pd.DataFrame:

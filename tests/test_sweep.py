@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from stockobserver.backtest.sweep import sweep
+from heimdall.backtest.sweep import sweep
 
 
 def _trending_ohlcv(n: int = 120) -> pd.DataFrame:

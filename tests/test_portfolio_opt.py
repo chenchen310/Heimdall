@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from stockobserver.analytics.portfolio_opt import optimize_portfolio, prices_wide
+from heimdall.analytics.portfolio_opt import optimize_portfolio, prices_wide
 
 
 def _prices() -> pd.DataFrame:

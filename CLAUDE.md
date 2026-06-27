@@ -34,12 +34,12 @@ uv sync --all-extras
 uv sync --extra data --extra ui
 
 # Phase 0 vertical-slice backtest (writes a quantstats tear sheet to reports/)
-uv run python -m stockobserver.backtest.demo
-uv run python -m stockobserver.backtest.demo --symbol MSFT.US --fast 20 --slow 50
+uv run python -m heimdall.backtest.demo
+uv run python -m heimdall.backtest.demo --symbol MSFT.US --fast 20 --slow 50
 
 # Phase 1: build the screener snapshot (set SEC_EDGAR_USER_AGENT in .env first), then run the UI
-uv run python -m stockobserver.screener.build
-uv run streamlit run src/stockobserver/ui/app.py   # screener + chart pages
+uv run python -m heimdall.screener.build
+uv run streamlit run src/heimdall/ui/app.py   # screener + chart pages
 
 # Tests
 uv run pytest                                # whole suite
@@ -50,7 +50,7 @@ uv run pytest -k cache -q                    # by keyword
 # Quality gates (run before declaring work done)
 uv run ruff check .            # lint
 uv run ruff format .           # format
-uv run mypy                    # type-check (strict; package = stockobserver)
+uv run mypy                    # type-check (strict; package = heimdall)
 
 # Dependency resolution sanity check (no install, no run)
 uv lock
@@ -91,7 +91,7 @@ before touching `data/` or adding a provider. Data-vendor strategy and budget th
 
 ### The two abstractions that make the rest work
 
-- **`DataProvider` ABC** (`src/stockobserver/data/`) — every source (yfinance, EDGAR, FRED, later FMP,
+- **`DataProvider` ABC** (`src/heimdall/data/`) — every source (yfinance, EDGAR, FRED, later FMP,
   FinMind) implements `get_ohlcv`, `get_fundamentals`, `get_estimates`, `get_earnings_dates` and
   normalizes into the canonical schema. Adding Taiwan = writing **one** `FinMindProvider` + a symbol
   router; nothing downstream changes.
@@ -132,7 +132,7 @@ These are the parts that are hard to get right and easy to fool yourself on. Do 
 
 ## Conventions
 
-- **Business logic stays in plain modules** under `src/stockobserver/`, not in Streamlit scripts, so a
+- **Business logic stays in plain modules** under `src/heimdall/`, not in Streamlit scripts, so a
   future FastAPI/React migration is mechanical.
 - **Free providers by default** (yfinance + EDGAR + FRED). Paid providers (FMP, etc.) are
   drop-in `DataProvider` implementations gated behind env keys — never a hard dependency.
@@ -142,7 +142,7 @@ These are the parts that are hard to get right and easy to fool yourself on. Do 
 
 ## Where to look first
 
-- Adding/with a data source → `src/stockobserver/data/CLAUDE.md` + `docs/ARCHITECTURE.md`
-- Writing a strategy/backtest → `src/stockobserver/backtest/CLAUDE.md` + `.claude/rules/backtest-honesty.md`
-- Factor scoring → `src/stockobserver/factors/CLAUDE.md`
+- Adding/with a data source → `src/heimdall/data/CLAUDE.md` + `docs/ARCHITECTURE.md`
+- Writing a strategy/backtest → `src/heimdall/backtest/CLAUDE.md` + `.claude/rules/backtest-honesty.md`
+- Factor scoring → `src/heimdall/factors/CLAUDE.md`
 - What to build next → `docs/ROADMAP.md` (Phase 0 is the current target)

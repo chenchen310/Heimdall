@@ -5,8 +5,8 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from stockobserver.analytics.earnings import earnings_report
-from stockobserver.data.schema import EARNINGS_COLUMNS
+from heimdall.analytics.earnings import earnings_report
+from heimdall.data.schema import EARNINGS_COLUMNS
 
 
 def _earnings() -> pd.DataFrame:

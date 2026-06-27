@@ -12,9 +12,9 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from stockobserver.backtest.costs import DEFAULT_COSTS, ZERO_COSTS
-from stockobserver.backtest.engine import run_backtest
-from stockobserver.backtest.signals import sma_crossover_signals
+from heimdall.backtest.costs import DEFAULT_COSTS, ZERO_COSTS
+from heimdall.backtest.engine import run_backtest
+from heimdall.backtest.signals import sma_crossover_signals
 
 
 def _fixture() -> tuple[pd.DataFrame, pd.Series, pd.Series]:

@@ -1,5 +1,5 @@
 [project]
-name = "stockobserver"
+name = "heimdall"
 version = "0.0.0"
 description = "Personal stock-screening, entry/exit-timing, and strategy-backtesting platform (US-first, Taiwan-ready)."
 readme = "README.md"
@@ -68,7 +68,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/stockobserver"]
+packages = ["src/heimdall"]
 
 # ----------------------------------------------------------------------------
 # Tooling config
@@ -83,7 +83,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "PD"]  # pyflakes, pycodestyle, isort
 
 [tool.mypy]
 python_version = "3.12"
-packages = ["stockobserver"]
+packages = ["heimdall"]
 strict = true
 plugins = ["pydantic.mypy"]
 
@@ -111,7 +111,7 @@ follow_imports = "skip"
 # UI is a thin Streamlit shell over typed core modules; Streamlit's decorators are
 # untyped, so strict-checking it is noise. Logic lives in (type-checked) core.
 [[tool.mypy.overrides]]
-module = ["stockobserver.ui.*"]
+module = ["heimdall.ui.*"]
 ignore_errors = true
 
 [tool.pytest.ini_options]

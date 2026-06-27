@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from stockobserver.backtest.setup import trade_setup
+from heimdall.backtest.setup import trade_setup
 
 
 def _ohlcv() -> pd.DataFrame:

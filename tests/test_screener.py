@@ -8,9 +8,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from stockobserver.screener import store
-from stockobserver.screener.engine import evaluate
-from stockobserver.screener.model import Predicate, Screen
+from heimdall.screener import store
+from heimdall.screener.engine import evaluate
+from heimdall.screener.model import Predicate, Screen
 
 
 def _snap() -> pd.DataFrame:

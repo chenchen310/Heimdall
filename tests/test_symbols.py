@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from stockobserver.data.symbols import Symbol, SymbolError, parse_symbol
+from heimdall.data.symbols import Symbol, SymbolError, parse_symbol
 
 
 def test_parse_us() -> None:

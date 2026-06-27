@@ -5,9 +5,9 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from stockobserver.data.base import NotSupported
-from stockobserver.data.providers.fred import FredProvider, _normalize_series
-from stockobserver.data.schema import MACRO_COLUMNS
+from heimdall.data.base import NotSupported
+from heimdall.data.providers.fred import FredProvider, _normalize_series
+from heimdall.data.schema import MACRO_COLUMNS
 
 
 class _FakeFred:

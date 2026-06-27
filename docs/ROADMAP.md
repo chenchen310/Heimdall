@@ -14,14 +14,14 @@ honesty** — not the UI. They are de-risked first, on purpose.
 De-risk the whole vertical slice before building breadth.
 
 - [x] `uv` env on Python 3.12; pre-commit, ruff, mypy (strict), pytest wired.
-- [x] `DataProvider` ABC + canonical schema + `TICKER.MARKET` router (`src/stockobserver/data/`).
+- [x] `DataProvider` ABC + canonical schema + `TICKER.MARKET` router (`src/heimdall/data/`).
 - [x] `YFinanceProvider` + DuckDB/Parquet **delta cache** (`CachedProvider`).
 - [x] **Vertical slice:** pull `AAPL.US` → SMA(20/50) crossover with `pandas-ta` → backtest in
   `vectorbt` **with commissions + slippage, next-bar-open fills** → `quantstats` tear sheet
-  (`src/stockobserver/backtest/demo.py`).
+  (`src/heimdall/backtest/demo.py`).
 - [x] **Known-answer** backtest test locking down look-ahead (`tests/test_backtest_known_answer.py`).
 
-**Done:** `uv run python -m stockobserver.backtest.demo` produces a tear sheet; 15 tests pass,
+**Done:** `uv run python -m heimdall.backtest.demo` produces a tear sheet; 15 tests pass,
 mypy/ruff clean. Deferred to Phase 1: `data/state.py` (SQLite app state) — not needed by the slice.
 
 ## Phase 1 — Data layer + basic screener (MVP UI)  ✅ **DONE**

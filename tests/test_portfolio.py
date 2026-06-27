@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from stockobserver.backtest.portfolio import backtest_portfolio
+from heimdall.backtest.portfolio import backtest_portfolio
 
 _DATES = pd.bdate_range("2022-01-03", periods=260)
 
