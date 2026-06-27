@@ -9,6 +9,7 @@ from stockobserver.analytics import earnings_report
 from stockobserver.data.symbols import SymbolError, parse_symbol
 from stockobserver.ui._data import fmp_provider
 from stockobserver.ui._personas import ai_report
+from stockobserver.ui.i18n import t
 
 
 def _fmt(v: float, pct: bool = False) -> str:
@@ -18,9 +19,9 @@ def _fmt(v: float, pct: bool = False) -> str:
 
 
 def render() -> None:
-    st.header("📰 Earnings — JPM lens")
-    st.caption("Consensus estimates and the earnings calendar are paid data (via FMP).")
-    symbol = st.text_input("Symbol", "AAPL.US")
+    st.header(t("📰 Earnings — JPM lens"))
+    st.caption(t("Consensus estimates and the earnings calendar are paid data (via FMP)."))
+    symbol = st.text_input(t("Symbol"), "AAPL.US")
     try:
         parse_symbol(symbol)
     except SymbolError as exc:
@@ -35,7 +36,7 @@ def render() -> None:
         return
     rep = earnings_report(symbol, earnings)
 
-    st.subheader("Decision Summary")
+    st.subheader(t("Decision Summary"))
     cols = st.columns(4)
     cols[0].metric("Next date", str(rep.next_date.date()) if rep.next_date is not None else "—")
     cols[1].metric("Consensus EPS", _fmt(rep.next_eps_estimate))
@@ -43,7 +44,7 @@ def render() -> None:
     cols[3].metric("Avg surprise", _fmt(rep.avg_surprise, pct=True))
 
     if not rep.recent.empty:
-        st.caption("Recent quarters — actual vs estimate")
+        st.caption(t("Recent quarters — actual vs estimate"))
         st.dataframe(rep.recent.round(3), width="stretch", hide_index=True)
 
     nxt_eps = None if pd.isna(rep.next_eps_estimate) else round(rep.next_eps_estimate, 3)

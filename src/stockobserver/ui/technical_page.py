@@ -12,11 +12,12 @@ from stockobserver.data.symbols import SymbolError, parse_symbol
 from stockobserver.factors.indicators import bollinger
 from stockobserver.ui._data import get_ohlcv
 from stockobserver.ui._personas import ai_report
+from stockobserver.ui.i18n import t
 
 
 def render() -> None:
-    st.header("📐 Technical — Morgan Stanley lens")
-    symbol = st.text_input("Symbol (TICKER.MARKET)", "AAPL.US")
+    st.header(t("📐 Technical — Morgan Stanley lens"))
+    symbol = st.text_input(t("Symbol (TICKER.MARKET)"), "AAPL.US")
     try:
         parse_symbol(symbol)
     except SymbolError as exc:
@@ -32,7 +33,7 @@ def render() -> None:
     s = tr.setup
 
     # --- Trading Plan Summary ---
-    st.subheader("Trading Plan Summary")
+    st.subheader(t("Trading Plan Summary"))
     box = st.columns(5)
     box[0].metric("Price", f"{tr.price:.2f}")
     box[1].metric("Entry", f"{s.entry:.2f}")
@@ -92,9 +93,9 @@ def render() -> None:
     st.plotly_chart(fig, width="stretch")
 
     cols = st.columns(2)
-    cols[0].caption("Support / Resistance")
+    cols[0].caption(t("Support / Resistance"))
     cols[0].write({"support": tr.support, "resistance": tr.resistance})
-    cols[1].caption("Fibonacci retracement")
+    cols[1].caption(t("Fibonacci retracement"))
     cols[1].write(tr.fibonacci)
 
     payload = {

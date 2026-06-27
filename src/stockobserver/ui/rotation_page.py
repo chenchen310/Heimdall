@@ -9,13 +9,16 @@ import streamlit as st
 from stockobserver.analytics import SECTOR_ETFS, sector_rotation
 from stockobserver.ui._data import get_ohlcv
 from stockobserver.ui._personas import ai_report
+from stockobserver.ui.i18n import t
 
 
 def render() -> None:
-    st.header("🔄 Sector rotation — Citadel lens")
-    st.caption("The 11 SPDR sector ETFs, ranked by a blended 1/3/6-month relative-strength score.")
-    if not st.button("Run rotation scan"):
-        st.info("Fetches ~11 sector ETFs (cached after the first run).")
+    st.header(t("🔄 Sector rotation — Citadel lens"))
+    st.caption(
+        t("The 11 SPDR sector ETFs, ranked by a blended 1/3/6-month relative-strength score.")
+    )
+    if not st.button(t("Run rotation scan")):
+        st.info(t("Fetches ~11 sector ETFs (cached after the first run)."))
         return
 
     end = date.today()
@@ -25,7 +28,7 @@ def render() -> None:
         rep = sector_rotation(etfs)
 
     cols = st.columns(3)
-    cols[0].metric("Tilt", rep.tilt)
+    cols[0].metric(t("Tilt"), rep.tilt)
     cols[1].metric("Offense score", f"{rep.offense_score:.1%}")
     cols[2].metric("Defense score", f"{rep.defense_score:.1%}")
     st.dataframe(

@@ -9,6 +9,7 @@ from stockobserver.screener import store
 from stockobserver.screener.engine import evaluate
 from stockobserver.screener.model import Predicate, Screen
 from stockobserver.ui._data import snapshot
+from stockobserver.ui.i18n import t
 
 # Scalar-comparison operators exposed in the table editor (lists/between via saved JSON).
 _EDITOR_OPS = ["<", "<=", ">", ">=", "==", "!=", "notna"]
@@ -34,12 +35,15 @@ def _numeric_fields(snap: pd.DataFrame) -> list[str]:
 
 
 def render() -> None:
-    st.header("📊 Screener")
+    st.header(t("📊 Screener"))
     try:
         snap = snapshot()
     except FileNotFoundError:
         st.warning(
-            "No snapshot found. Build one first:\n\n`uv run python -m stockobserver.screener.build`"
+            t(
+                "No snapshot found. Build one first:\n\n"
+                "`uv run python -m stockobserver.screener.build`"
+            )
         )
         return
 
@@ -51,8 +55,8 @@ def render() -> None:
 
     # --- choose a starting point: preset or saved screen --------------------
     left, right = st.columns(2)
-    preset = left.selectbox("Start from preset", list(_PRESETS))
-    saved = right.selectbox("…or load saved", ["—", *store.list_screens()])
+    preset = left.selectbox(t("Start from preset"), list(_PRESETS), format_func=t)
+    saved = right.selectbox(t("…or load saved"), ["—", *store.list_screens()])
 
     if saved != "—":
         start_rows = [p.model_dump() for p in store.load_screen(saved).predicates]
@@ -66,17 +70,17 @@ def render() -> None:
         num_rows="dynamic",
         width="stretch",
         column_config={
-            "field": st.column_config.SelectboxColumn("Field", options=fields, required=True),
-            "op": st.column_config.SelectboxColumn("Op", options=_EDITOR_OPS, required=True),
-            "value": st.column_config.NumberColumn("Value"),
+            "field": st.column_config.SelectboxColumn(t("Field"), options=fields, required=True),
+            "op": st.column_config.SelectboxColumn(t("Op"), options=_EDITOR_OPS, required=True),
+            "value": st.column_config.NumberColumn(t("Value")),
         },
         key="predicates",
     )
 
     c1, c2, c3 = st.columns([2, 1, 1])
-    sort_by = c1.selectbox("Rank by", fields, index=fields.index("pe") if "pe" in fields else 0)
-    ascending = c2.toggle("Ascending", value=True)
-    limit = int(c3.number_input("Limit", min_value=1, max_value=len(snap), value=len(snap)))
+    sort_by = c1.selectbox(t("Rank by"), fields, index=fields.index("pe") if "pe" in fields else 0)
+    ascending = c2.toggle(t("Ascending"), value=True)
+    limit = int(c3.number_input(t("Limit"), min_value=1, max_value=len(snap), value=len(snap)))
 
     predicates = [
         Predicate(field=row["field"], op=row["op"], value=row.get("value"))
@@ -93,12 +97,12 @@ def render() -> None:
         st.error(str(exc))
         return
 
-    st.subheader(f"{len(results)} matches")
+    st.subheader(f"{len(results)} {t('matches')}")
     st.dataframe(results, width="stretch", hide_index=True)
 
     # --- save the current screen --------------------------------------------
-    with st.expander("Save this screen"):
-        name = st.text_input("Name")
-        if st.button("Save", disabled=not name):
+    with st.expander(t("Save this screen")):
+        name = st.text_input(t("Name"))
+        if st.button(t("Save"), disabled=not name):
             store.save_screen(screen.model_copy(update={"name": name}))
             st.success(f"Saved screen {name!r}")

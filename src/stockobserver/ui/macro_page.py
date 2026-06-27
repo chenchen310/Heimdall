@@ -8,10 +8,11 @@ import streamlit as st
 from stockobserver.analytics import macro_dashboard
 from stockobserver.ui._data import macro_provider
 from stockobserver.ui._personas import ai_report
+from stockobserver.ui.i18n import t
 
 
 def render() -> None:
-    st.header("🌐 Macro — Two Sigma lens")
+    st.header(t("🌐 Macro — Two Sigma lens"))
     try:
         with st.spinner("Pulling FRED indicators…"):
             rep = macro_dashboard(macro_provider())
@@ -22,12 +23,12 @@ def render() -> None:
         )
         return
 
-    st.subheader(f"Regime read: {rep.regime}")
+    st.subheader(f"{t('Regime read')}: {rep.regime}")
     if rep.signals:
         for s in rep.signals:
             st.markdown(f"- {s}")
     else:
-        st.caption("No strong macro signals from the key series right now.")
+        st.caption(t("No strong macro signals from the key series right now."))
 
     table = pd.DataFrame(
         [

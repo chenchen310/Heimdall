@@ -15,6 +15,7 @@ from stockobserver.factors.scoring import DEFAULT_WEIGHTS, FACTOR_NAMES, factor_
 from stockobserver.factors.validate import information_coefficient, quantile_spread
 from stockobserver.screener.snapshot import DEFAULT_UNIVERSE
 from stockobserver.ui._data import snapshot
+from stockobserver.ui.i18n import t
 
 _SURVIVORSHIP = (
     "⚠️ Over a **current** universe these results carry survivorship bias — today's "
@@ -45,8 +46,8 @@ def _panel(
 
 
 def render() -> None:
-    st.header("🧬 Factors")
-    ranking, portfolio = st.tabs(["Ranking (current)", "Portfolio backtest"])
+    st.header(t("🧬 Factors"))
+    ranking, portfolio = st.tabs([t("Ranking (current)"), t("Portfolio backtest")])
     with ranking:
         _ranking_tab()
     with portfolio:
@@ -57,9 +58,9 @@ def _ranking_tab() -> None:
     try:
         snap = snapshot()
     except FileNotFoundError:
-        st.warning("No snapshot. Build one: `uv run python -m stockobserver.screener.build`")
+        st.warning(t("No snapshot. Build one: `uv run python -m stockobserver.screener.build`"))
         return
-    st.caption("Composite of value / quality / momentum / growth, each scored 0–100.")
+    st.caption(t("Composite of value / quality / momentum / growth, each scored 0–100."))
     weights = _weights("rank")
     scored = factor_scores(snap, weights).sort_values("composite_score", ascending=False)
     cols = [
@@ -85,15 +86,19 @@ def _ranking_tab() -> None:
 
 
 def _portfolio_tab() -> None:
-    st.warning(_SURVIVORSHIP)
+    st.warning(t(_SURVIVORSHIP))
     c1, c2, c3, c4 = st.columns(4)
-    start_year = c1.slider("Start year", 2016, 2024, 2020)
-    freq = "ME" if c2.selectbox("Rebalance", ["Monthly", "Quarterly"]) == "Monthly" else "QE"
-    top_n = c3.slider("Top N", 2, 10, 5)
-    commission_bps = c4.number_input("Commission (bps)", 0.0, 100.0, 10.0, step=1.0)
+    start_year = c1.slider(t("Start year"), 2016, 2024, 2020)
+    freq = (
+        "ME"
+        if c2.selectbox(t("Rebalance"), ["Monthly", "Quarterly"], format_func=t) == "Monthly"
+        else "QE"
+    )
+    top_n = c3.slider(t("Top N"), 2, 10, 5)
+    commission_bps = c4.number_input(t("Commission (bps)"), 0.0, 100.0, 10.0, step=1.0)
     weights = _weights("pf")
 
-    if not st.button("Run factor backtest"):
+    if not st.button(t("Run factor backtest")):
         return
     with st.spinner("Building point-in-time panel and backtesting…"):
         data = _panel(
@@ -104,7 +109,7 @@ def _portfolio_tab() -> None:
             tuple(weights.items()),
         )
         if data.panel.empty:
-            st.error("No panel data (network/symbol issue).")
+            st.error(t("No panel data (network/symbol issue)."))
             return
         ic = information_coefficient(data.panel)
         res = backtest_portfolio(
@@ -132,5 +137,5 @@ def _portfolio_tab() -> None:
 
     spread = quantile_spread(data.panel, q=3)
     if not spread.empty:
-        st.caption("Forward return by composite quantile (low → high) — upward slope is good:")
+        st.caption(t("Forward return by composite quantile (low → high) — upward slope is good:"))
         st.bar_chart(spread)

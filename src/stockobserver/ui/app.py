@@ -19,6 +19,7 @@ from stockobserver.ui import (  # noqa: E402  (after set_page_config)
     etf_page,
     factors_page,
     fundamental_page,
+    i18n,
     macro_page,
     risk_page,
     rotation_page,
@@ -41,9 +42,10 @@ PAGES = {
 }
 
 st.sidebar.title("📉 Stock Observer")
-choice = st.sidebar.radio("Page", list(PAGES))
+i18n.language_selector()
+choice = st.sidebar.radio(i18n.t("Page"), list(PAGES), format_func=i18n.t)
 st.sidebar.caption(
-    "Rebuild the snapshot any time:\n\n`uv run python -m stockobserver.screener.build`"
+    i18n.t("Rebuild the snapshot any time:\n\n`uv run python -m stockobserver.screener.build`")
 )
 
 PAGES[choice]()
