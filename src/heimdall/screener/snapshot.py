@@ -64,6 +64,29 @@ UNIVERSES: dict[str, list[str]] = {
     "all": DEFAULT_UNIVERSE + TW_UNIVERSE,
 }
 
+# Snapshot columns denominated in the symbol's currency (USD for US, TWD for TW).
+# A threshold on these is market-specific — ``market_cap > 1e9`` means very different
+# things in USD vs TWD — so the UI labels them with the active currency and warns when a
+# screen using them is loaded under a different market. Ratios (pe, roe, margins, …) and
+# returns are unit-free and omitted.
+MONETARY_FIELDS: frozenset[str] = frozenset(
+    {
+        "price",
+        "sma_20",
+        "sma_50",
+        "sma_200",
+        "market_cap",
+        "ev",
+        "net_debt",
+        "ebitda",
+        "revenue",
+        "net_income",
+        "eps_diluted",
+        "equity",
+        "fcf",
+    }
+)
+
 
 def build_row(
     symbol: str,
