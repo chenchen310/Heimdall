@@ -66,6 +66,23 @@ _ZH: dict[str, str] = {
     "Limit": "顯示上限",
     "Save this screen": "儲存此條件組",
     "Name": "名稱",
+    "Description (optional)": "描述（選填）",
+    "Saved screen": "已儲存條件組",
+    "(no description)": "（無描述）",
+    "Delete": "刪除",
+    "On": "啟用",
+    "{n} condition(s) off → {m} extra stock(s) (marked ➕).": (
+        "停用 {n} 個條件 → 多出 {m} 檔（下表標 ➕）。"
+    ),
+    "Appears only because a condition is off": "因為有條件被停用才出現",
+    "Amount fields are in {currency} — thresholds are market-specific.": (
+        "金額欄位以 {currency} 計價——門檻為各市場專屬。"
+    ),
+    "This screen was built for {m} ({c}) and uses amount fields "
+    "(e.g. market_cap); its thresholds may not carry over to {cur}.": (
+        "此條件組是為「{m}（{c}）」建立的，且用到金額欄位（如 market_cap），"
+        "其門檻可能無法套用到 {cur}。"
+    ),
     # --- build data ---
     "🗂 Data — build snapshot": "🗂 資料 — 建立快照",
     "The snapshot is the data behind the Screener and Factors pages. Build or refresh it here.": (

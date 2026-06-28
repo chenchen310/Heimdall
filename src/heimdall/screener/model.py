@@ -19,12 +19,15 @@ class Predicate(BaseModel):
     """One filter, e.g. ``Predicate(field="pe", op="<", value=15)``.
 
     ``between`` expects ``value=[lo, hi]``; ``in`` expects a list; ``notna``
-    ignores ``value``.
+    ignores ``value``. ``enabled=False`` keeps the predicate on the screen (still
+    saved and editable) but makes it a no-op — the UI uses this to toggle a
+    criterion off and see which extra rows appear, without deleting it.
     """
 
     field: str
     op: str
     value: Any = None
+    enabled: bool = True
 
     @field_validator("op")
     @classmethod
@@ -35,10 +38,18 @@ class Predicate(BaseModel):
 
 
 class Screen(BaseModel):
-    """A named set of predicates plus optional ranking."""
+    """A named set of predicates plus optional ranking.
+
+    ``market`` records the region the screen was built for (``US`` / ``Taiwan``);
+    currency-denominated thresholds (e.g. ``market_cap``) are in that market's
+    currency, so the UI warns when such a screen is loaded under a different market.
+    New optional fields default safely, so screens saved before they existed still load.
+    """
 
     name: str
+    description: str = ""
     predicates: list[Predicate] = []
     sort_by: str | None = None
     ascending: bool = True
     limit: int | None = None
+    market: str | None = None

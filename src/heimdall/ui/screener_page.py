@@ -9,7 +9,7 @@ from heimdall.data.symbols import REGION_CURRENCY
 from heimdall.screener import store
 from heimdall.screener.engine import evaluate
 from heimdall.screener.model import Predicate, Screen
-from heimdall.screener.snapshot import split_by_region
+from heimdall.screener.snapshot import MONETARY_FIELDS, split_by_region
 from heimdall.ui._data import snapshot
 from heimdall.ui._markets import market_radio
 from heimdall.ui.i18n import t
@@ -35,6 +35,11 @@ _PRESETS: dict[str, list[dict[str, object]]] = {
 
 def _numeric_fields(snap: pd.DataFrame) -> list[str]:
     return [c for c in snap.columns if pd.api.types.is_numeric_dtype(snap[c])]
+
+
+def _has_monetary(screen: Screen) -> bool:
+    """True if any predicate filters a currency-denominated field (market-specific)."""
+    return any(p.field in MONETARY_FIELDS for p in screen.predicates)
 
 
 def render() -> None:
@@ -67,10 +72,26 @@ def render() -> None:
     saved = right.selectbox(t("…or load saved"), ["—", *store.list_screens()])
 
     if saved != "—":
-        start_rows = [p.model_dump() for p in store.load_screen(saved).predicates]
+        loaded = store.load_screen(saved)
+        start_rows = [p.model_dump() for p in loaded.predicates]
+        meta, action = st.columns([5, 1])
+        meta.caption("📝 " + (loaded.description or t("(no description)")))
+        if action.button("🗑 " + t("Delete"), key="del_screen"):
+            store.delete_screen(saved)
+            st.rerun()
+        if loaded.market and loaded.market != region and _has_monetary(loaded):
+            st.warning(
+                t(
+                    "This screen was built for {m} ({c}) and uses amount fields "
+                    "(e.g. market_cap); its thresholds may not carry over to {cur}."
+                ).format(
+                    m=t(loaded.market), c=REGION_CURRENCY.get(loaded.market, "?"), cur=currency
+                )
+            )
     else:
         start_rows = _PRESETS[preset]
-    base = pd.DataFrame(start_rows, columns=["field", "op", "value"])
+    base = pd.DataFrame(start_rows, columns=["enabled", "field", "op", "value"])
+    base["enabled"] = [True if pd.isna(v) else bool(v) for v in base["enabled"]]  # presets: on
 
     # --- editable predicate table -------------------------------------------
     edited = st.data_editor(
@@ -78,6 +99,7 @@ def render() -> None:
         num_rows="dynamic",
         width="stretch",
         column_config={
+            "enabled": st.column_config.CheckboxColumn(t("On"), default=True),
             "field": st.column_config.SelectboxColumn(t("Field"), options=fields, required=True),
             "op": st.column_config.SelectboxColumn(t("Op"), options=_EDITOR_OPS, required=True),
             "value": st.column_config.NumberColumn(t("Value")),
@@ -91,7 +113,12 @@ def render() -> None:
     limit = int(c3.number_input(t("Limit"), min_value=1, max_value=len(snap), value=len(snap)))
 
     predicates = [
-        Predicate(field=row["field"], op=row["op"], value=row.get("value"))
+        Predicate(
+            field=row["field"],
+            op=row["op"],
+            value=row.get("value"),
+            enabled=bool(row["enabled"]) if pd.notna(row.get("enabled")) else True,
+        )
         for _, row in edited.iterrows()
         if pd.notna(row.get("field")) and pd.notna(row.get("op"))
     ]
@@ -105,12 +132,54 @@ def render() -> None:
         st.error(str(exc))
         return
 
+    # Toggled-off conditions widen the result set; mark the rows they let in so you can
+    # see exactly which stocks the relaxed criteria add.
+    disabled = [p for p in predicates if not p.enabled]
+    added_mask = None
+    if disabled and not results.empty:
+        strict = screen.model_copy(
+            update={"predicates": [p.model_copy(update={"enabled": True}) for p in predicates]}
+        )
+        try:
+            strict_syms = set(evaluate(strict, snap)["symbol"])
+            added_mask = ~results["symbol"].isin(strict_syms)
+        except (KeyError, ValueError):
+            added_mask = None  # a disabled predicate hit a missing field — skip the marking
+
     st.subheader(f"{len(results)} {t('matches')}")
-    st.dataframe(results, width="stretch", hide_index=True)
+    if disabled:
+        extra = int(added_mask.sum()) if added_mask is not None else 0
+        st.caption(
+            "🔓 "
+            + t("{n} condition(s) off → {m} extra stock(s) (marked ➕).").format(
+                n=len(disabled), m=extra
+            )
+        )
+    money = [c for c in results.columns if c in MONETARY_FIELDS]
+    if money:
+        st.caption(
+            "💱 "
+            + t("Amount fields are in {currency} — thresholds are market-specific.").format(
+                currency=currency
+            )
+        )
+    # Label money columns with the currency; pin `symbol` (and the ➕ marker) so they stay
+    # put when the wide table scrolls sideways.
+    display = results.rename(columns={c: f"{c} ({currency})" for c in money})
+    colcfg: dict[str, object] = {"symbol": st.column_config.Column(pinned=True)}
+    if added_mask is not None:
+        display.insert(1, "added", added_mask.to_numpy())
+        colcfg["added"] = st.column_config.CheckboxColumn(
+            "➕", pinned=True, help=t("Appears only because a condition is off")
+        )
+    st.dataframe(display, width="stretch", hide_index=True, column_config=colcfg)
 
     # --- save the current screen --------------------------------------------
     with st.expander(t("Save this screen")):
         name = st.text_input(t("Name"))
+        desc = st.text_area(t("Description (optional)"), height=68)
         if st.button(t("Save"), disabled=not name):
-            store.save_screen(screen.model_copy(update={"name": name}))
-            st.success(f"Saved screen {name!r}")
+            store.save_screen(
+                screen.model_copy(update={"name": name, "description": desc, "market": region})
+            )
+            st.success(f"{t('Saved screen')} {name!r}")

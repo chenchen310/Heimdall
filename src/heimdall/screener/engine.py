@@ -44,9 +44,15 @@ def _mask(df: pd.DataFrame, p: Predicate) -> pd.Series:
 
 
 def evaluate(screen: Screen, snapshot: pd.DataFrame) -> pd.DataFrame:
-    """Return the snapshot rows passing every predicate, sorted/limited per the screen."""
+    """Return the snapshot rows passing every *enabled* predicate, sorted/limited.
+
+    A predicate with ``enabled=False`` is skipped — it stays on the screen but does
+    not constrain — so the UI can toggle a criterion off to widen the result set.
+    """
     mask = pd.Series(True, index=snapshot.index)
     for predicate in screen.predicates:
+        if not predicate.enabled:
+            continue
         mask &= _mask(snapshot, predicate)
 
     out = snapshot[mask]
