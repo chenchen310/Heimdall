@@ -17,6 +17,7 @@ _ZH: dict[str, str] = {
     # --- nav / app shell ---
     "Page": "頁面",
     "Screener": "選股器",
+    "Build data": "建立資料",
     "Chart": "個股圖",
     "Fundamental": "基本面",
     "Technical": "技術面",
@@ -65,6 +66,52 @@ _ZH: dict[str, str] = {
     "Limit": "顯示上限",
     "Save this screen": "儲存此條件組",
     "Name": "名稱",
+    # --- build data ---
+    "🗂 Data — build snapshot": "🗂 資料 — 建立快照",
+    "The snapshot is the data behind the Screener and Factors pages. Build or refresh it here.": (
+        "快照是「選股器」與「多因子」頁面的資料來源,可在此建立或更新。"
+    ),
+    "No snapshot yet — build one below.": "尚無快照——請在下方建立。",
+    "Current snapshot": "目前快照",
+    "set": "已設定",
+    "missing — US fundamentals may be price-only": "未設定——美股基本面可能僅有價格",
+    "unset — Taiwan runs on a low free quota": "未設定——台股使用較低的免費配額",
+    "Quick (curated / custom)": "快速(精選 / 自選)",
+    "Whole market (background)": "全市場(背景執行)",
+    "Runs in the app with a progress bar — best for tens to a few hundred symbols.": (
+        "在 App 內執行並顯示進度條——適合數十至數百檔。"
+    ),
+    "A background build is running — wait for it to finish or stop it first.": (
+        "背景建構進行中——請先等待完成或停止它。"
+    ),
+    "Custom symbols": "自選代號",
+    "Universe": "股票池",
+    "Symbols (comma / space / newline, e.g. AAPL.US 2330.TW)": (
+        "代號(以逗號 / 空白 / 換行分隔,例如 AAPL.US 2330.TW)"
+    ),
+    "Re-fetch symbols already in the snapshot": "重新抓取已在快照中的代號",
+    "refresh all": "全部更新",
+    "new only": "僅新增",
+    "Build now": "立即建立",
+    "Starting…": "開始中…",
+    "Done": "完成",
+    "Already up to date — nothing to fetch.": "已是最新——無須抓取。",
+    "Built": "已建立",
+    "skipped": "略過",
+    "Launches a background crawl. Long and one-time — you can leave this page; it keeps "
+    "running and is resumable. Prices are cached, so a later refresh is far faster.": (
+        "啟動背景爬取。耗時且為一次性——可離開此頁,會持續執行且可續跑。價格已快取,之後更新會快很多。"
+    ),
+    "Background build finished.": "背景建構完成。",
+    "Rebuild from scratch (re-fetch everything)": "從頭重建(全部重新抓取)",
+    "Start background build": "開始背景建構",
+    "Building in the background — safe to switch pages; come back any time.": (
+        "背景建構中——可安全切換頁面,隨時回來查看。"
+    ),
+    "Stop": "停止",
+    "Stopped. The partial snapshot is kept; start again to resume.": (
+        "已停止。部分快照已保留;再次開始即可續跑。"
+    ),
     # --- chart ---
     "📈 Chart": "📈 個股圖",
     "Lookback (days)": "回看天數",
