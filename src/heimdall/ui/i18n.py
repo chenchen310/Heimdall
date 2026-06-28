@@ -52,6 +52,12 @@ _ZH: dict[str, str] = {
     "No snapshot found. Build one first:\n\n`uv run python -m heimdall.screener.build`": (
         "找不到快照，請先建立：\n\n`uv run python -m heimdall.screener.build`"
     ),
+    "Snapshot is empty.": "快照是空的。",
+    "Market": "市場",
+    "US": "美股",
+    "Taiwan": "台股",
+    "symbols": "檔",
+    "as of": "資料日",
     "Start from preset": "從預設條件開始",
     "…or load saved": "…或載入已存的",
     "Rank by": "排序依據",
@@ -165,6 +171,7 @@ _ZH: dict[str, str] = {
     "No snapshot. Build one: `uv run python -m heimdall.screener.build`": (
         "找不到快照，請先建立：`uv run python -m heimdall.screener.build`"
     ),
+    "No rows for this market in the snapshot.": "快照中沒有這個市場的資料。",
     "No panel data (network/symbol issue).": "沒有面板資料（網路／代號問題）。",
     "⚠️ Over a **current** universe these results carry survivorship bias — today's "
     "winners are baked in. Treat returns as an optimistic upper bound, not a forecast.": (

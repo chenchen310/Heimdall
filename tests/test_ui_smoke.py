@@ -42,6 +42,44 @@ def test_screener_page_renders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 
     assert not at.exception  # the script ran cleanly (empty ElementList)
     assert [h.value for h in at.header] == ["📊 Screener"]
-    # default "Cheap & profitable" preset (pe<25, roe>.15, net_margin>.10) → only A.US
+    # default market is US (USD); the "Cheap & profitable" preset → only A.US
+    assert at.radio[0].options == ["US (USD)"]
     results = at.dataframe[-1].value
     assert results["symbol"].tolist() == ["A.US"]
+
+
+def _write_mixed_snapshot(data_dir: Path) -> None:
+    """US + Taiwan rows with varying factor inputs, for the market-split test."""
+    snap = pd.DataFrame(
+        {
+            "symbol": ["A.US", "B.US", "2330.TW", "2317.TW"],
+            "as_of": [pd.Timestamp("2024-01-01")] * 4,
+            "pe": [10.0, 40.0, 15.0, 25.0],
+            "roe": [0.25, 0.05, 0.27, 0.10],
+            "net_margin": [0.22, 0.04, 0.40, 0.03],
+            "ret_6m": [0.20, -0.10, 0.25, 0.02],
+            "revenue_growth_yoy": [0.15, -0.02, 0.18, 0.01],
+        }
+    )
+    snap.to_parquet(data_dir / "snapshot.parquet")
+
+
+def test_factors_ranking_splits_us_and_taiwan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_mixed_snapshot(tmp_path)
+    st.cache_data.clear()
+
+    at = AppTest.from_file(APP).run(timeout=60)
+    at.sidebar.radio[0].set_value("Factors").run()  # navigate to the Factors page
+    assert not at.exception
+    assert [h.value for h in at.header] == ["🧬 Factors"]
+
+    # One market at a time, each labeled with its own currency.
+    assert at.radio[0].options == ["US (USD)", "Taiwan (TWD)"]
+    assert at.dataframe[-1].value["symbol"].tolist() == ["A.US", "B.US"]  # default US
+
+    at.radio[0].set_value("Taiwan").run()
+    assert not at.exception
+    assert at.dataframe[-1].value["symbol"].tolist() == ["2330.TW", "2317.TW"]

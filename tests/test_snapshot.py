@@ -15,7 +15,7 @@ import pytest
 from heimdall.data.base import DataProvider, NotSupported, ProviderError
 from heimdall.data.schema import OHLCV_COLUMNS
 from heimdall.factors.metrics import _latest_annual, _revenue_growth_yoy, snapshot_row
-from heimdall.screener.snapshot import build_row
+from heimdall.screener.snapshot import build_row, split_by_region
 
 
 def _fundamentals() -> pd.DataFrame:
@@ -171,3 +171,29 @@ def test_snapshot_row_derived_metrics_known_answer() -> None:
     # shares 55 → 50: net buyback, negative dilution.
     assert m["share_dilution_yoy"] == pytest.approx(50 / 55 - 1)
     assert m["buyback_yield"] == pytest.approx(1 - 50 / 55)
+    assert m["currency"] == "USD"  # follows the market suffix, not hardcoded
+
+
+def test_snapshot_row_currency_follows_market() -> None:
+    # The unit bug: a TW row's TWD figures must not be labeled (and compared as) USD.
+    us = snapshot_row("X.US", _ohlcv_at(40.0), _fund_two_years(), date(2024, 6, 1))
+    tw = snapshot_row("2330.TW", _ohlcv_at(40.0), _fund_two_years(), date(2024, 6, 1))
+    assert us["currency"] == "USD"
+    assert tw["currency"] == "TWD"
+
+
+def test_split_by_region_partitions_us_and_taiwan() -> None:
+    snap = pd.DataFrame(
+        {
+            "symbol": ["AAPL.US", "2330.TW", "MSFT.US", "6488.TWO"],
+            "price": [1.0, 2.0, 3.0, 4.0],
+        }
+    )
+    groups = split_by_region(snap)
+    assert list(groups) == ["US", "Taiwan"]  # US first, per market-definition order
+    assert groups["US"]["symbol"].tolist() == ["AAPL.US", "MSFT.US"]
+    assert groups["Taiwan"]["symbol"].tolist() == ["2330.TW", "6488.TWO"]  # .TW + .TWO together
+
+
+def test_split_by_region_empty_snapshot() -> None:
+    assert split_by_region(pd.DataFrame()) == {}

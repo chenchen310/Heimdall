@@ -8,14 +8,19 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from heimdall.backtest.portfolio import backtest_portfolio
+from heimdall.data import router
 from heimdall.data.cache import CachedProvider
-from heimdall.data.providers import SecEdgarProvider, YFinanceProvider
 from heimdall.factors.panel import PanelData, build_panel
 from heimdall.factors.scoring import DEFAULT_WEIGHTS, FACTOR_NAMES, factor_scores
 from heimdall.factors.validate import information_coefficient, quantile_spread
-from heimdall.screener.snapshot import DEFAULT_UNIVERSE
+from heimdall.screener.snapshot import DEFAULT_UNIVERSE, TW_UNIVERSE, split_by_region
 from heimdall.ui._data import snapshot
+from heimdall.ui._markets import market_radio
 from heimdall.ui.i18n import t
+
+# Curated per-market universe for the point-in-time portfolio backtest. Returns are
+# relative, but FX would muddy a mixed book — so each backtest is single-currency.
+_UNIVERSE_BY_REGION: dict[str, list[str]] = {"US": DEFAULT_UNIVERSE, "Taiwan": TW_UNIVERSE}
 
 _SURVIVORSHIP = (
     "⚠️ Over a **current** universe these results carry survivorship bias — today's "
@@ -39,26 +44,39 @@ def _panel(
     freq: str,
     weights: tuple[tuple[str, float], ...],
 ) -> PanelData:
-    prices = CachedProvider(YFinanceProvider())
+    # Router dispatches per symbol: US → EDGAR/FMP, Taiwan → FinMind.
+    prices = CachedProvider(router.price_provider())
     return build_panel(
-        list(symbols), prices, SecEdgarProvider(), start, end, freq=freq, weights=dict(weights)
+        list(symbols),
+        prices,
+        router.fundamentals_provider(),
+        start,
+        end,
+        freq=freq,
+        weights=dict(weights),
     )
 
 
 def render() -> None:
     st.header(t("🧬 Factors"))
+    # US and Taiwan are scored/backtested separately — different currency, and factor
+    # z-scores are only comparable within one market's cross-section.
+    region = market_radio(list(_UNIVERSE_BY_REGION))
     ranking, portfolio = st.tabs([t("Ranking (current)"), t("Portfolio backtest")])
     with ranking:
-        _ranking_tab()
+        _ranking_tab(region)
     with portfolio:
-        _portfolio_tab()
+        _portfolio_tab(region)
 
 
-def _ranking_tab() -> None:
+def _ranking_tab(region: str) -> None:
     try:
-        snap = snapshot()
+        snap = split_by_region(snapshot()).get(region)
     except FileNotFoundError:
         st.warning(t("No snapshot. Build one: `uv run python -m heimdall.screener.build`"))
+        return
+    if snap is None or snap.empty:
+        st.warning(t("No rows for this market in the snapshot."))
         return
     st.caption(t("Composite of value / quality / momentum / growth, each scored 0–100."))
     weights = _weights("rank")
@@ -85,7 +103,7 @@ def _ranking_tab() -> None:
     )
 
 
-def _portfolio_tab() -> None:
+def _portfolio_tab(region: str) -> None:
     st.warning(t(_SURVIVORSHIP))
     c1, c2, c3, c4 = st.columns(4)
     start_year = c1.slider(t("Start year"), 2016, 2024, 2020)
@@ -102,7 +120,7 @@ def _portfolio_tab() -> None:
         return
     with st.spinner("Building point-in-time panel and backtesting…"):
         data = _panel(
-            tuple(DEFAULT_UNIVERSE),
+            tuple(_UNIVERSE_BY_REGION[region]),
             date(start_year, 1, 1),
             date.today(),
             freq,
