@@ -83,3 +83,16 @@ def test_factors_ranking_splits_us_and_taiwan(
     at.radio[0].set_value("Taiwan").run()
     assert not at.exception
     assert at.dataframe[-1].value["symbol"].tolist() == ["2330.TW", "2317.TW"]
+
+
+def test_build_page_renders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The page renders its controls without starting a build (no network / subprocess).
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_snapshot(tmp_path)
+    st.cache_data.clear()
+
+    at = AppTest.from_file(APP).run(timeout=60)
+    at.sidebar.radio[0].set_value("Build data").run()
+    assert not at.exception
+    assert [h.value for h in at.header] == ["🗂 Data — build snapshot"]
+    assert at.radio  # the quick-tab Universe picker rendered

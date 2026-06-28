@@ -19,7 +19,6 @@ Use ``--rebuild`` to start a fresh snapshot. Set ``SEC_EDGAR_USER_AGENT`` in
 from __future__ import annotations
 
 import argparse
-import contextlib
 from datetime import date
 
 import pandas as pd
@@ -29,9 +28,9 @@ from heimdall.data import router
 from heimdall.data.cache import CachedProvider
 from heimdall.screener.snapshot import (
     UNIVERSES,
-    build_row,
+    build_snapshot_iter,
     load_snapshot,
-    save_snapshot,
+    snapshot_path,
 )
 from heimdall.screener.universe import tw_symbols, vti_symbols
 
@@ -75,42 +74,36 @@ def main(argv: list[str] | None = None) -> int:
     prices = CachedProvider(router.price_provider())
     fundamentals = router.fundamentals_provider()
 
-    # Resume: keep existing rows, only fetch symbols not yet in the snapshot.
-    existing = pd.DataFrame()
-    if not args.rebuild:
-        with contextlib.suppress(FileNotFoundError):
-            existing = load_snapshot()
-    done = set(existing["symbol"]) if not existing.empty else set()
-    todo = [s for s in symbols if s not in done]
+    # The resumable crawl + checkpointing lives in the core iterator; here we just
+    # print the plan, checkpoint lines, and a final summary as it streams progress.
+    progress = build_snapshot_iter(
+        symbols,
+        prices,
+        fundamentals,
+        as_of,
+        resume=not args.rebuild,
+        checkpoint_every=args.checkpoint_every,
+    )
+    last = next(progress)  # initial plan (done == 0)
     print(
-        f"Universe: {len(symbols)} symbols | already built: {len(done & set(symbols))} "
-        f"| to fetch: {len(todo)} | as of {as_of}"
+        f"Universe: {len(symbols)} symbols | already built: {len(symbols) - last.total} "
+        f"| to fetch: {last.total} | as of {as_of}"
     )
+    for last in progress:
+        if last.done and not last.finished and last.done % args.checkpoint_every == 0:
+            print(
+                f"  [{last.done}/{last.total}] built {last.built}, "
+                f"skipped {last.done - last.built} — checkpoint saved"
+            )
 
-    rows: list[dict[str, object]] = (
-        existing.to_dict("records") if not existing.empty else []  # type: ignore[assignment]
-    )
-    built = 0
-    failures: dict[str, int] = {}
-    for i, symbol in enumerate(todo, start=1):
-        try:
-            row = build_row(symbol, prices, fundamentals, as_of)
-        except Exception as exc:  # network/provider hiccup — skip, don't abort the crawl
-            failures[type(exc).__name__] = failures.get(type(exc).__name__, 0) + 1
-            row = None
-        if row is not None:
-            rows.append(row)
-            built += 1
-        if i % args.checkpoint_every == 0:
-            save_snapshot(pd.DataFrame(rows))
-            print(f"  [{i}/{len(todo)}] built {built}, skipped {i - built} — checkpoint saved")
-
-    df = pd.DataFrame(rows)
+    try:
+        df = load_snapshot()
+    except FileNotFoundError:
+        df = pd.DataFrame()
     if df.empty:
         print("Snapshot is empty (no data fetched).")
         return 1
-    path = save_snapshot(df)
-    print(f"\nSaved {len(df)} rows -> {path}")
+    print(f"\nSaved {len(df)} rows -> {snapshot_path()}")
     fund_cols = [c for c in ("pe", "ps", "net_margin", "roe") if c in df.columns]
     if fund_cols:
         no_fund = int(df[fund_cols].isna().all(axis=1).sum())
@@ -119,8 +112,8 @@ def main(argv: list[str] | None = None) -> int:
                 f"Price-only (no fundamentals): {no_fund} of {len(df)} "
                 "— e.g. FinMind quota; set FINMIND_TOKEN and --rebuild to fill."
             )
-    if failures:
-        summary = ", ".join(f"{name}×{n}" for name, n in sorted(failures.items()))
+    if last.failures:
+        summary = ", ".join(f"{name}×{n}" for name, n in sorted(last.failures.items()))
         print(f"Skipped on error: {summary}")
     cols = [c for c in _PREVIEW_COLS if c in df.columns]
     print("\nPreview (first 15):")

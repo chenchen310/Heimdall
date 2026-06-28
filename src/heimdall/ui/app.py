@@ -14,6 +14,7 @@ st.set_page_config(page_title="Heimdall", page_icon="🛡️", layout="wide")
 
 from heimdall.ui import (  # noqa: E402  (after set_page_config)
     backtest_page,
+    build_page,
     chart_page,
     earnings_page,
     etf_page,
@@ -29,6 +30,7 @@ from heimdall.ui import (  # noqa: E402  (after set_page_config)
 
 PAGES = {
     "Screener": screener_page.render,
+    "Build data": build_page.render,
     "Chart": chart_page.render,
     "Fundamental": fundamental_page.render,
     "Technical": technical_page.render,

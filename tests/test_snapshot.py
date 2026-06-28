@@ -7,6 +7,7 @@ most recently *ended* fiscal period (not the last row of a multi-year filing).
 from __future__ import annotations
 
 from datetime import date
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -15,7 +16,12 @@ import pytest
 from heimdall.data.base import DataProvider, NotSupported, ProviderError
 from heimdall.data.schema import OHLCV_COLUMNS
 from heimdall.factors.metrics import _latest_annual, _revenue_growth_yoy, snapshot_row
-from heimdall.screener.snapshot import build_row, split_by_region
+from heimdall.screener.snapshot import (
+    build_row,
+    build_snapshot_iter,
+    load_snapshot,
+    split_by_region,
+)
 
 
 def _fundamentals() -> pd.DataFrame:
@@ -197,3 +203,44 @@ def test_split_by_region_partitions_us_and_taiwan() -> None:
 
 def test_split_by_region_empty_snapshot() -> None:
     assert split_by_region(pd.DataFrame()) == {}
+
+
+def test_build_snapshot_iter_resumes_and_checkpoints(tmp_path: Path) -> None:
+    prices, nofund = _Prices(_ohlcv()), _NoFundamentals()  # price-only rows
+    syms = ["A.US", "B.US", "C.US"]
+
+    seen = (-1, -1, -1, False)
+    for p in build_snapshot_iter(
+        syms, prices, nofund, date(2024, 4, 1), resume=False, checkpoint_every=2, root=tmp_path
+    ):
+        seen = (p.total, p.done, p.built, p.finished)
+    assert seen == (3, 3, 3, True)
+    assert sorted(load_snapshot(tmp_path)["symbol"].tolist()) == ["A.US", "B.US", "C.US"]
+
+    # Resume keeps existing rows and fetches only the not-yet-built symbol.
+    plan_total, last_built = -1, -1
+    for i, p in enumerate(
+        build_snapshot_iter([*syms, "D.US"], prices, nofund, date(2024, 4, 1), root=tmp_path)
+    ):
+        if i == 0:
+            plan_total = p.total  # initial plan, before any fetch
+        last_built = p.built
+    assert plan_total == 1 and last_built == 1
+    assert sorted(load_snapshot(tmp_path)["symbol"].tolist()) == ["A.US", "B.US", "C.US", "D.US"]
+
+
+def test_build_snapshot_iter_tallies_failures(tmp_path: Path) -> None:
+    class _Flaky(DataProvider):
+        def get_ohlcv(self, symbol: str, start: date, end: date) -> pd.DataFrame:
+            if symbol == "BAD.US":
+                raise ProviderError("boom")  # one symbol blows up mid-crawl
+            return _ohlcv()
+
+    failures: dict[str, int] = {}
+    built = -1
+    for p in build_snapshot_iter(
+        ["A.US", "BAD.US"], _Flaky(), _NoFundamentals(), date(2024, 4, 1), root=tmp_path
+    ):
+        failures, built = p.failures, p.built
+    assert built == 1  # A.US built; BAD.US tallied, not fatal
+    assert failures == {"ProviderError": 1}
