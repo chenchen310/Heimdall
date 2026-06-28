@@ -16,6 +16,7 @@ import pandas as pd
 from heimdall.data.base import DataProvider, NotSupported, ProviderError
 from heimdall.data.schema import FUNDAMENTALS_COLUMNS
 from heimdall.data.store import data_root
+from heimdall.data.symbols import MARKET_REGION, parse_symbol
 from heimdall.factors.metrics import snapshot_row
 
 # Small default US universe for Phase 1 (extend freely; full index lists later).
@@ -99,6 +100,22 @@ def build_snapshot(
         if (row := build_row(symbol, prices, fundamentals, as_of)) is not None
     ]
     return pd.DataFrame(rows)
+
+
+def split_by_region(snap: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    """Partition a snapshot into per-region tables (``US`` first, then ``Taiwan``).
+
+    Reporting currency differs by market (USD vs TWD), so a single mixed table makes
+    the price/market-cap columns non-comparable and any sort across them meaningless.
+    The UI shows one region — hence one currency — at a time. Region is derived from
+    each symbol's canonical market suffix, so it stays correct even against an older
+    snapshot whose stored ``currency`` column predates the per-market fix.
+    """
+    if snap.empty or "symbol" not in snap.columns:
+        return {}
+    region = snap["symbol"].map(lambda s: parse_symbol(str(s)).region)
+    order = list(dict.fromkeys(MARKET_REGION.values()))  # US, Taiwan — definition order
+    return {r: snap[region == r].reset_index(drop=True) for r in order if (region == r).any()}
 
 
 def snapshot_path(root: Path | None = None) -> Path:

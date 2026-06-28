@@ -16,6 +16,21 @@ MARKET_CURRENCY: dict[str, str] = {
     "TWO": "TWD",  # TPEX / OTC
 }
 
+# UI grouping: markets that share a reporting currency are shown as one region, so
+# the screener never mixes USD and TWD figures in one table. TWSE-listed ``.TW`` and
+# TPEX/OTC ``.TWO`` are both "Taiwan". Insertion order is the display order (US first).
+MARKET_REGION: dict[str, str] = {
+    "US": "US",
+    "TW": "Taiwan",
+    "TWO": "Taiwan",
+}
+
+# Reporting currency per UI region (every market in a region shares one currency).
+# Lets a universe-driven page label its currency without a sample symbol in hand.
+REGION_CURRENCY: dict[str, str] = {
+    region: MARKET_CURRENCY[market] for market, region in MARKET_REGION.items()
+}
+
 
 class SymbolError(ValueError):
     """Raised for a malformed or unknown canonical symbol."""
@@ -35,6 +50,11 @@ class Symbol:
     @property
     def currency(self) -> str:
         return MARKET_CURRENCY[self.market]
+
+    @property
+    def region(self) -> str:
+        """UI region (``US`` / ``Taiwan``) — groups markets sharing a currency."""
+        return MARKET_REGION[self.market]
 
     def __str__(self) -> str:
         return self.canonical

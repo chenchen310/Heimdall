@@ -12,6 +12,7 @@ from datetime import date
 
 import pandas as pd
 
+from heimdall.data.symbols import parse_symbol
 from heimdall.factors.indicators import rsi, sma
 
 
@@ -113,7 +114,9 @@ def snapshot_row(
     return {
         "symbol": symbol,
         "as_of": pd.Timestamp(as_of),
-        "currency": "USD",
+        # Currency follows the market (US→USD, TW/TWO→TWD) — never assume USD, or a
+        # Taiwan row's TWD figures get mislabeled and compared against US dollars.
+        "currency": parse_symbol(symbol).currency,
         **tech,
         "market_cap": market_cap,
         "revenue": revenue,

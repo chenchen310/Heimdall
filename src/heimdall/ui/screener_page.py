@@ -5,10 +5,13 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from heimdall.data.symbols import REGION_CURRENCY
 from heimdall.screener import store
 from heimdall.screener.engine import evaluate
 from heimdall.screener.model import Predicate, Screen
+from heimdall.screener.snapshot import split_by_region
 from heimdall.ui._data import snapshot
+from heimdall.ui._markets import market_radio
 from heimdall.ui.i18n import t
 
 # Scalar-comparison operators exposed in the table editor (lists/between via saved JSON).
@@ -37,17 +40,25 @@ def _numeric_fields(snap: pd.DataFrame) -> list[str]:
 def render() -> None:
     st.header(t("📊 Screener"))
     try:
-        snap = snapshot()
+        full = snapshot()
     except FileNotFoundError:
         st.warning(
             t("No snapshot found. Build one first:\n\n`uv run python -m heimdall.screener.build`")
         )
         return
 
-    st.caption(
-        f"{len(snap)} symbols · snapshot as of "
-        f"{pd.to_datetime(snap['as_of']).max().date() if 'as_of' in snap else 'n/a'}"
-    )
+    # US and Taiwan report in different currencies (USD vs TWD); mixing them in one
+    # table makes price/market-cap sorts meaningless, so screen one market at a time.
+    groups = split_by_region(full)
+    if not groups:
+        st.warning(t("Snapshot is empty."))
+        return
+    region = market_radio(list(groups))
+    snap = groups[region]
+    currency = REGION_CURRENCY[region]
+
+    as_of = pd.to_datetime(snap["as_of"]).max().date() if "as_of" in snap else "n/a"
+    st.caption(f"{len(snap)} {t('symbols')} · {currency} · {t('as of')} {as_of}")
     fields = _numeric_fields(snap)
 
     # --- choose a starting point: preset or saved screen --------------------
