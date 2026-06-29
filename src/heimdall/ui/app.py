@@ -43,11 +43,41 @@ PAGES = {
     "ETF Portfolio": etf_page.render,
 }
 
+# Pages grouped by purpose — one labelled section each in the sidebar.
+NAV: dict[str, list[str]] = {
+    "Data": ["Build data"],
+    "Stock picking": ["Screener", "Chart"],
+    "Backtest": ["Backtest"],
+    "Analyst lenses": [
+        "Fundamental",
+        "Technical",
+        "Risk",
+        "Earnings",
+        "Rotation",
+        "Factors",
+        "ETF Portfolio",
+        "Macro",
+    ],
+}
+
 st.sidebar.title("🛡️ Heimdall")
 i18n.language_selector()
-choice = st.sidebar.radio(i18n.t("Page"), list(PAGES), format_func=i18n.t)
+
+# Render each group as a header + its page buttons; the active page is highlighted.
+st.session_state.setdefault("page", "Screener")
+for _group, _names in NAV.items():
+    st.sidebar.markdown(f"**{i18n.t(_group)}**")
+    for _name in _names:
+        if st.sidebar.button(
+            i18n.t(_name),
+            key=f"nav_{_name}",
+            width="stretch",
+            type="primary" if st.session_state.page == _name else "secondary",
+        ):
+            st.session_state.page = _name
+            st.rerun()
+
 st.sidebar.caption(
     i18n.t("Rebuild the snapshot any time:\n\n`uv run python -m heimdall.screener.build`")
 )
-
-PAGES[choice]()
+PAGES[st.session_state.page]()
