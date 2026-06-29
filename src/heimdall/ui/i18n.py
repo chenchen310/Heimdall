@@ -16,6 +16,9 @@ LANGUAGES: dict[str, str] = {"English": "en", "繁體中文": "zh"}
 _ZH: dict[str, str] = {
     # --- nav / app shell ---
     "Page": "頁面",
+    "Data": "資料",
+    "Stock picking": "選股",
+    "Analyst lenses": "分析師視角",
     "Screener": "選股器",
     "Build data": "建立資料",
     "Chart": "個股圖",

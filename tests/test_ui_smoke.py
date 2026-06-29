@@ -21,6 +21,12 @@ from streamlit.testing.v1 import AppTest  # noqa: E402
 APP = str(Path(__file__).resolve().parents[1] / "src" / "heimdall" / "ui" / "app.py")
 
 
+def _nav(at: AppTest, label: str) -> AppTest:
+    """Click a grouped sidebar nav button by its (English) label, then rerun."""
+    [b for b in at.sidebar.button if b.label == label][0].click().run()
+    return at
+
+
 def _write_snapshot(data_dir: Path) -> None:
     snap = pd.DataFrame(
         {
@@ -75,7 +81,7 @@ def test_factors_ranking_splits_us_and_taiwan(
     st.cache_data.clear()
 
     at = AppTest.from_file(APP).run(timeout=60)
-    at.sidebar.radio[0].set_value("Factors").run()  # navigate to the Factors page
+    _nav(at, "Factors")  # navigate to the Factors page
     assert not at.exception
     assert [h.value for h in at.header] == ["🧬 Factors"]
 
@@ -95,7 +101,7 @@ def test_build_page_renders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     st.cache_data.clear()
 
     at = AppTest.from_file(APP).run(timeout=60)
-    at.sidebar.radio[0].set_value("Build data").run()
+    _nav(at, "Build data")
     assert not at.exception
     assert [h.value for h in at.header] == ["🗂 Data — build snapshot"]
     assert at.radio  # the quick-tab Universe picker rendered
@@ -179,3 +185,19 @@ def test_screener_disabled_condition_widens_and_marks_extra(
     assert "added" in out.columns  # the ➕ marker column
     assert bool(out.loc[out["symbol"] == "A.US", "added"].iloc[0]) is True
     assert any("➕" in c.value for c in at.caption)
+
+
+def test_sidebar_nav_is_grouped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_snapshot(tmp_path)  # default Screener page renders cleanly
+    st.cache_data.clear()
+
+    at = AppTest.from_file(APP).run(timeout=60)
+    assert not at.exception
+    # Every page is a sidebar button…
+    labels = {b.label for b in at.sidebar.button}
+    assert {"Build data", "Screener", "Chart", "Backtest", "Factors", "Macro"} <= labels
+    # …under its group header.
+    headers = " ".join(m.value for m in at.sidebar.markdown)
+    for group in ("Data", "Stock picking", "Backtest", "Analyst lenses"):
+        assert group in headers
