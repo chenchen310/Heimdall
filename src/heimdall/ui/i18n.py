@@ -19,6 +19,8 @@ _ZH: dict[str, str] = {
     "Data": "資料",
     "Stock picking": "選股",
     "Analyst lenses": "分析師視角",
+    "Help": "說明",
+    "Guide": "使用說明",
     "Screener": "選股器",
     "Build data": "建立資料",
     "Chart": "個股圖",
@@ -86,6 +88,11 @@ _ZH: dict[str, str] = {
         "此條件組是為「{m}（{c}）」建立的，且用到金額欄位（如 market_cap），"
         "其門檻可能無法套用到 {cur}。"
     ),
+    # --- user guide ---
+    "📖 User guide": "📖 使用說明",
+    "Quick start": "快速上手",
+    "Reading the numbers — conventions": "看數字的通則",
+    "How to read each page": "如何閱讀各分頁的指標",
     # --- build data ---
     "🗂 Data — build snapshot": "🗂 資料 — 建立快照",
     "The snapshot is the data behind the Screener and Factors pages. Build or refresh it here.": (
