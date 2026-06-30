@@ -199,5 +199,17 @@ def test_sidebar_nav_is_grouped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     assert {"Build data", "Screener", "Chart", "Backtest", "Factors", "Macro"} <= labels
     # …under its group header.
     headers = " ".join(m.value for m in at.sidebar.markdown)
-    for group in ("Data", "Stock picking", "Backtest", "Analyst lenses"):
+    for group in ("Help", "Data", "Stock picking", "Backtest", "Analyst lenses"):
         assert group in headers
+
+
+def test_guide_page_renders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))  # guide needs no snapshot
+    st.cache_data.clear()
+
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Guide")
+    assert not at.exception
+    assert [h.value for h in at.header] == ["📖 User guide"]
+    # one collapsible guide per page (12) + the conventions expander
+    assert len(at.expander) >= 12
