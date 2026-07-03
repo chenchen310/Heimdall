@@ -21,6 +21,20 @@ from streamlit.testing.v1 import AppTest  # noqa: E402
 APP = str(Path(__file__).resolve().parents[1] / "src" / "heimdall" / "ui" / "app.py")
 
 
+def _force_english(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin the UI to English for a test, bypassing the sidebar's language toggle.
+
+    ``current_lang()`` reads ``st.session_state``, which AppTest can evaluate outside
+    an active script run (e.g. while serializing widget state between reruns) — there
+    it falls back to the *default* UI language. A page with a ``format_func=t`` widget
+    (e.g. the Screener's Market radio) then sees mismatched options between the render
+    and that out-of-band check and raises. Patching the function directly keeps ``t()``
+    consistently "en" in both contexts, sidestepping the mismatch entirely. Call before
+    constructing the ``AppTest``.
+    """
+    monkeypatch.setattr("heimdall.ui.i18n.current_lang", lambda: "en")
+
+
 def _nav(at: AppTest, label: str) -> AppTest:
     """Click a grouped sidebar nav button by its (English) label, then rerun."""
     [b for b in at.sidebar.button if b.label == label][0].click().run()
@@ -42,11 +56,27 @@ def _write_snapshot(data_dir: Path) -> None:
     snap.to_parquet(data_dir / "snapshot.parquet")
 
 
+def test_default_language_is_traditional_chinese(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # No language chosen yet — the sidebar selector's first option (繁體中文) is default.
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_snapshot(tmp_path)
+    st.cache_data.clear()
+
+    at = AppTest.from_file(APP).run(timeout=60)
+    assert not at.exception
+    assert [h.value for h in at.header] == ["📊 選股器"]
+    lang_select = [s for s in at.sidebar.selectbox if "Language" in s.label][0]
+    assert lang_select.value == "繁體中文"
+
+
 def test_screener_page_renders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
     _write_snapshot(tmp_path)
     st.cache_data.clear()  # don't reuse a snapshot cached from another test/dir
 
+    _force_english(monkeypatch)
     at = AppTest.from_file(APP).run(timeout=60)
 
     assert not at.exception  # the script ran cleanly (empty ElementList)
@@ -80,6 +110,7 @@ def test_factors_ranking_splits_us_and_taiwan(
     _write_mixed_snapshot(tmp_path)
     st.cache_data.clear()
 
+    _force_english(monkeypatch)
     at = AppTest.from_file(APP).run(timeout=60)
     _nav(at, "Factors")  # navigate to the Factors page
     assert not at.exception
@@ -100,6 +131,7 @@ def test_build_page_renders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     _write_snapshot(tmp_path)
     st.cache_data.clear()
 
+    _force_english(monkeypatch)
     at = AppTest.from_file(APP).run(timeout=60)
     _nav(at, "Build data")
     assert not at.exception
@@ -132,6 +164,7 @@ def test_screener_labels_money_columns_and_keeps_symbol(
     _write_money_snapshot(tmp_path, ["A.US", "B.US"])
     st.cache_data.clear()
 
+    _force_english(monkeypatch)
     at = AppTest.from_file(APP).run(timeout=60)
     assert not at.exception
     cols = list(at.dataframe[-1].value.columns)
@@ -154,6 +187,7 @@ def test_screener_warns_loading_money_screen_in_other_market(
     )
     st.cache_data.clear()
 
+    _force_english(monkeypatch)
     at = AppTest.from_file(APP).run(timeout=60)
     [s for s in at.selectbox if s.label == "…or load saved"][0].set_value("us-bigcap").run()
     at.radio[0].set_value("Taiwan").run()  # a different-currency market
@@ -178,6 +212,7 @@ def test_screener_disabled_condition_widens_and_marks_extra(
     )
     st.cache_data.clear()
 
+    _force_english(monkeypatch)
     at = AppTest.from_file(APP).run(timeout=60)
     [s for s in at.selectbox if s.label == "…or load saved"][0].set_value("explore").run()
     assert not at.exception
@@ -192,6 +227,7 @@ def test_sidebar_nav_is_grouped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     _write_snapshot(tmp_path)  # default Screener page renders cleanly
     st.cache_data.clear()
 
+    _force_english(monkeypatch)
     at = AppTest.from_file(APP).run(timeout=60)
     assert not at.exception
     # Every page is a sidebar button…
@@ -207,6 +243,7 @@ def test_guide_page_renders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))  # guide needs no snapshot
     st.cache_data.clear()
 
+    _force_english(monkeypatch)
     at = AppTest.from_file(APP).run(timeout=60)
     _nav(at, "Guide")
     assert not at.exception

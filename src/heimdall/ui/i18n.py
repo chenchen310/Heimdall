@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-LANGUAGES: dict[str, str] = {"English": "en", "繁體中文": "zh"}
+LANGUAGES: dict[str, str] = {"繁體中文": "zh", "English": "en"}  # first entry = default
 
 # English source -> Traditional Chinese. Missing keys fall back to the source.
 _ZH: dict[str, str] = {
@@ -256,7 +256,7 @@ _ZH: dict[str, str] = {
 
 
 def current_lang() -> str:
-    return str(st.session_state.get("lang", "en"))
+    return str(st.session_state.get("lang", "zh"))
 
 
 def t(text: str) -> str:
