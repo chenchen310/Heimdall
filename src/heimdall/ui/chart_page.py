@@ -83,10 +83,33 @@ def render() -> None:
         go.Scatter(x=dates, y=macd_sig, name="signal", line={"color": "#ff6d00"}), row=3, col=1
     )
 
+    # Bind every trace to ONE x-axis so the hover crosshair spans all three panels.
+    # ``shared_xaxes=True`` only *matches* the per-row axes (x/x2/x3); ``spikemode="across"``
+    # crosses subplots that truly **share** an x-axis, not merely matched ones — so without
+    # this the spike stays in the hovered panel. The single axis is anchored under the
+    # bottom row (so the date labels sit at the bottom); the now-unused axes are hidden.
+    fig.update_traces(xaxis="x")
+    for shape in fig.layout.shapes:  # the RSI 30/70 guides were tied to the now-hidden x2
+        shape.update(xref="x domain")
     fig.update_layout(
         height=720,
-        xaxis_rangeslider_visible=False,
         showlegend=True,
         margin={"l": 0, "r": 0, "t": 30, "b": 0},
+        hovermode="x unified",  # one readout per panel at the cursor's date
+        spikedistance=-1,  # the crosshair tracks the cursor anywhere, not only near a point
+        xaxis={
+            "anchor": "y3",
+            "matches": None,  # it now carries all the data, so range to itself (not empty x3)
+            "showticklabels": True,  # the single axis is now the bottom one — show the dates
+            "rangeslider": {"visible": False},
+            "showspikes": True,
+            "spikemode": "across",  # the line crosses price / RSI / MACD
+            "spikesnap": "cursor",
+            "spikethickness": 1,
+            "spikedash": "dot",
+            "spikecolor": "#888",
+        },
+        xaxis2={"visible": False},
+        xaxis3={"visible": False},
     )
     st.plotly_chart(fig, width="stretch")
