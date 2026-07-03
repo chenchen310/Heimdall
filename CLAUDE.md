@@ -8,8 +8,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > fundamentals → EDGAR, Taiwan → FinMind, prices → yfinance (adjusted) for both. Phases 0–5 stand:
 > `analytics/` has Bridgewater **risk**, Citadel **rotation**, Vanguard **ETF construction**, Two Sigma
 > **macro** (FRED-gated), JPM **earnings** (FMP-gated), each with an optional persona AI report; the UI
-> has 11 pages. The roadmap (`docs/ROADMAP.md`) is fully delivered — further work is breadth
-> (universes, paid providers) and polish.
+> has 11 pages. Phases 0–6 (`docs/ROADMAP.md`) are fully delivered.
+>
+> **Current program — the north star:** make the app itself surface stocks with an *objectively
+> validated* high probability of beating the benchmark — no human/LLM judgment in the loop.
+> Read `docs/NORTH_STAR.md` first, execute one task card per session from `docs/ROADMAP_V2.md`,
+> and obey `docs/RESEARCH_PLAYBOOK.md` + `.claude/rules/signal-certification.md` to the letter.
 
 ## What this is
 
@@ -131,6 +135,8 @@ These are the parts that are hard to get right and easy to fool yourself on. Do 
 - **Canonical schema only** downstream of providers; carry currency everywhere. (`canonical-schema.md`)
 - **Delta-only fetching.** Never re-pull full history; fetch new dates and append. Respect provider
   rate limits with a limiter inside each provider class.
+- **Certified signals only.** Today's Picks may show only signals that passed the certification
+  gates on pre-registered out-of-sample data; never tune against the OOS vault. (`signal-certification.md`)
 
 ## Conventions
 
@@ -147,4 +153,5 @@ These are the parts that are hard to get right and easy to fool yourself on. Do 
 - Adding/with a data source → `src/heimdall/data/CLAUDE.md` + `docs/ARCHITECTURE.md`
 - Writing a strategy/backtest → `src/heimdall/backtest/CLAUDE.md` + `.claude/rules/backtest-honesty.md`
 - Factor scoring → `src/heimdall/factors/CLAUDE.md`
-- What to build next → `docs/ROADMAP.md` (Phase 0 is the current target)
+- What to build next → `docs/ROADMAP_V2.md` (one task card per session; read `docs/NORTH_STAR.md` first)
+- Signal research / anything touching forward returns → `docs/RESEARCH_PLAYBOOK.md` (splits, gates, log)
