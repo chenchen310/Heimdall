@@ -81,6 +81,10 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "PD"]  # pyflakes, pycodestyle, isort, pyupgrade, bugbear, simplify, pandas-vet
 
+[tool.ruff.lint.per-file-ignores]
+# Long-form bilingual help prose — wrapping it mid-sentence would hurt readability.
+"src/heimdall/ui/help_page.py" = ["E501"]
+
 [tool.mypy]
 python_version = "3.12"
 packages = ["heimdall"]

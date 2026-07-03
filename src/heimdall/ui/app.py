@@ -20,6 +20,7 @@ from heimdall.ui import (  # noqa: E402  (after set_page_config)
     etf_page,
     factors_page,
     fundamental_page,
+    help_page,
     i18n,
     macro_page,
     risk_page,
@@ -29,6 +30,7 @@ from heimdall.ui import (  # noqa: E402  (after set_page_config)
 )
 
 PAGES = {
+    "Guide": help_page.render,
     "Screener": screener_page.render,
     "Build data": build_page.render,
     "Chart": chart_page.render,
@@ -45,6 +47,7 @@ PAGES = {
 
 # Pages grouped by purpose — one labelled section each in the sidebar.
 NAV: dict[str, list[str]] = {
+    "Help": ["Guide"],
     "Data": ["Build data"],
     "Stock picking": ["Screener", "Chart"],
     "Backtest": ["Backtest"],
