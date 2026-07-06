@@ -14,7 +14,7 @@ import pandas as pd
 import pytest
 
 from heimdall.data.base import DataProvider, NotSupported, ProviderError
-from heimdall.data.schema import OHLCV_COLUMNS
+from heimdall.data.schema import FUNDAMENTALS_COLUMNS, OHLCV_COLUMNS
 from heimdall.factors.metrics import _latest_annual, _revenue_growth_yoy, snapshot_row
 from heimdall.screener.snapshot import (
     build_row,
@@ -244,3 +244,69 @@ def test_build_snapshot_iter_tallies_failures(tmp_path: Path) -> None:
         failures, built = p.failures, p.built
     assert built == 1  # A.US built; BAD.US tallied, not fatal
     assert failures == {"ProviderError": 1}
+
+
+# --- roadmap 7.1: liquidity + skip-month momentum + realized vol -------------
+
+
+def _empty_fund() -> pd.DataFrame:
+    return pd.DataFrame(columns=FUNDAMENTALS_COLUMNS)
+
+
+def _ohlcv_series(close: list[float], volume: list[float] | None = None) -> pd.DataFrame:
+    """Canonical OHLCV from explicit close/volume paths (adj_close mirrors close)."""
+    n = len(close)
+    c = pd.Series(close, dtype=float)
+    v = pd.Series(volume if volume is not None else [1_000_000.0] * n, dtype=float)
+    return pd.DataFrame(
+        {
+            "symbol": "X.US",
+            "date": pd.bdate_range("2023-01-02", periods=n),
+            "open": c,
+            "high": c,
+            "low": c,
+            "close": c,
+            "adj_close": c,
+            "volume": v,
+            "currency": "USD",
+            "provider": "test",
+            "fetched_at": pd.Timestamp("2024-04-01"),
+        }
+    )[OHLCV_COLUMNS]
+
+
+def test_dollar_vol_21d_uses_last_21_bars_median() -> None:
+    # 21 tiny-volume bars then 21 bars at close 10 × volume 1000 = 10,000 traded value;
+    # a full-history median would be dragged down — only the last 21 bars may count.
+    close = [10.0] * 42
+    volume = [0.1] * 21 + [1000.0] * 21
+    m = snapshot_row("X.US", _ohlcv_series(close, volume), _empty_fund(), date(2024, 6, 1))
+    assert m["dollar_vol_21d"] == pytest.approx(10_000.0)
+
+
+def test_dollar_vol_21d_nan_on_short_history() -> None:
+    m = snapshot_row("X.US", _ohlcv_series([10.0] * 20), _empty_fund(), date(2024, 6, 1))
+    assert pd.isna(m["dollar_vol_21d"])
+
+
+def test_ret_12_1_skips_the_last_month() -> None:
+    # 252 bars at 100; the bar 21-back is 150; the FINAL bar spikes to 999 and must not
+    # matter — skip-month momentum reads t−12m → t−1m, ignoring the most recent month.
+    close = [100.0] * 252
+    close[-21] = 150.0
+    close[-1] = 999.0
+    m = snapshot_row("X.US", _ohlcv_series(close), _empty_fund(), date(2024, 6, 1))
+    assert m["ret_12_1"] == pytest.approx(0.5)  # 150 / 100 − 1
+    short = snapshot_row("X.US", _ohlcv_series(close[:251]), _empty_fund(), date(2024, 6, 1))
+    assert pd.isna(short["ret_12_1"])
+
+
+def test_vol_63d_windowed_and_annualized() -> None:
+    # Wild head, then 64 bars of exact 1% growth: the last 63 daily returns are constant,
+    # so annualized realized vol is 0 — proving only the trailing window is used.
+    head = [100.0, 200.0, 50.0, 400.0] * 10
+    tail = [100.0 * 1.01**k for k in range(64)]
+    m = snapshot_row("X.US", _ohlcv_series(head + tail), _empty_fund(), date(2024, 6, 1))
+    assert m["vol_63d"] == pytest.approx(0.0, abs=1e-9)
+    short = snapshot_row("X.US", _ohlcv_series([100.0] * 60), _empty_fund(), date(2024, 6, 1))
+    assert pd.isna(short["vol_63d"])
