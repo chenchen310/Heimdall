@@ -34,7 +34,7 @@ DoD: known-answer tests for each on synthetic series (e.g. constant close×volum
 `dollar_vol_21d`); NaN behavior tested for short history; existing tests untouched and green.
 **Don't:** change existing column semantics (`ret_12m` stays as-is); don't touch providers.
 
-### 7.2 Benchmark map + relative-return helper  `[ ]`
+### 7.2 Benchmark map + relative-return helper  `[x]`
 
 **Goal:** one sanctioned place answering "which benchmark, and what did it return over my window".
 **Files:** new `src/heimdall/research/__init__.py`, `src/heimdall/research/benchmark.py`,
