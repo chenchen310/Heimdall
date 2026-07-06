@@ -19,7 +19,7 @@
 
 ## Phase 7 — Research data layer (labels, liquidity, benchmarks)
 
-### 7.1 Liquidity + missing return features in the snapshot row  `[ ]`
+### 7.1 Liquidity + missing return features in the snapshot row  `[x]`
 
 **Goal:** the snapshot (and therefore the panel) gains the fields hygiene filters and momentum
 signals need. **Files:** `src/heimdall/factors/metrics.py`, `tests/test_snapshot.py`.

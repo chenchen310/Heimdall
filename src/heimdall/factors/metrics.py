@@ -56,11 +56,29 @@ def _or0(x: float) -> float:
 
 
 def _technicals(ohlcv: pd.DataFrame) -> dict[str, float]:
+    nan = float("nan")
     close = ohlcv["adj_close"].reset_index(drop=True)
     price = float(close.iloc[-1])
 
     def ret(n: int) -> float:
-        return _safe_div(price, float(close.iloc[-1 - n])) - 1.0 if len(close) > n else float("nan")
+        return _safe_div(price, float(close.iloc[-1 - n])) - 1.0 if len(close) > n else nan
+
+    # Liquidity: median daily dollar volume over the last 21 bars, on RAW close (adjusted
+    # prices rescale history and would distort past traded value). Hygiene filters use this.
+    traded = (ohlcv["close"] * ohlcv["volume"]).reset_index(drop=True)
+    dollar_vol_21d = float(traded.tail(21).median()) if len(traded) >= 21 else nan
+
+    # Skip-month momentum (t−12m → t−1m): the most recent month tends to reverse, so classic
+    # momentum (UMD) excludes it — unlike ret_12m, which is the plain trailing-year return.
+    ret_12_1 = (
+        _safe_div(float(close.iloc[-21]), float(close.iloc[-252])) - 1.0
+        if len(close) >= 252
+        else nan
+    )
+
+    # Realized volatility: std of the last 63 daily returns, annualized.
+    rets = close.pct_change().dropna()
+    vol_63d = float(rets.tail(63).std() * (252.0**0.5)) if len(rets) >= 63 else nan
 
     s200 = sma(close, 200).iloc[-1]
     return {
@@ -72,6 +90,9 @@ def _technicals(ohlcv: pd.DataFrame) -> dict[str, float]:
         "ret_3m": ret(63),
         "ret_6m": ret(126),
         "ret_12m": ret(252),
+        "ret_12_1": ret_12_1,
+        "vol_63d": vol_63d,
+        "dollar_vol_21d": dollar_vol_21d,
         "pct_above_sma_200": _safe_div(price, float(s200)) - 1.0,
     }
 
