@@ -198,15 +198,43 @@ Panel-only feature (TW rows): `rev_mom_yoy` (latest month YoY) and `rev_mom_acce
 prior 3m mean YoY), point-in-time per 11.1's rule. PIT leak test mandatory. This is Taiwan's
 signature free signal — treat carefully.
 
-### 11.3 TW institutional-flows feature  `[ ]`
-New `FinMindProvider` method for `TaiwanStockInstitutionalInvestorsBuySell` (golden-test from
-saved JSON; respect the rate limiter); panel feature `foreign_net_buy_21d` = 21-day foreign net
-buy value ÷ dollar volume. Data available T+1 — no PIT synthesis needed, but test the T+1 shift.
+### 11.3 TW chip/flow features (法人買賣超・外資持股・融資融券)  `[ ]`
+
+**Reality check (probed live 2026-07-07, free tier with registered token):**
+`TaiwanStockInstitutionalInvestorsBuySell` (daily buy/sell per investor type — `Foreign_Investor`,
+`Investment_Trust`, `Dealer_self`, `Dealer_Hedging`), `TaiwanStockShareholding` (daily foreign
+holding ratio), `TaiwanStockMarginPurchaseShortSale` (daily margin/short balances) — all fresh to
+T+1. `TaiwanStockHoldingSharesPer` (TDCC big-holder brackets) needs a paid FinMind tier — skip;
+if ever wanted, TDCC's own open-data portal serves the weekly file free (separate provider card).
+
+Steps:
+1. `FinMindProvider` methods for the three datasets (golden-test from saved JSON; rate limiter).
+   Probe whether per-**date** bulk queries (omit `data_id`) work — if yes, prefer 1 request/day
+   over per-symbol loops for whole-market builds.
+2. Panel features (TW rows; each shifted **+1 trading day** so row *t* uses only data through
+   *t−1* — test the shift): `foreign_net_buy_21d` / `foreign_net_buy_63d` (Σ net-buy shares ×
+   close ÷ 21d median dollar volume), `trust_net_buy_21d`, `foreign_hold_delta_63d` (pp change in
+   holding ratio), `margin_delta_21d` (margin-balance %-change; expected direction **negative** —
+   rising retail leverage is crowding).
+3. Priors to register honestly (from the literature, not to be presented as results): foreign-flow
+   momentum is the best-documented TW chip signal at weeks–months horizons, but is partly global
+   risk-appetite beta (our `_rel` labels strip that) and is the most crowded signal type in Taiwan
+   (expect decay); trust flows are shorter-lived with quarter-end distortions; dealer flows are
+   hedging noise — excluded on purpose.
 
 ### 11.4 Certify TW families  `[ ]`
 Build `panel_tw` (7.3 CLI), then run 10.x-style cards for: monthly-revenue momentum, price
 momentum, flows. Benchmark `0050.TW`. Note in the log that TW history via FinMind may start later
 than 2010 — splits shrink accordingly (validation/OOS boundaries stay fixed).
+
+### 11.5 TW Chips (籌碼) dashboard — descriptive lens, NOT a signal  `[ ]`
+**Goal:** the daily "who is buying" view, kept firmly outside certification. **Files:**
+`src/heimdall/ui/chips_page.py` (nav group "Analyst lenses"), `i18n.py`, AppTest smoke.
+Per symbol: cumulative 外資/投信 net-buy vs price, foreign holding %, margin balance; market-wide
+top-10 net buy/sell lists (bulk per-date query). Requires only 11.3 step 1, so it may be built
+right after it. The page must carry a fixed caption — *descriptive chip data, not a certified
+signal; Today's Picks ignores this page* — in both languages. **Don't:** render anything that
+looks like a recommendation ranking.
 
 ## Phase 12 — Operations & evolution
 
@@ -224,6 +252,16 @@ realized cohort beat rate to the cert's monitoring series; trailing-12 NW CI upp
 Only after ≥ 2 Phase-10 families are certified-or-rejected: write `docs/DATA_DECISION.md` — what
 free signals achieved, what FMP estimates/revisions would add, cost vs measured gap. A memo, not
 an integration; the user decides.
+
+### 12.4 US insider-transactions feature (Form 4) — the honest US "smart money"  `[ ]`
+**Reality note (binding):** the US has **no public daily institutional flow**. Retail-app "money
+flow" for US stocks is a price/volume proxy (tick-rule buy/sell imbalance) — it may be added as a
+*technical* feature but must never be labelled institutional flow. 13F is quarterly with a 45-day
+lag (cloning evidence weak). The credible free option is SEC **Form 4** insider transactions
+(EDGAR, ~2-business-day lag): provider + panel feature `insider_net_buy_90d` (officer/director
+open-market buys − sells ÷ market cap) with a cluster-buy flag; golden-tested from saved filings;
+keyed on the filing timestamp (point-in-time). Prior: moderate, event-like, works at long
+horizons. Pre-register before any OOS touch, as always.
 
 ---
 
