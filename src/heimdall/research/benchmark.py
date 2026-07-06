@@ -40,3 +40,21 @@ def forward_return(adj: pd.Series, start: pd.Timestamp, bars: int) -> float:
         return float("nan")
     entry, exit_ = float(adj.iloc[i]), float(adj.iloc[j])
     return exit_ / entry - 1.0 if entry > 0 else float("nan")
+
+
+def window_return(adj: pd.Series, start: pd.Timestamp, end: pd.Timestamp) -> float:
+    """Calendar-window variant: first bar ≥ ``start`` to first bar ≥ ``end``.
+
+    Used for the to-next-rebalance ``fwd_1m`` label, where the window is defined
+    by two calendar dates rather than a bar count. Same contracts as
+    :func:`forward_return`: forward alignment, NaN when either leg is missing or
+    the window contains no elapsed bar, NaN prices propagate, sorted input only.
+    """
+    if not adj.index.is_monotonic_increasing:
+        raise ValueError("adjusted-close series must be sorted ascending by date")
+    i = int(adj.index.searchsorted(pd.Timestamp(start)))
+    j = int(adj.index.searchsorted(pd.Timestamp(end)))
+    if j >= len(adj) or j <= i:
+        return float("nan")
+    entry, exit_ = float(adj.iloc[i]), float(adj.iloc[j])
+    return exit_ / entry - 1.0 if entry > 0 else float("nan")
