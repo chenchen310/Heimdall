@@ -16,8 +16,14 @@ them (see ``.claude/rules/data-discipline.md``):
   figure is the **year-end** value (never summed). The balance sheet is
   point-in-time, also taken at year-end.
 
-FinMind carries no filing date, so ``filed_at`` is synthesized as a conservative
-lag after the fiscal-period end (Taiwan annual reports are due ~90 days out).
+FinMind carries no filing date (verified 2026-07-08: no announcement-date dataset
+exists — probed the API and the official docs), so ``filed_at`` is synthesized
+from the statutory deadlines of the Securities and Exchange Act §36 (證交法36條):
+annual reports within **3 months** of fiscal year end (Dec-FY ⇒ 3/31, which is
+exactly ``fiscal_end + 90d``), and monthly revenue by the **10th of the following
+month**. Deadlines are the *latest legal* availability, so on-time filers are
+never seen early (no look-ahead); early filers only make us conservative; the
+sole look-ahead exposure is late filers, which are rare and sanctioned.
 """
 
 from __future__ import annotations
@@ -43,6 +49,7 @@ _BASE = "https://api.finmindtrade.com/api/v4/data"
 
 # Conservative point-in-time lag when no filing date is available (TW annual
 # reports are due within ~3 months of fiscal-year end).
+# §36: annual report due within 3 months of FY end — 12/31 + 90d = 3/31, the statutory deadline.
 _ANNUAL_FILING_LAG = timedelta(days=90)
 # How far back get_fundamentals reaches to build annual history (FinMind needs a
 # range; EDGAR/FMP return all history).
@@ -304,17 +311,23 @@ def _normalize_fundamentals(
 
 
 def _normalize_month_revenue(raw: list[dict[str, Any]], sym: Symbol) -> pd.DataFrame:
-    """FinMind ``TaiwanStockMonthRevenue`` rows → ``[symbol, month, revenue, …]``."""
-    cols = ["symbol", "month", "revenue", "currency", "provider", "fetched_at"]
+    """FinMind ``TaiwanStockMonthRevenue`` rows → ``[symbol, month, filed_at, revenue, …]``.
+
+    ``filed_at`` is the statutory availability date — §36 requires the prior
+    month's revenue to be announced by the **10th of the following month** — so
+    point-in-time features (roadmap 11.2) may only read a month's revenue on or
+    after that date.
+    """
+    cols = ["symbol", "month", "filed_at", "revenue", "currency", "provider", "fetched_at"]
     if not raw:
         return pd.DataFrame(columns=cols)
     df = pd.DataFrame(raw)
+    month = pd.to_datetime(dict(year=df["revenue_year"], month=df["revenue_month"], day=1))
     out = pd.DataFrame(
         {
             "symbol": sym.canonical,
-            "month": pd.to_datetime(
-                dict(year=df["revenue_year"], month=df["revenue_month"], day=1)
-            ),
+            "month": month,
+            "filed_at": month + pd.DateOffset(months=1, days=9),  # the 10th of the next month
             "revenue": df["revenue"].astype(float),
             "currency": sym.currency,
             "provider": "finmind",

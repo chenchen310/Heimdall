@@ -207,12 +207,21 @@ The composite most literature supports at 6m horizons. Negative weight = lower-i
 
 ## Phase 11 — Taiwan enablement
 
-### 11.1 Real TW filing dates  `[ ]`
+### 11.1 Real TW filing dates  `[x]`
 Probe FinMind for a financial-statement announcement-date dataset (check API docs live; e.g. a
 `*FinancialStatementsDate`-like dataset). If found: wire into `filed_at` (golden-test with saved
 JSON). If not: keep +90d but validate against ≥ 10 known filings (document the error bound in
 `docs/NORTH_STAR.md` accepted limitations). Monthly revenue: set `filed_at = month_end + 10 days`
 (statutory deadline) — implement regardless.
+
+> **Outcome (2026-07-08):** FinMind has **no announcement-date dataset** (probed the API's
+> datalist + candidate names + the official docs). Fallback taken, upgraded from "~90d heuristic"
+> to **statutory grounding**: Securities and Exchange Act §36 fetched and cited — annual within
+> 3 months (⇒ `+90d` = 3/31 exactly), monthly revenue by the 10th of the following month (now a
+> `filed_at` column on `monthly_revenue`, golden-tested incl. the December year-roll). Error
+> bound documented as NORTH_STAR accepted limitation 5 (deadline = latest legal availability ⇒
+> no look-ahead for on-time filers; per-filing validation would need MOPS — deferred unless a TW
+> family reaches pre-registration).
 
 ### 11.2 TW monthly-revenue momentum feature  `[ ]`
 Panel-only feature (TW rows): `rev_mom_yoy` (latest month YoY) and `rev_mom_accel` (3m mean YoY −

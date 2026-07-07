@@ -53,7 +53,7 @@ computations into standards. Status as of 2026-07-03 (Phases 0–6 delivered, se
 
 | Layer | Have | Missing (→ roadmap phase) |
 | --- | --- | --- |
-| Point-in-time data | EDGAR `filed_at` (real), canonical schema, delta cache | TW `filed_at` is synthetic (+90d) → 11.1; monthly-revenue `filed_at` rule → 11.2 |
+| Point-in-time data | EDGAR `filed_at` (real), canonical schema, delta cache; TW `filed_at` = statutory §36 deadlines (11.1 ✅ — see accepted limitation 5) | — |
 | Labels | `fwd_return` computed on the fly in the UI panel, never persisted | Persisted research dataset with 1m/3m/6m **benchmark-relative** labels → 7.3 |
 | Features | value/quality/momentum/growth ratios in the snapshot | No liquidity fields (can't exclude untradeable names) → 7.1; skip-month momentum (12-1), realized vol → 7.1; TW monthly-revenue momentum → 11.2; TW institutional flows (free, unwired) → 11.3; earnings revisions (paid, deferred) → 12.3 |
 | Validation | IC + quantile spread functions (`factors/validate.py`), eyeballed in the UI | Walk-forward splits, gates with numbers, turnover/cost integration → 8.2 |
@@ -76,6 +76,15 @@ computations into standards. Status as of 2026-07-03 (Phases 0–6 delivered, se
    names are dropped and reported, not silently kept.
 4. **yfinance is unofficial.** Acceptable for research cadence (monthly); a certified signal's
    ops doc must note the refresh dependency.
+5. **TW filing dates are statutory deadlines, not actual announcement dates.** FinMind carries no
+   announcement-date dataset (verified 2026-07-08 against both the API and the official docs), so
+   `filed_at` is synthesized from the Securities and Exchange Act §36 deadlines: annual =
+   fiscal-end + 90 days (exactly 3/31 for a December fiscal year), monthly revenue = the 10th of
+   the following month. Deadlines are the *latest legal* availability — on-time filers are never
+   seen early (no look-ahead); early filers only make features conservative; the sole look-ahead
+   exposure is late filers, which are rare and typically trading-sanctioned. Per-filing empirical
+   validation would require a MOPS (公開資訊觀測站) integration — revisit only if a TW family
+   reaches pre-registration.
 
 ## File map of the institution
 
