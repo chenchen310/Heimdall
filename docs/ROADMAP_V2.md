@@ -175,10 +175,15 @@ evidence + picks; zh translations present. **Don't:** any path that renders a ra
 > honestly logged, completes the card.** Each card: spec JSON under `signals/specs/`, a log
 > entry, a certification run, roadmap checkbox.
 
-### 10.1 US momentum family (`ret_12_1`, optionally `vol_63d` tilt)  `[ ]`
+### 10.1 US momentum family (`ret_12_1`, optionally `vol_63d` tilt)  `[x]`
 Hypothesis to register: skip-month momentum ranks 6-month relative winners in the eligible US
 universe. Start pure single-feature (1 parameter); a low-vol tilt is v2 *only if* v1 fails on a
 pre-stated reason.
+
+> **Outcome (2026-07-08): family closed at development** — dev 6m beat rate 43–44%
+> (significantly < 50%, NW-t −2.4…−3.4) for v1 and both pre-authorized vol tilts: a structural
+> equal-weight-vs-SPY cap-weighting headwind that momentum doesn't overcome. **0/3 OOS attempts
+> spent**; vault untouched. Full numbers: `docs/RESEARCH_LOG.md` entry 001.
 
 ### 10.2 US quality/profitability family (`roic`, `fcf_margin`, `operating_margin`)  `[ ]`
 Equal weights first (3 parameters). Watch G1 — quality alone is often weak standalone; expect a
