@@ -1,0 +1,293 @@
+{
+  "spec_name": "us-fcf-yield",
+  "spec_version": 1,
+  "spec_hash": "ade91883d56d9b0b59a8837a9cc88dc027fe7c222f5e04152db5414bf6123871",
+  "market": "US",
+  "window_start": "2023-01-31",
+  "window_end": "2025-12-31",
+  "n_months": 36,
+  "verdict": "REJECTED",
+  "gates": [
+    {
+      "gate": "G1_ic",
+      "value": 0.030741858915976583,
+      "threshold": 0.03,
+      "passed": true,
+      "note": ""
+    },
+    {
+      "gate": "G1_t",
+      "value": 1.593557883026153,
+      "threshold": 2.0,
+      "passed": false,
+      "note": ""
+    },
+    {
+      "gate": "G1_months",
+      "value": 36.0,
+      "threshold": 24.0,
+      "passed": true,
+      "note": ""
+    },
+    {
+      "gate": "G2_mean",
+      "value": -0.002413915608708601,
+      "threshold": 0.0,
+      "passed": false,
+      "note": ""
+    },
+    {
+      "gate": "G2_share",
+      "value": 0.4722222222222222,
+      "threshold": 0.55,
+      "passed": false,
+      "note": ""
+    },
+    {
+      "gate": "G3_rate",
+      "value": 0.4138888888888889,
+      "threshold": 0.55,
+      "passed": false,
+      "note": ""
+    },
+    {
+      "gate": "G3_t",
+      "value": -2.765900480207082,
+      "threshold": 2.0,
+      "passed": false,
+      "note": ""
+    },
+    {
+      "gate": "G4_cagr",
+      "value": 0.11296316068895784,
+      "threshold": 0.20985942034601623,
+      "passed": false,
+      "note": ""
+    },
+    {
+      "gate": "G4_sharpe",
+      "value": 0.6084110684457601,
+      "threshold": 1.704010153119241,
+      "passed": false,
+      "note": ""
+    },
+    {
+      "gate": "G5_ic_h1",
+      "value": 0.048982705600661466,
+      "threshold": 0.0,
+      "passed": true,
+      "note": ""
+    },
+    {
+      "gate": "G5_ic_h2",
+      "value": 0.012501012231291707,
+      "threshold": 0.0,
+      "passed": true,
+      "note": ""
+    },
+    {
+      "gate": "G5_params",
+      "value": 1.0,
+      "threshold": 4.0,
+      "passed": true,
+      "note": ""
+    },
+    {
+      "gate": "G6_turnover",
+      "value": 0.12571428571428572,
+      "threshold": 0.4,
+      "passed": true,
+      "note": ""
+    }
+  ],
+  "beat_rate_mean": 0.4138888888888889,
+  "beat_rate_ci95": [
+    0.35286797400581205,
+    0.4749098037719658
+  ],
+  "cohorts": [
+    {
+      "date": "2023-01-31",
+      "beat_rate": 0.4,
+      "n_picks": 20
+    },
+    {
+      "date": "2023-02-28",
+      "beat_rate": 0.25,
+      "n_picks": 20
+    },
+    {
+      "date": "2023-03-31",
+      "beat_rate": 0.45,
+      "n_picks": 20
+    },
+    {
+      "date": "2023-04-28",
+      "beat_rate": 0.45,
+      "n_picks": 20
+    },
+    {
+      "date": "2023-05-31",
+      "beat_rate": 0.55,
+      "n_picks": 20
+    },
+    {
+      "date": "2023-06-30",
+      "beat_rate": 0.6,
+      "n_picks": 20
+    },
+    {
+      "date": "2023-07-31",
+      "beat_rate": 0.55,
+      "n_picks": 20
+    },
+    {
+      "date": "2023-08-31",
+      "beat_rate": 0.4,
+      "n_picks": 20
+    },
+    {
+      "date": "2023-09-29",
+      "beat_rate": 0.35,
+      "n_picks": 20
+    },
+    {
+      "date": "2023-10-31",
+      "beat_rate": 0.6,
+      "n_picks": 20
+    },
+    {
+      "date": "2023-11-30",
+      "beat_rate": 0.5,
+      "n_picks": 20
+    },
+    {
+      "date": "2023-12-29",
+      "beat_rate": 0.1,
+      "n_picks": 20
+    },
+    {
+      "date": "2024-01-31",
+      "beat_rate": 0.4,
+      "n_picks": 20
+    },
+    {
+      "date": "2024-02-29",
+      "beat_rate": 0.55,
+      "n_picks": 20
+    },
+    {
+      "date": "2024-03-28",
+      "beat_rate": 0.6,
+      "n_picks": 20
+    },
+    {
+      "date": "2024-04-30",
+      "beat_rate": 0.65,
+      "n_picks": 20
+    },
+    {
+      "date": "2024-05-31",
+      "beat_rate": 0.65,
+      "n_picks": 20
+    },
+    {
+      "date": "2024-06-28",
+      "beat_rate": 0.5,
+      "n_picks": 20
+    },
+    {
+      "date": "2024-07-31",
+      "beat_rate": 0.4,
+      "n_picks": 20
+    },
+    {
+      "date": "2024-08-30",
+      "beat_rate": 0.3,
+      "n_picks": 20
+    },
+    {
+      "date": "2024-09-30",
+      "beat_rate": 0.5,
+      "n_picks": 20
+    },
+    {
+      "date": "2024-10-31",
+      "beat_rate": 0.2,
+      "n_picks": 20
+    },
+    {
+      "date": "2024-11-29",
+      "beat_rate": 0.15,
+      "n_picks": 20
+    },
+    {
+      "date": "2024-12-31",
+      "beat_rate": 0.25,
+      "n_picks": 20
+    },
+    {
+      "date": "2025-01-31",
+      "beat_rate": 0.2,
+      "n_picks": 20
+    },
+    {
+      "date": "2025-02-28",
+      "beat_rate": 0.5,
+      "n_picks": 20
+    },
+    {
+      "date": "2025-03-31",
+      "beat_rate": 0.3,
+      "n_picks": 20
+    },
+    {
+      "date": "2025-04-30",
+      "beat_rate": 0.35,
+      "n_picks": 20
+    },
+    {
+      "date": "2025-05-30",
+      "beat_rate": 0.4,
+      "n_picks": 20
+    },
+    {
+      "date": "2025-06-30",
+      "beat_rate": 0.45,
+      "n_picks": 20
+    },
+    {
+      "date": "2025-07-31",
+      "beat_rate": 0.3,
+      "n_picks": 20
+    },
+    {
+      "date": "2025-08-29",
+      "beat_rate": 0.45,
+      "n_picks": 20
+    },
+    {
+      "date": "2025-09-30",
+      "beat_rate": 0.45,
+      "n_picks": 20
+    },
+    {
+      "date": "2025-10-31",
+      "beat_rate": 0.5,
+      "n_picks": 20
+    },
+    {
+      "date": "2025-11-28",
+      "beat_rate": 0.25,
+      "n_picks": 20
+    },
+    {
+      "date": "2025-12-31",
+      "beat_rate": 0.4,
+      "n_picks": 20
+    }
+  ],
+  "mean_turnover": 0.12571428571428572,
+  "survivorship": "current_universe (optimistic)",
+  "generated_at": "2026-07-07T22:15:19.221306+00:00"
+}

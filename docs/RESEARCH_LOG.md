@@ -106,5 +106,18 @@
   6m beat **57.1%** (NW-t +1.35, 36 cohorts), turnover 11%. By year: 2020 −0.01, 2021 +0.14,
   2022 +0.05 — flat in the growth melt-up, strong in the value revival and the rate shock.
 - OOS attempt: **1 of 3** for family `us-value-quality`.
-- OOS verdict: **pending** (this entry is committed before the vault is evaluated).
-- Registry status change: draft → (registered → certified|rejected via the certify CLI).
+- OOS verdict: **REJECTED** (2026-07-08; immutable report
+  `signals/certifications/us-fcf-yield_v1.json`). OOS window 2023-01→2025-12, 36 cohorts:
+  **G1_ic passed** (+0.031 ≥ 0.03) and **G5 stability passed** (IC positive in both halves) —
+  the ranking information is real out-of-sample — but G1_t 1.59 < 2, G2 spread −0.24%/mo (47%
+  positive), and above all **G3 beat rate 41.4%** (95% CI 35–48%, NW-t −2.77): the top-20 book
+  *significantly underperformed* SPY over 6-month windows in the 2023–2025 mega-cap regime.
+  G4: 11.3% CAGR / 0.61 Sharpe vs SPY's 21.0% / 1.70.
+- Registry status change: draft → registered → **rejected** (attempt 1/3 spent; 2 remain for the
+  family, to be used only on genuinely new evidence, not re-weightings).
+- **Aggregate Phase-10 finding (001 + 002 + 003):** with free data, at the frozen definition
+  (equal-weight top-20 vs SPY, 6-month horizon), **no family certifies** — momentum dev-dead
+  (cap-weighting headwind), quality dev-dead (no cross-sectional edge), FCF yield vault-rejected
+  (real IC, but SPY's 2023–25 run was unbeatable by a diversified value book). This arms the
+  12.3 trigger: the paid-data decision memo and/or a user-level discussion of the program
+  definition — **not** gate-softening. Today's Picks stays honestly empty, as designed.
