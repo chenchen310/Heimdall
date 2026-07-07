@@ -195,12 +195,23 @@ def test_month_revenue_normalizes() -> None:
             "revenue_month": 8,
             "revenue_year": 2024,
         },
+        {
+            "date": "2025-01-01",
+            "stock_id": "2330",
+            "revenue": 260000000000,
+            "revenue_month": 12,
+            "revenue_year": 2024,
+        },
     ]
     df = _normalize_month_revenue(raw, _TW)
     assert df["symbol"].unique().tolist() == ["2330.TW"]
     assert df.iloc[0]["month"] == pd.Timestamp("2024-07-01")
     assert df.iloc[0]["revenue"] == 256953058000.0
     assert df["currency"].unique().tolist() == ["TWD"]
+    # §36 point-in-time rule: month M's revenue is knowable on the 10th of M+1.
+    assert df.iloc[0]["filed_at"] == pd.Timestamp("2024-08-10")
+    assert df.iloc[1]["filed_at"] == pd.Timestamp("2024-09-10")
+    assert df.iloc[2]["filed_at"] == pd.Timestamp("2025-01-10")  # December rolls the year
 
 
 def test_rejects_non_taiwan_market() -> None:
