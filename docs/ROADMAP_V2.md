@@ -185,9 +185,14 @@ pre-stated reason.
 > equal-weight-vs-SPY cap-weighting headwind that momentum doesn't overcome. **0/3 OOS attempts
 > spent**; vault untouched. Full numbers: `docs/RESEARCH_LOG.md` entry 001.
 
-### 10.2 US quality/profitability family (`roic`, `fcf_margin`, `operating_margin`)  `[ ]`
+### 10.2 US quality/profitability family (`roic`, `fcf_margin`, `operating_margin`)  `[x]`
 Equal weights first (3 parameters). Watch G1 — quality alone is often weak standalone; expect a
 possible honest rejection.
+
+> **Outcome (2026-07-08): family closed at development** — dev IC ≈ 0 (t < 1) across all three
+> variants; beat rate ≈ coin flip (51%). No benchmark headwind this time (stable large-cap book,
+> 10–12% turnover) — simply no cross-sectional edge. **0/3 OOS attempts spent.** See
+> `docs/RESEARCH_LOG.md` entry 002.
 
 ### 10.3 US value×quality family (`fcf_yield`, `ev_ebitda`(−), `roic`)  `[ ]`
 The composite most literature supports at 6m horizons. Negative weight = lower-is-better.
