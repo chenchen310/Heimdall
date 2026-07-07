@@ -51,3 +51,34 @@
   check the dev beat rate before anything else. If every free family dies here, that aggregate
   finding triggers the 12.3 data-decision memo / a user-level discussion of the program — it is
   **not** grounds for softening gates.
+
+---
+
+## 002 — us-quality / equal-weight profitability (2026-07-08, model: Fable 5)
+
+- Hypothesis: profitable, cash-generative names (`roic`, `fcf_margin`, `operating_margin`,
+  equal weights) rank 6-month benchmark-relative winners in the eligible US universe (top-20,
+  monthly). Same panel as entry 001.
+- Coverage note (dev, eligible rows with all 3 features): 7% in 2010 → ~44% from 2013 → 52% in
+  2019 — early-dev cross-sections are thin; `score()`'s missing-data-excludes rule shrinks the
+  pool accordingly.
+- **Development-only evaluations** (2010-01→2019-12; no row ≥ 2020 read):
+
+  | candidate | IC (t) | 6m beat rate (NW-t vs 0.5) | turnover |
+  | --- | --- | --- | --- |
+  | `{roic, fcf_margin, operating_margin}` equal | +0.008 (0.88) | 51.3% (+0.59) | 12% |
+  | `{roic}` pure | −0.004 (−0.43) | 51.6% (+0.71) | 10% |
+  | `{roic, fcf_margin}` | +0.005 (0.52) | 50.9% (+0.40) | 11% |
+
+- Contrast with 001 worth keeping: the quality book does **not** suffer the momentum family's
+  cap-weighting headwind (beat ≈ 51% vs 43%; turnover ~10%, the book is stable profitable large
+  caps that overlap SPY's leadership). The failure mode is different: **no cross-sectional edge**
+  — IC is indistinguishable from zero in-sample, an order of magnitude under G1.
+- Validation window (2020–2022): not evaluated — terminal dev verdict.
+- **Verdict: FAMILY CLOSED AT DEVELOPMENT.** In-sample IC ≈ 0 and beat ≈ coin flip cannot clear
+  G1 (≥ 0.03, t ≥ 2) or G3 (≥ 55%, NW-t ≥ 2) out-of-sample. The card's own caution ("quality
+  alone is often weak standalone") is confirmed.
+- OOS attempts spent: **0 of 3**. Registry status change: none (never pre-registered).
+- Implication for 10.3: the value×quality composite (`fcf_yield`, `ev_ebitda`(−), `roic`) adds
+  the valuation axis these ratios lack — it is the last free family on the board; same
+  discipline: dev beat rate and IC first, close cheaply if dead.
