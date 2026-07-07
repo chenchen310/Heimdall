@@ -78,7 +78,7 @@ ineligible rows.
 
 ## Phase 8 — Certification harness + registry
 
-### 8.1 SignalSpec + registry  `[ ]`
+### 8.1 SignalSpec + registry  `[x]`
 
 **Goal:** signals become data with enforced lifecycle. **Files:** new
 `src/heimdall/research/spec.py`, `src/heimdall/research/registry.py`, `signals/specs/.gitkeep`,
