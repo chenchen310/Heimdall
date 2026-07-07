@@ -124,7 +124,7 @@ DoD: gate math known-answer on tiny hand-computed panels (esp. NW t and turnover
 enforcement (absent id / wrong hash / attempts=3 all refuse); report file written and immutable
 (second run for same entry refuses). **Don't:** let any code path evaluate OOS without an entry.
 
-### 8.3 Canary tests (the harness must have power)  `[ ]`
+### 8.3 Canary tests (the harness must have power)  `[x]`
 
 **Goal:** prove certification rejects noise and would catch leakage-strength signals.
 **Files:** `tests/test_research_canary.py` (+ a small synthetic-panel builder in the test).
