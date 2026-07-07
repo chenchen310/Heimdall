@@ -80,8 +80,9 @@ Reference implementations (copy verbatim; no new dependencies):
 
 ```python
 import numpy as np
+import numpy.typing as npt
 
-def nw_tstat(series: "np.ndarray", null: float = 0.0, lag: int = 5) -> float:
+def nw_tstat(series: npt.ArrayLike, null: float = 0.0, lag: int = 5) -> float:
     """t-stat of mean(series) vs `null`, Newey-West (Bartlett) HAC standard error.
 
     Use for overlapping-window series (e.g. monthly cohorts of 6m beat rates, lag=5).
@@ -96,7 +97,7 @@ def nw_tstat(series: "np.ndarray", null: float = 0.0, lag: int = 5) -> float:
         s += 2 * (1 - k / (lag + 1)) * float(e[:-k] @ e[k:]) / n
     return float(mu / np.sqrt(s / n))
 
-def nw_ci95(series: "np.ndarray", lag: int = 5) -> tuple[float, float]:
+def nw_ci95(series: npt.ArrayLike, lag: int = 5) -> tuple[float, float]:
     x = np.asarray(series, dtype=float)
     x = x[~np.isnan(x)]
     n = len(x)

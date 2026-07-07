@@ -98,7 +98,7 @@ Steps:
 DoD: hash stability test (key order / description don't change it); illegal-transition tests;
 attempts counter increments per family. **Don't:** allow status writes except via `transition()`.
 
-### 8.2 Certify harness + gates  `[ ]`
+### 8.2 Certify harness + gates  `[x]`
 
 **Goal:** the referee. **Files:** `src/heimdall/research/gates.py` (extend),
 `src/heimdall/research/certify.py`, `tests/test_research_certify.py`.
@@ -108,10 +108,13 @@ Steps:
    from the playbook. Add `test_gates_mirror_playbook` asserting the literal numbers (duplication
    is the tripwire: changing either place alone fails CI).
 2. `certify(spec, panel, benchmark_adj) -> CertReport` — filter to OOS window (start `2023-01-01`,
-   end = last month with non-NaN `fwd_6m`), compute G1–G6 (G4 via `backtest.portfolio` with
-   `commission_bps=20`, documented as the all-in per-side cost; G6's 40–60% branch re-runs at 40),
-   verdict = all-pass. Report dataclass: every gate's value, threshold, pass flag; cohort series;
-   window; the survivorship stamp; spec hash.
+   end = last month with non-NaN `fwd_6m`), compute G1–G6, verdict = all-pass. G4 is a monthly
+   top-N backtest derived **directly from the panel's own `fwd_1m` labels** (gross = mean pick
+   return per rebalance, minus 20 bps per side on traded value; G6's 40–60% branch re-runs at 40)
+   — implemented this way instead of via `backtest.portfolio` so every gate sits on the *same*
+   calendar windows as the labels, with no second pricing path to disagree with them. Report
+   dataclass: every gate's value, threshold, pass flag; cohort series; window; the survivorship
+   stamp; spec hash.
 3. CLI `uv run python -m heimdall.research.certify signals/specs/<f>.json --log-entry <id>`:
    parse `docs/RESEARCH_LOG.md` for `## <id> —` containing the spec's sha256 → refuse if absent
    (message: "pre-register first, see playbook §4"); refuse if family attempts ≥ 3; write report
