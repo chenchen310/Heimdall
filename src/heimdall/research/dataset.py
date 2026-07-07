@@ -27,12 +27,13 @@ from __future__ import annotations
 import contextlib
 import json
 import os
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import cast
 
+import numpy as np
 import pandas as pd
 
 from heimdall.data.base import DataProvider, NotSupported, ProviderError
@@ -105,6 +106,41 @@ def _labels(
     }
 
 
+def _revenue_features(monthly: pd.DataFrame, as_of: pd.Timestamp) -> dict[str, float]:
+    """TW monthly-revenue momentum — the signature free Taiwan signal (roadmap 11.2).
+
+    Point-in-time on ``filed_at`` (§36: the 10th of the following month, see 11.1):
+    only months filed on/before ``as_of`` exist. Features (both higher-is-better):
+
+    - ``rev_mom_yoy`` — the latest known month's revenue YoY;
+    - ``rev_mom_accel`` — mean YoY of the last 3 known months minus the prior 3,
+      the second derivative that leads inflections.
+
+    Computed on a contiguous monthly calendar (a gap month poisons its windows to
+    NaN rather than silently spanning it); YoY on a non-positive year-ago base is
+    NaN, mirroring ``_growth_yoy``.
+    """
+    nan = float("nan")
+    out = {"rev_mom_yoy": nan, "rev_mom_accel": nan}
+    if monthly.empty:
+        return out
+    known = monthly[monthly["filed_at"] <= as_of]
+    if known.empty:
+        return out
+    s = known.sort_values(["month", "filed_at"]).groupby("month")["revenue"].last()
+    s.index = pd.PeriodIndex(s.index, freq="M")
+    full = s.reindex(pd.period_range(s.index.min(), s.index.max(), freq="M"))
+    prev = full.shift(12)
+    yoy = pd.Series(np.where(prev > 0, full / prev - 1.0, np.nan), index=full.index, dtype=float)
+    if pd.notna(yoy.iloc[-1]):
+        out["rev_mom_yoy"] = float(yoy.iloc[-1])
+    if len(yoy) >= 6:
+        last3, prior3 = yoy.iloc[-3:], yoy.iloc[-6:-3]
+        if not (bool(last3.isna().any()) or bool(prior3.isna().any())):
+            out["rev_mom_accel"] = float(last3.mean() - prior3.mean())
+    return out
+
+
 def _eligibility(market: str, n_bars: int, raw_close: float, dollar_vol: float) -> tuple[bool, str]:
     """Playbook §3 hygiene; first failing reason wins. NaN inputs fail their check."""
     if n_bars < gates.MIN_HISTORY_BARS:
@@ -128,6 +164,7 @@ def build_dataset_iter(
     resume: bool = True,
     min_cross_section: int = gates.MIN_CROSS_SECTION,
     checkpoint_every: int = 6,
+    monthly_revenue: Callable[[str, date, date], pd.DataFrame] | None = None,
 ) -> Iterator[DatasetProgress]:
     """Build (or extend) the panel month by month, yielding progress per month.
 
@@ -158,6 +195,16 @@ def build_dataset_iter(
             fund_data[sym] = fundamentals.get_fundamentals(sym, "all", "annual")
         except (ProviderError, NotSupported):
             fund_data[sym] = pd.DataFrame(columns=FUNDAMENTALS_COLUMNS)
+
+    # Optional third stream (TW): monthly revenue for the 11.2 momentum features.
+    # Injected as a callable so the core stays market-neutral — the CLI routes it.
+    rev_hist: dict[str, pd.DataFrame] = {}
+    if monthly_revenue is not None:
+        for sym in price_hist:
+            try:  # ~19 months of warm-up needed for rev_mom_accel's YoY windows
+                rev_hist[sym] = monthly_revenue(sym, start - timedelta(days=650), end)
+            except (ProviderError, NotSupported):
+                rev_hist[sym] = pd.DataFrame()
 
     # Existing panel + meta: resume skips computed months AND previously-dropped ones.
     existing = pd.DataFrame()
@@ -202,6 +249,8 @@ def build_dataset_iter(
                 continue
             row = snapshot_row(sym, hist, fund_data[sym], t.date())
             row.update(_labels(adj_by_sym[sym], bench_adj, t, next_of[t]))
+            if monthly_revenue is not None:
+                row.update(_revenue_features(rev_hist.get(sym, pd.DataFrame()), t))
             ok, why = _eligibility(
                 market,
                 len(hist),

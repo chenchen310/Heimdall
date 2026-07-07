@@ -223,7 +223,7 @@ JSON). If not: keep +90d but validate against ≥ 10 known filings (document the
 > no look-ahead for on-time filers; per-filing validation would need MOPS — deferred unless a TW
 > family reaches pre-registration).
 
-### 11.2 TW monthly-revenue momentum feature  `[ ]`
+### 11.2 TW monthly-revenue momentum feature  `[x]`
 Panel-only feature (TW rows): `rev_mom_yoy` (latest month YoY) and `rev_mom_accel` (3m mean YoY −
 prior 3m mean YoY), point-in-time per 11.1's rule. PIT leak test mandatory. This is Taiwan's
 signature free signal — treat carefully.
