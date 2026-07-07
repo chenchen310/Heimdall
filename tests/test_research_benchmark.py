@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 
 from heimdall.data.symbols import MARKET_REGION
-from heimdall.research.benchmark import BENCHMARK, forward_return
+from heimdall.research.benchmark import BENCHMARK, forward_return, window_return
 
 
 def _series(values: list[float], start: str = "2024-01-01") -> pd.Series:
@@ -67,3 +67,19 @@ def test_unsorted_series_raises() -> None:
     s = _series([100.0, 110.0, 120.0]).iloc[::-1]
     with pytest.raises(ValueError, match="sorted"):
         forward_return(s, pd.Timestamp("2024-01-01"), 1)
+
+
+def test_window_return_known_answer_and_alignment() -> None:
+    s = _series([100.0, 110.0, 121.0, 133.1])
+    assert window_return(s, s.index[0], s.index[2]) == pytest.approx(0.21)
+    # A non-trading start aligns forward, same as forward_return.
+    day_before = s.index[0] - pd.offsets.Day(2)  # a Saturday
+    assert window_return(s, day_before, s.index[1]) == pytest.approx(0.10)
+
+
+def test_window_return_empty_or_incomplete_window_is_nan() -> None:
+    s = _series([100.0, 110.0, 121.0])
+    assert pd.isna(window_return(s, s.index[0], s.index[0]))  # no elapsed bar
+    assert pd.isna(window_return(s, s.index[1], s.index[0]))  # end before start
+    beyond = s.index[-1] + pd.offsets.BDay(2)
+    assert pd.isna(window_return(s, s.index[0], beyond))  # end past the series

@@ -50,7 +50,7 @@ Steps:
 DoD: known-answer tests incl. the incomplete-window NaN and the "first bar ≥ start" alignment.
 **Don't:** fetch anything here; callers pass series in.
 
-### 7.3 Persisted research panel with forward labels (the dataset)  `[ ]`
+### 7.3 Persisted research panel with forward labels (the dataset)  `[x]`
 
 **Goal:** the reusable, resumable dataset every experiment reads — one row per (month-end, symbol):
 all `snapshot_row` fields + `eligible`/`inelig_reason` + `fwd_1m/3m/6m` and `*_rel` labels.
