@@ -1,3 +1,20 @@
 {
-  "signals": []
+  "signals": [
+    {
+      "name": "us-fcf-yield",
+      "family": "us-value-quality",
+      "version": 1,
+      "spec_path": "signals/specs/us-fcf-yield.json",
+      "spec_hash": "ade91883d56d9b0b59a8837a9cc88dc027fe7c222f5e04152db5414bf6123871",
+      "status": "rejected",
+      "oos_attempts_family": 1,
+      "cert_report": "/Users/hanruchen/Claude/Projects/stock-observer/signals/certifications/us-fcf-yield_v1.json",
+      "updated_at": "2026-07-07T22:15:19.223686+00:00"
+    }
+  ],
+  "families": {
+    "us-value-quality": {
+      "oos_attempts": 1
+    }
+  }
 }

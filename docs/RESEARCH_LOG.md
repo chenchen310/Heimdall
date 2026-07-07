@@ -82,3 +82,42 @@
 - Implication for 10.3: the value×quality composite (`fcf_yield`, `ev_ebitda`(−), `roic`) adds
   the valuation axis these ratios lack — it is the last free family on the board; same
   discipline: dev beat rate and IC first, close cheaply if dead.
+
+---
+
+## 003 — us-value-quality / us-fcf-yield v1 (2026-07-08, model: Fable 5)
+
+- Hypothesis: high free-cash-flow yield (CFO − capex over market cap) ranks 6-month
+  benchmark-relative winners in the eligible US universe (top-20, monthly rebalance).
+- Spec: `signals/specs/us-fcf-yield.json`
+  sha256: `ade91883d56d9b0b59a8837a9cc88dc027fe7c222f5e04152db5414bf6123871`
+- **Development (2010-01→2019-12; full disclosure of the selection — 3 candidates looked at):**
+
+  | candidate | IC (t) | 6m beat (NW-t vs 0.5) | turnover |
+  | --- | --- | --- | --- |
+  | card spec `{fcf_yield, −ev_ebitda, roic}` | −0.004 (−0.38) | 47.9% (−1.00) | 13% |
+  | `{fcf_yield, roic}` | −0.002 (−0.18) | 49.8% (−0.07) | 11% |
+  | **frozen: `{fcf_yield}` pure** | **+0.022 (+2.87, hit 60%)** | **54.9% (+2.46)** | 10% |
+
+  `roic` and `ev_ebitda` subtract (consistent with entry 002); the single-feature,
+  one-parameter spec is frozen. Marginally under the gate floors in-sample (IC 0.022 < 0.03;
+  beat 54.9% < 55%) — advanced to validation on the strength of its significance.
+- **Validation (2020-01→2022-12; the single look):** IC **+0.058** (t 2.71, hit 64%),
+  6m beat **57.1%** (NW-t +1.35, 36 cohorts), turnover 11%. By year: 2020 −0.01, 2021 +0.14,
+  2022 +0.05 — flat in the growth melt-up, strong in the value revival and the rate shock.
+- OOS attempt: **1 of 3** for family `us-value-quality`.
+- OOS verdict: **REJECTED** (2026-07-08; immutable report
+  `signals/certifications/us-fcf-yield_v1.json`). OOS window 2023-01→2025-12, 36 cohorts:
+  **G1_ic passed** (+0.031 ≥ 0.03) and **G5 stability passed** (IC positive in both halves) —
+  the ranking information is real out-of-sample — but G1_t 1.59 < 2, G2 spread −0.24%/mo (47%
+  positive), and above all **G3 beat rate 41.4%** (95% CI 35–48%, NW-t −2.77): the top-20 book
+  *significantly underperformed* SPY over 6-month windows in the 2023–2025 mega-cap regime.
+  G4: 11.3% CAGR / 0.61 Sharpe vs SPY's 21.0% / 1.70.
+- Registry status change: draft → registered → **rejected** (attempt 1/3 spent; 2 remain for the
+  family, to be used only on genuinely new evidence, not re-weightings).
+- **Aggregate Phase-10 finding (001 + 002 + 003):** with free data, at the frozen definition
+  (equal-weight top-20 vs SPY, 6-month horizon), **no family certifies** — momentum dev-dead
+  (cap-weighting headwind), quality dev-dead (no cross-sectional edge), FCF yield vault-rejected
+  (real IC, but SPY's 2023–25 run was unbeatable by a diversified value book). This arms the
+  12.3 trigger: the paid-data decision memo and/or a user-level discussion of the program
+  definition — **not** gate-softening. Today's Picks stays honestly empty, as designed.

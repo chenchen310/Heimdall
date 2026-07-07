@@ -194,8 +194,16 @@ possible honest rejection.
 > 10–12% turnover) — simply no cross-sectional edge. **0/3 OOS attempts spent.** See
 > `docs/RESEARCH_LOG.md` entry 002.
 
-### 10.3 US value×quality family (`fcf_yield`, `ev_ebitda`(−), `roic`)  `[ ]`
+### 10.3 US value×quality family (`fcf_yield`, `ev_ebitda`(−), `roic`)  `[x]`
 The composite most literature supports at 6m horizons. Negative weight = lower-is-better.
+
+> **Outcome (2026-07-08): pre-registered and vault-REJECTED** — the full pipeline ran end to end
+> for the first time. Dev selected pure `{fcf_yield}` (IC t 2.87); validation confirmed
+> (IC +0.058, beat 57.1%); the one-shot OOS run **passed G1_ic and G5** (the ranking information
+> is real) but failed G3 decisively (beat 41.4%, NW-t −2.77) — the top-20 book lost to SPY's
+> 2023–25 mega-cap run. Attempt 1/3 spent; immutable report committed. **Phase-10 aggregate:**
+> no free family certifies at the frozen definition → the 12.3 trigger is armed. See
+> `docs/RESEARCH_LOG.md` entry 003.
 
 ## Phase 11 — Taiwan enablement
 
