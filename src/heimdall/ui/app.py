@@ -27,10 +27,12 @@ from heimdall.ui import (  # noqa: E402  (after set_page_config)
     rotation_page,
     screener_page,
     technical_page,
+    today_page,
 )
 
 PAGES = {
     "Guide": help_page.render,
+    "Today's Picks": today_page.render,
     "Screener": screener_page.render,
     "Build data": build_page.render,
     "Chart": chart_page.render,
@@ -49,7 +51,7 @@ PAGES = {
 NAV: dict[str, list[str]] = {
     "Help": ["Guide"],
     "Data": ["Build data"],
-    "Stock picking": ["Screener", "Chart"],
+    "Stock picking": ["Today's Picks", "Screener", "Chart"],
     "Backtest": ["Backtest"],
     "Analyst lenses": [
         "Fundamental",

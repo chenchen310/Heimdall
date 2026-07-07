@@ -151,7 +151,7 @@ ranks); `freshness(snapshot) -> int` returning business-day staleness of `as_of`
 DoD: known-answer ranking on a crafted snapshot; ineligible names excluded with reasons; staleness
 math tested. **Don't:** read the registry here (pure function); the page composes.
 
-### 9.2 Today's Picks page  `[ ]`
+### 9.2 Today's Picks page  `[x]`
 
 **Goal:** the north-star surface. **Files:** `src/heimdall/ui/today_page.py`, `app.py` (nav group
 "Stock picking", first position), `i18n.py` (zh strings), `tests/test_ui_smoke.py`.

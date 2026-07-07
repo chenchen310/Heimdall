@@ -22,6 +22,7 @@ _ZH: dict[str, str] = {
     "Help": "說明",
     "Guide": "使用說明",
     "Screener": "選股器",
+    "Today's Picks": "今日候選",
     "Build data": "建立資料",
     "Chart": "個股圖",
     "Fundamental": "基本面",
@@ -93,6 +94,32 @@ _ZH: dict[str, str] = {
     "Quick start": "快速上手",
     "Reading the numbers — conventions": "看數字的通則",
     "How to read each page": "如何閱讀各分頁的指標",
+    # --- today's picks ---
+    "🎯 Today's Picks": "🎯 今日候選",
+    "Only signals that passed out-of-sample certification render here — nothing else, ever.": (
+        "只有通過樣本外認證的訊號會出現在這裡——除此之外,永遠不顯示任何排名。"
+    ),
+    "No certified signal yet for this market — an honest empty state. "
+    "The referee (docs/RESEARCH_PLAYBOOK.md) has passed nothing; the first "
+    "candidates are registered in Phase 10 of docs/ROADMAP_V2.md.": (
+        "這個市場目前沒有任何已認證的訊號——誠實留白。"
+        "裁判(docs/RESEARCH_PLAYBOOK.md)尚未放行任何訊號;"
+        "第一批候選將在 docs/ROADMAP_V2.md 的 Phase 10 登記。"
+    ),
+    "Snapshot is {n} business days old — refresh it on the Build data page.": (
+        "快照已 {n} 個營業日未更新——請到「建立資料」頁重新整理。"
+    ),
+    "Beat rate (6m vs benchmark)": "6個月贏過基準的比率",
+    "Q5−Q1 spread": "Q5−Q1 價差",
+    "OOS cohorts": "樣本外期數",
+    "Certified {d} · OOS window {a} → {b} · benchmark {bench}": (
+        "認證於 {d} · 樣本外視窗 {a} → {b} · 基準 {bench}"
+    ),
+    "survivorship: current universe (optimistic upper bound)": ("存活者偏差:現今成分股(樂觀上限)"),
+    "No eligible names to rank right now.": "目前沒有符合資格可排名的股票。",
+    "z = strength vs today's eligible pool; the score is the weighted sum of z columns.": (
+        "z = 相對今日合格池的強度;總分為各 z 欄的加權和。"
+    ),
     # --- build data ---
     "🗂 Data — build snapshot": "🗂 資料 — 建立快照",
     "The snapshot is the data behind the Screener and Factors pages. Build or refresh it here.": (
