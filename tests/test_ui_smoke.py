@@ -6,6 +6,7 @@ if the optional ``ui`` extra (streamlit) isn't installed.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -222,6 +223,113 @@ def test_screener_disabled_condition_widens_and_marks_extra(
     assert any("➕" in c.value for c in at.caption)
 
 
+def _write_today_snapshot(data_dir: Path) -> None:
+    """Snapshot with the 9.1 hygiene fields + the default screener preset fields."""
+    snap = pd.DataFrame(
+        {
+            "symbol": [f"{s}.US" for s in "ABCDE"],
+            "as_of": pd.Timestamp("2024-01-02"),
+            "price": 100.0,
+            "dollar_vol_21d": 1e8,
+            "ret_12_1": [0.5, 0.4, 0.3, 0.2, 0.1],
+            "pe": 10.0,
+            "roe": 0.20,
+            "net_margin": 0.20,
+            "rsi_14": 50.0,
+            "pct_above_sma_200": 0.10,
+        }
+    )
+    snap.to_parquet(data_dir / "snapshot.parquet")
+
+
+def _point_registry_at(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "heimdall.research.registry.registry_path",
+        lambda root=None: tmp_path / "signals" / "registry.json",
+    )
+
+
+def test_today_page_honest_empty_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _force_english(monkeypatch)
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_today_snapshot(tmp_path)
+    _point_registry_at(tmp_path, monkeypatch)  # empty registry → nothing may render
+    st.cache_data.clear()
+
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Today's Picks")
+    assert not at.exception
+    assert [h.value for h in at.header] == ["🎯 Today's Picks"]
+    assert any("No certified signal" in i.value for i in at.info)
+    assert not at.dataframe  # the rule: no ranking without a certified registry row
+
+
+def test_today_page_renders_certified_evidence_then_picks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from heimdall.research import registry as reg
+    from heimdall.research.spec import SignalSpec
+
+    _force_english(monkeypatch)
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_today_snapshot(tmp_path)
+    _point_registry_at(tmp_path, monkeypatch)
+
+    spec = SignalSpec.model_validate(
+        {
+            "name": "us-mom",
+            "family": "us-momentum",
+            "market": "US",
+            "version": 1,
+            "features": {"ret_12_1": 1.0},
+            "top_n": 3,
+        }
+    )
+    (tmp_path / "signals" / "specs").mkdir(parents=True)
+    (tmp_path / "signals" / "specs" / "us-mom.json").write_text(spec.model_dump_json())
+    report_file = tmp_path / "signals" / "certifications" / "us-mom_v1.json"
+    report_file.parent.mkdir(parents=True)
+    report_file.write_text(
+        json.dumps(
+            {
+                "verdict": "CERTIFIED",
+                "beat_rate_mean": 0.61,
+                "beat_rate_ci95": [0.55, 0.67],
+                "cohorts": [{"date": "2023-01-31"}] * 30,
+                "window_start": "2023-01-31",
+                "window_end": "2025-06-30",
+                "generated_at": "2026-07-07T00:00:00+00:00",
+                "gates": [
+                    {"gate": "G1_ic", "value": 0.05, "threshold": 0.03, "passed": True},
+                    {"gate": "G2_mean", "value": 0.012, "threshold": 0.0, "passed": True},
+                ],
+            }
+        )
+    )
+    # Dogfood the real lifecycle — no hand-edited registry, even in tests.
+    reg.add(spec, "signals/specs/us-mom.json", root=tmp_path)
+    reg.transition("us-mom", 1, "registered", root=tmp_path)
+    reg.transition(
+        "us-mom", 1, "certified", cert_report=str(report_file), oos_attempt=1, root=tmp_path
+    )
+    st.cache_data.clear()
+
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Today's Picks")
+    assert not at.exception
+    assert any(m.value == "61%" for m in at.metric)  # the evidence box renders first
+    assert any("business days old" in w.value for w in at.warning)  # stale-snapshot banner
+    picks = at.dataframe[-1].value
+    assert picks["symbol"].tolist() == ["A.US", "B.US", "C.US"]  # top-3 by ret_12_1
+    assert "z_ret_12_1" in picks.columns  # the why-it-ranks breakdown
+    captions = " ".join(c.value for c in at.caption)
+    assert "optimistic" in captions  # the survivorship stamp is always on screen
+
+    from heimdall.ui.i18n import _ZH
+
+    assert "🎯 Today's Picks" in _ZH  # zh strings present
+
+
 def test_sidebar_nav_is_grouped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
     _write_snapshot(tmp_path)  # default Screener page renders cleanly
@@ -232,7 +340,15 @@ def test_sidebar_nav_is_grouped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     assert not at.exception
     # Every page is a sidebar button…
     labels = {b.label for b in at.sidebar.button}
-    assert {"Build data", "Screener", "Chart", "Backtest", "Factors", "Macro"} <= labels
+    assert {
+        "Today's Picks",
+        "Build data",
+        "Screener",
+        "Chart",
+        "Backtest",
+        "Factors",
+        "Macro",
+    } <= labels
     # …under its group header.
     headers = " ".join(m.value for m in at.sidebar.markdown)
     for group in ("Help", "Data", "Stock picking", "Backtest", "Analyst lenses"):
