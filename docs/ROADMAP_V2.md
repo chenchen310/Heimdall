@@ -139,7 +139,7 @@ DoD: both canaries in the normal suite, < 5 s runtime, no network.
 
 ## Phase 9 — Today's Picks
 
-### 9.1 Picks engine  `[ ]`
+### 9.1 Picks engine  `[x]`
 
 **Goal:** certified spec + fresh snapshot → today's ranked cohort. **Files:**
 `src/heimdall/research/today.py`, `tests/test_research_today.py`.
