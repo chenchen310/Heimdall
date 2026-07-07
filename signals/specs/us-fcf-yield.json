@@ -1,0 +1,11 @@
+{
+  "name": "us-fcf-yield",
+  "family": "us-value-quality",
+  "market": "US",
+  "version": 1,
+  "features": {
+    "fcf_yield": 1.0
+  },
+  "top_n": 20,
+  "description": "Pure free-cash-flow yield (CFO − capex over market cap) — the most robust single value metric. Frozen on development evidence alone (2010-19: IC +0.022 t 2.87, 6m beat 54.9%) and confirmed by the single validation look (2020-22: IC +0.058 t 2.71, 6m beat 57.1%). One parameter; ~10% monthly turnover."
+}

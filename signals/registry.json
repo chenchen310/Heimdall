@@ -1,3 +1,16 @@
 {
-  "signals": []
+  "signals": [
+    {
+      "name": "us-fcf-yield",
+      "family": "us-value-quality",
+      "version": 1,
+      "spec_path": "signals/specs/us-fcf-yield.json",
+      "spec_hash": "ade91883d56d9b0b59a8837a9cc88dc027fe7c222f5e04152db5414bf6123871",
+      "status": "draft",
+      "oos_attempts_family": null,
+      "cert_report": null,
+      "updated_at": "2026-07-07T22:14:37.248270+00:00"
+    }
+  ],
+  "families": {}
 }
