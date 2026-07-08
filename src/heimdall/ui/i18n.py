@@ -109,7 +109,14 @@ _ZH: dict[str, str] = {
     "Snapshot is {n} business days old — refresh it on the Build data page.": (
         "快照已 {n} 個營業日未更新——請到「建立資料」頁重新整理。"
     ),
-    "Beat rate (6m vs benchmark)": "6個月贏過基準的比率",
+    "Beat rate (6m book vs benchmark)": "組合6個月贏過基準的比率",
+    "Selection skill (vs equal-weight)": "選股技術(相對等權重)",
+    "Beat rate = how often the equal-weight book beat the benchmark (includes the "
+    "equal-weight premium); selection skill = return above an equal-weight universe "
+    "book (the certified edge, G3).": (
+        "贏過基準的比率 = 等權重組合打敗基準的頻率(包含等權重本身的紅利);"
+        "選股技術 = 相對「等權重可交易宇宙」多賺的報酬(這才是真正被認證的邊際,即 G3)。"
+    ),
     "Q5−Q1 spread": "Q5−Q1 價差",
     "OOS cohorts": "樣本外期數",
     "Certified {d} · OOS window {a} → {b} · benchmark {bench}": (
@@ -119,6 +126,20 @@ _ZH: dict[str, str] = {
     "No eligible names to rank right now.": "目前沒有符合資格可排名的股票。",
     "z = strength vs today's eligible pool; the score is the weighted sum of z columns.": (
         "z = 相對今日合格池的強度;總分為各 z 欄的加權和。"
+    ),
+    "Post-cert monitoring: trailing-{n} selection skill {a:+.1%} — drift alarm not triggered.": (
+        "認證後監控:近 {n} 期選股技術 {a:+.1%} — 未觸發漂移警報。"
+    ),
+    "⚠️ {name} v{v} — certified, then flagged by drift monitoring: post-certification "
+    "selection skill went significantly negative (trailing-{n} {a:+.1%}, 95% CI upper "
+    "{hi:+.1%} < 0). Under review — its ranking is withheld until it re-certifies or "
+    "retires.": (
+        "⚠️ {name} v{v} — 曾經認證,現被漂移監控標記:認證後選股技術顯著轉負"
+        "(近 {n} 期 {a:+.1%},95% CI 上界 {hi:+.1%} < 0)。目前為審查中——"
+        "在重新認證或下架之前,排名將暫停顯示。"
+    ),
+    "⚠️ {name} v{v} — under review (post-certification drift). Ranking withheld.": (
+        "⚠️ {name} v{v} — 審查中(認證後偵測到漂移)。排名暫停顯示。"
     ),
     # --- build data ---
     "🗂 Data — build snapshot": "🗂 資料 — 建立快照",
