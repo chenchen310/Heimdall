@@ -1,0 +1,11 @@
+{
+  "name": "tw-revenue-momentum",
+  "family": "tw-revenue-momentum",
+  "market": "Taiwan",
+  "version": 1,
+  "features": {
+    "rev_mom_accel": 1.0
+  },
+  "top_n": 20,
+  "description": "Taiwan monthly-revenue acceleration (mean YoY of the last 3 known months minus the prior 3; PIT on the §36 10th-of-next-month availability). One feature, one parameter. Frozen on 11.4 in-sample evidence under the decomposed metric (ROADMAP 12.5 / RESEARCH_LOG 008): validation 2020-22 selection skill vs the equal-weight universe +6.35% (NW-t 2.07), rank IC +0.043 (t 1.81), quintile spread positive in 75% of months. Universe: 140 most-liquid non-ETF TW names (a liquidity/survivorship selection on top of current_universe optimistic). First OOS attempt for the family."
+}
