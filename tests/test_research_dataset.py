@@ -293,6 +293,109 @@ def test_meta_sidecar_contents(tmp_path: Path) -> None:
     assert set(meta["eligible_per_month"]) == set(meta["months"])
 
 
+# --- roadmap 11.2: TW monthly-revenue momentum (PIT on filed_at) --------------
+
+
+def _rev_frame(rows: list[tuple[str, float]]) -> pd.DataFrame:
+    months = pd.to_datetime([m for m, _ in rows])
+    return pd.DataFrame(
+        {
+            "symbol": "AAA.TW",
+            "month": months,
+            "filed_at": months + pd.DateOffset(months=1, days=9),  # §36: 10th of next month
+            "revenue": [r for _, r in rows],
+            "currency": "TWD",
+            "provider": "finmind",
+            "fetched_at": pd.Timestamp("2024-08-01"),
+        }
+    )
+
+
+_REV_SERIES: list[tuple[str, float]] = (
+    [(f"2023-{m:02d}-01", 100.0) for m in range(1, 13)]
+    + [(f"2024-{m:02d}-01", 110.0) for m in range(1, 6)]
+    + [("2024-06-01", 150.0)]
+)
+
+
+def test_revenue_features_known_answer_and_pit_flip() -> None:
+    from heimdall.research.dataset import _revenue_features
+
+    rev = _rev_frame(_REV_SERIES)
+    # 2024-07-05: June (filed 7/10) is NOT yet knowable → latest known is May.
+    before = _revenue_features(rev, pd.Timestamp("2024-07-05"))
+    assert before["rev_mom_yoy"] == pytest.approx(0.10)  # May 110 / 100 − 1
+    # 2024-07-10: June becomes knowable → the feature flips to June's YoY.
+    after = _revenue_features(rev, pd.Timestamp("2024-07-10"))
+    assert after["rev_mom_yoy"] == pytest.approx(0.50)  # June 150 / 100 − 1
+    # accel = mean(Apr,May,Jun YoY) − mean(Jan,Feb,Mar YoY) = .2333 − .10
+    assert after["rev_mom_accel"] == pytest.approx((0.10 + 0.10 + 0.50) / 3 - 0.10)
+
+
+def test_revenue_features_guards() -> None:
+    from heimdall.research.dataset import _revenue_features
+
+    late = pd.Timestamp("2025-01-15")
+    # Too little history: 10 months has no 12-month-ago base → NaN.
+    short = _rev_frame([(f"2024-{m:02d}-01", 100.0) for m in range(1, 11)])
+    out = _revenue_features(short, late)
+    assert pd.isna(out["rev_mom_yoy"]) and pd.isna(out["rev_mom_accel"])
+    # Non-positive year-ago base → NaN, never a fake percent.
+    zero_base = _rev_frame([("2023-06-01", 0.0), ("2024-06-01", 150.0)])
+    assert pd.isna(_revenue_features(zero_base, late)["rev_mom_yoy"])
+    # A gap month poisons the windows it touches (contiguous-calendar rule):
+    gapped = _rev_frame([r for r in _REV_SERIES if r[0] != "2024-03-01"])
+    out = _revenue_features(gapped, late)
+    assert out["rev_mom_yoy"] == pytest.approx(0.50)  # June itself is fine
+    assert pd.isna(out["rev_mom_accel"])  # prior-3 window spans the hole
+    # Empty frame → NaN dict.
+    empty = _revenue_features(pd.DataFrame(), late)
+    assert pd.isna(empty["rev_mom_yoy"]) and pd.isna(empty["rev_mom_accel"])
+
+
+def test_panel_carries_pit_revenue_features_for_tw(tmp_path: Path) -> None:
+    frames = {
+        "0050.TW": _ohlcv_geo("0050.TW", 700, 0.0005),
+        "AAA.TW": _ohlcv_geo("AAA.TW", 700, 0.0),  # NT$100, NT$100M/day → eligible
+    }
+    rev = _rev_frame(_REV_SERIES)
+    _drive(
+        build_dataset_iter(
+            ["AAA.TW"],
+            _Prices(frames),
+            _Funds(),
+            "Taiwan",
+            date(2024, 6, 1),
+            date(2024, 7, 31),
+            root=tmp_path,
+            min_cross_section=0,
+            monthly_revenue=lambda sym, s, e: rev,
+        )
+    )
+    panel = load_panel("Taiwan", tmp_path).set_index("date")
+    june, july = panel.loc[pd.Timestamp("2024-06-28")], panel.loc[pd.Timestamp("2024-07-31")]
+    assert june["rev_mom_yoy"] == pytest.approx(0.10)  # June's 150 not filed until 7/10
+    assert july["rev_mom_yoy"] == pytest.approx(0.50)  # …then it is
+    assert july["rev_mom_accel"] == pytest.approx((0.10 + 0.10 + 0.50) / 3 - 0.10)
+    assert pd.isna(june["rev_mom_accel"])  # Dec-2023 YoY has no 2022 base → window poisoned
+
+
+def test_us_panel_has_no_revenue_columns_without_the_stream(tmp_path: Path) -> None:
+    _drive(
+        build_dataset_iter(
+            ["X.US"],
+            _Prices(_spy_and_x()),
+            _Funds(),
+            "US",
+            date(2023, 6, 1),
+            date(2023, 7, 31),
+            root=tmp_path,
+            min_cross_section=0,
+        )
+    )
+    assert "rev_mom_yoy" not in load_panel("US", tmp_path).columns
+
+
 def test_hygiene_constants_mirror_playbook() -> None:
     # docs/RESEARCH_PLAYBOOK.md §3 — changing either side alone must fail here.
     assert gates.MIN_PRICE == {"US": 2.0, "Taiwan": 10.0}
