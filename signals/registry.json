@@ -17,14 +17,17 @@
       "version": 1,
       "spec_path": "signals/specs/tw-revenue-momentum.json",
       "spec_hash": "146f08a6e5df9d2ecb1b5a80c781b9ea029302ca9a10ef736a3ddb85234c0c2b",
-      "status": "draft",
-      "oos_attempts_family": null,
-      "cert_report": null,
-      "updated_at": "2026-07-08T17:17:41.773214+00:00"
+      "status": "certified",
+      "oos_attempts_family": 1,
+      "cert_report": "/Users/hanruchen/Claude/Projects/stock-observer/signals/certifications/tw-revenue-momentum_v1.json",
+      "updated_at": "2026-07-08T17:17:59.068189+00:00"
     }
   ],
   "families": {
     "us-value-quality": {
+      "oos_attempts": 1
+    },
+    "tw-revenue-momentum": {
       "oos_attempts": 1
     }
   }

@@ -316,3 +316,23 @@ NOT changed by this entry, and no result below is certified (all in-sample).**
   likely **reverses** the equal-weight/breadth premium and pressures momentum, so a fair test is
   **not** a promised pass. Whatever the number, it is logged and the family closes on this attempt
   unless genuinely new data (not a re-weighting) appears.
+
+**OOS RESULT (2026-07-09): CERTIFIED.** Immutable report
+`signals/certifications/tw-revenue-momentum_v1.json`. OOS 2023-01→2025-11, 35 cohorts, all 13 gate
+checks pass:
+- G1 IC **+0.049 (t 3.16)**, 35 months; G2 spread +1.48% (positive in 65.7% of months).
+- **G3 selection skill +8.13% (NW-t 2.02)** — the alpha vs the equal-weight universe *strengthened*
+  out-of-sample (validation was +6.35%). The pre-registered "the regime reverses the EW premium"
+  prior was **wrong**: revenue-acceleration kept selecting the 2023–25 AI-supply-chain winners.
+- G4 cost-aware book **75.2% CAGR / 2.44 Sharpe vs 0050's 34.3% / 1.75**; G5 IC positive in both
+  halves (+0.042, +0.056), 1 parameter; G6 turnover 34.6% (≤ 40%, no stress band).
+- **Displayed probability: portfolio-cohort beat rate 68.6%, 95% CI 41.1%–96.1%** — the CI is *wide*
+  because 35 overlapping 6-month windows carry heavy autocorrelation. Strong point estimate, honestly
+  imprecise interval.
+- Registry: draft → registered → **certified** (attempt **1/3** spent; 2 remain, for genuinely new
+  data only, never a re-weighting). **Today's Picks now renders — the first certified signal.**
+- **Caveats that ride with every display** (signal-certification rule): `current_universe
+  (optimistic)` × the 140-name most-liquid selection (a sharper survivorship/liquidity tilt than the
+  US panels); G3_alpha_t cleared the bar by a hair (2.02 ≥ 2.0); and 2023–25 was an AI-boom regime
+  unusually kind to revenue-acceleration names. Post-cert drift monitoring (12.2) is the honest next
+  guard — if the trailing-12-cohort skill decays, it flips to `under_review`.
