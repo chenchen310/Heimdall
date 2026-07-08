@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import contextlib
 import os
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
@@ -22,6 +22,10 @@ from heimdall.data.schema import FUNDAMENTALS_COLUMNS
 from heimdall.data.store import data_root
 from heimdall.data.symbols import MARKET_REGION, parse_symbol
 from heimdall.factors.metrics import snapshot_row
+
+#: Warm-up for TW revenue-momentum: rev_mom_accel needs ~19 known months (mirrors
+#: research.dataset's build warm-up so a snapshot row and a panel row agree).
+_MONTHLY_REVENUE_LOOKBACK = timedelta(days=650)
 
 # Small default US universe for Phase 1 (extend freely; full index lists later).
 DEFAULT_UNIVERSE: list[str] = [
@@ -93,6 +97,8 @@ def build_row(
     prices: DataProvider,
     fundamentals: DataProvider,
     as_of: date,
+    *,
+    monthly_revenue: Callable[[str, date, date], pd.DataFrame] | None = None,
 ) -> dict[str, object] | None:
     """One snapshot row, or ``None`` if the symbol has no price data.
 
@@ -101,6 +107,15 @@ def build_row(
     rather than being dropped, which keeps the screener's universe wide. Network
     and unexpected errors propagate so the caller can decide (the build CLI skips
     and records them).
+
+    ``monthly_revenue`` is the same injectable TW-revenue callable
+    ``research.dataset.build_dataset_iter`` takes (roadmap 11.2); a snapshot may
+    mix US and TW symbols in one call (``--market all``, or pasted custom
+    symbols), so — unlike the single-market research panel — it is always safe
+    to pass this for every build: a non-TW symbol's fetch raises
+    ``NotSupported``/``ProviderError``, caught here and treated as "no monthly
+    revenue" (the row still gets the ``rev_mom_*`` columns, as NaN), so the
+    resulting table has one consistent schema regardless of market mix.
     """
     price_start = as_of - timedelta(days=500)  # enough history for SMA-200
     ohlcv = prices.get_ohlcv(symbol, price_start, as_of)
@@ -110,7 +125,13 @@ def build_row(
         fund = fundamentals.get_fundamentals(symbol, "all", "annual")
     except (ProviderError, NotSupported):
         fund = pd.DataFrame(columns=FUNDAMENTALS_COLUMNS)
-    return snapshot_row(symbol, ohlcv, fund, as_of)
+    monthly = None
+    if monthly_revenue is not None:
+        try:
+            monthly = monthly_revenue(symbol, as_of - _MONTHLY_REVENUE_LOOKBACK, as_of)
+        except (ProviderError, NotSupported):
+            monthly = pd.DataFrame()
+    return snapshot_row(symbol, ohlcv, fund, as_of, monthly=monthly)
 
 
 def build_snapshot(
@@ -118,13 +139,16 @@ def build_snapshot(
     prices: DataProvider,
     fundamentals: DataProvider,
     as_of: date | None = None,
+    *,
+    monthly_revenue: Callable[[str, date, date], pd.DataFrame] | None = None,
 ) -> pd.DataFrame:
     """Build the snapshot table for ``symbols`` as known on ``as_of`` (default today)."""
     as_of = as_of or date.today()
     rows = [
         row
         for symbol in symbols
-        if (row := build_row(symbol, prices, fundamentals, as_of)) is not None
+        if (row := build_row(symbol, prices, fundamentals, as_of, monthly_revenue=monthly_revenue))
+        is not None
     ]
     return pd.DataFrame(rows)
 
@@ -150,6 +174,7 @@ def build_snapshot_iter(
     resume: bool = True,
     checkpoint_every: int = 50,
     root: Path | None = None,
+    monthly_revenue: Callable[[str, date, date], pd.DataFrame] | None = None,
 ) -> Iterator[BuildProgress]:
     """Resumable, checkpointed build that yields progress after each symbol.
 
@@ -182,7 +207,7 @@ def build_snapshot_iter(
 
     for i, symbol in enumerate(todo, start=1):
         try:
-            row = build_row(symbol, prices, fundamentals, as_of)
+            row = build_row(symbol, prices, fundamentals, as_of, monthly_revenue=monthly_revenue)
         except Exception as exc:  # network/provider hiccup — skip, don't abort the crawl
             prog.failures[type(exc).__name__] = prog.failures.get(type(exc).__name__, 0) + 1
             row = None

@@ -106,41 +106,6 @@ def _labels(
     }
 
 
-def _revenue_features(monthly: pd.DataFrame, as_of: pd.Timestamp) -> dict[str, float]:
-    """TW monthly-revenue momentum — the signature free Taiwan signal (roadmap 11.2).
-
-    Point-in-time on ``filed_at`` (§36: the 10th of the following month, see 11.1):
-    only months filed on/before ``as_of`` exist. Features (both higher-is-better):
-
-    - ``rev_mom_yoy`` — the latest known month's revenue YoY;
-    - ``rev_mom_accel`` — mean YoY of the last 3 known months minus the prior 3,
-      the second derivative that leads inflections.
-
-    Computed on a contiguous monthly calendar (a gap month poisons its windows to
-    NaN rather than silently spanning it); YoY on a non-positive year-ago base is
-    NaN, mirroring ``_growth_yoy``.
-    """
-    nan = float("nan")
-    out = {"rev_mom_yoy": nan, "rev_mom_accel": nan}
-    if monthly.empty:
-        return out
-    known = monthly[monthly["filed_at"] <= as_of]
-    if known.empty:
-        return out
-    s = known.sort_values(["month", "filed_at"]).groupby("month")["revenue"].last()
-    s.index = pd.PeriodIndex(s.index, freq="M")
-    full = s.reindex(pd.period_range(s.index.min(), s.index.max(), freq="M"))
-    prev = full.shift(12)
-    yoy = pd.Series(np.where(prev > 0, full / prev - 1.0, np.nan), index=full.index, dtype=float)
-    if pd.notna(yoy.iloc[-1]):
-        out["rev_mom_yoy"] = float(yoy.iloc[-1])
-    if len(yoy) >= 6:
-        last3, prior3 = yoy.iloc[-3:], yoy.iloc[-6:-3]
-        if not (bool(last3.isna().any()) or bool(prior3.isna().any())):
-            out["rev_mom_accel"] = float(last3.mean() - prior3.mean())
-    return out
-
-
 _FLOW_KEYS = [
     "foreign_net_buy_21d",
     "foreign_net_buy_63d",
@@ -324,10 +289,9 @@ def build_dataset_iter(
             hist = ohlcv[ohlcv["date"] <= t]
             if hist.empty:
                 continue
-            row = snapshot_row(sym, hist, fund_data[sym], t.date())
+            monthly = rev_hist.get(sym, pd.DataFrame()) if monthly_revenue is not None else None
+            row = snapshot_row(sym, hist, fund_data[sym], t.date(), monthly=monthly)
             row.update(_labels(adj_by_sym[sym], bench_adj, t, next_of[t]))
-            if monthly_revenue is not None:
-                row.update(_revenue_features(rev_hist.get(sym, pd.DataFrame()), t))
             if daily_chips is not None:
                 row.update(_flow_features(chips_hist.get(sym, pd.DataFrame()), ohlcv, t))
             ok, why = _eligibility(

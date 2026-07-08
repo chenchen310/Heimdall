@@ -73,6 +73,12 @@ def main(argv: list[str] | None = None) -> int:
 
     prices = CachedProvider(router.price_provider())
     fundamentals = router.fundamentals_provider()
+    # Always wired: --market all / custom --symbols can mix US and TW in one build,
+    # and a non-TW fetch is a cheap no-op (raises NotSupported before any network
+    # call — see FinMindProvider._require_market), so there is no US-only cost.
+    from heimdall.data.providers import FinMindProvider
+
+    monthly_revenue = FinMindProvider().monthly_revenue
 
     # The resumable crawl + checkpointing lives in the core iterator; here we just
     # print the plan, checkpoint lines, and a final summary as it streams progress.
@@ -83,6 +89,7 @@ def main(argv: list[str] | None = None) -> int:
         as_of,
         resume=not args.rebuild,
         checkpoint_every=args.checkpoint_every,
+        monthly_revenue=monthly_revenue,
     )
     last = next(progress)  # initial plan (done == 0)
     print(
