@@ -228,7 +228,7 @@ Panel-only feature (TW rows): `rev_mom_yoy` (latest month YoY) and `rev_mom_acce
 prior 3m mean YoY), point-in-time per 11.1's rule. PIT leak test mandatory. This is Taiwan's
 signature free signal — treat carefully.
 
-### 11.3 TW chip/flow features (法人買賣超・外資持股・融資融券)  `[ ]`
+### 11.3 TW chip/flow features (法人買賣超・外資持股・融資融券)  `[x]`
 
 **Reality check (probed live 2026-07-07, free tier with registered token):**
 `TaiwanStockInstitutionalInvestorsBuySell` (daily buy/sell per investor type — `Foreign_Investor`,

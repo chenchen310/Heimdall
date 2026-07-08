@@ -14,9 +14,13 @@ import pytest
 from heimdall.data.base import NotSupported
 from heimdall.data.providers.finmind import (
     FinMindProvider,
+    _merge_chips,
     _normalize_fundamentals,
+    _normalize_institutional,
+    _normalize_margin,
     _normalize_month_revenue,
     _normalize_ohlcv,
+    _normalize_shareholding,
 )
 from heimdall.data.schema import FUNDAMENTALS_COLUMNS, OHLCV_COLUMNS
 from heimdall.data.symbols import Symbol
@@ -219,3 +223,120 @@ def test_rejects_non_taiwan_market() -> None:
         FinMindProvider().get_ohlcv(
             "AAPL.US", pd.Timestamp("2024-01-01").date(), pd.Timestamp("2024-02-01").date()
         )
+
+
+# --- roadmap 11.3: daily chip/flow datasets (法人籌碼) -------------------------
+
+# Real FinMind TaiwanStockInstitutionalInvestorsBuySell shape (buy/sell in shares).
+_INST_ROWS = [
+    # 2024-01-02
+    {"date": "2024-01-02", "stock_id": "2330", "name": "Foreign_Dealer_Self", "buy": 0, "sell": 0},
+    {"date": "2024-01-02", "stock_id": "2330", "name": "Dealer_self", "buy": 80000, "sell": 641052},
+    {
+        "date": "2024-01-02",
+        "stock_id": "2330",
+        "name": "Dealer_Hedging",
+        "buy": 25585,
+        "sell": 472504,
+    },
+    {
+        "date": "2024-01-02",
+        "stock_id": "2330",
+        "name": "Foreign_Investor",
+        "buy": 19034488,
+        "sell": 11202763,
+    },
+    {
+        "date": "2024-01-02",
+        "stock_id": "2330",
+        "name": "Investment_Trust",
+        "buy": 869000,
+        "sell": 109685,
+    },
+    # 2024-01-03 — a non-zero Foreign_Dealer_Self and a negative trust net
+    {
+        "date": "2024-01-03",
+        "stock_id": "2330",
+        "name": "Foreign_Investor",
+        "buy": 10000000,
+        "sell": 8000000,
+    },
+    {
+        "date": "2024-01-03",
+        "stock_id": "2330",
+        "name": "Foreign_Dealer_Self",
+        "buy": 500000,
+        "sell": 100000,
+    },
+    {
+        "date": "2024-01-03",
+        "stock_id": "2330",
+        "name": "Investment_Trust",
+        "buy": 300000,
+        "sell": 500000,
+    },
+    {"date": "2024-01-03", "stock_id": "2330", "name": "Dealer_self", "buy": 1, "sell": 2},
+    {"date": "2024-01-03", "stock_id": "2330", "name": "Dealer_Hedging", "buy": 3, "sell": 4},
+]
+_HOLD_ROWS = [
+    {"date": "2024-01-02", "stock_id": "2330", "ForeignInvestmentSharesRatio": 73.08},
+    {"date": "2024-01-03", "stock_id": "2330", "ForeignInvestmentSharesRatio": 73.05},
+    {
+        "date": "2024-01-04",
+        "stock_id": "2330",
+        "ForeignInvestmentSharesRatio": 73.05,
+    },  # inst lacks this day
+]
+_MARGIN_ROWS = [
+    {"date": "2024-01-02", "stock_id": "2330", "MarginPurchaseTodayBalance": 12844},
+    {"date": "2024-01-03", "stock_id": "2330", "MarginPurchaseTodayBalance": 13785},
+]
+
+
+def test_institutional_sums_foreign_and_trust_excludes_dealers() -> None:
+    df = _normalize_institutional(_INST_ROWS)
+    assert list(df.columns) == ["date", "foreign_net_shares", "trust_net_shares"]
+    assert df["date"].is_monotonic_increasing
+    d2 = df[df["date"] == pd.Timestamp("2024-01-02")].iloc[0]
+    # foreign = Foreign_Investor net + Foreign_Dealer_Self net; dealers excluded.
+    assert d2["foreign_net_shares"] == (19034488 - 11202763) + 0
+    assert d2["trust_net_shares"] == 869000 - 109685
+    d3 = df[df["date"] == pd.Timestamp("2024-01-03")].iloc[0]
+    assert d3["foreign_net_shares"] == (10000000 - 8000000) + (
+        500000 - 100000
+    )  # dealer-self summed in
+    assert d3["trust_net_shares"] == 300000 - 500000  # negatives preserved
+
+
+def test_shareholding_and_margin_pick_the_right_columns() -> None:
+    hold = _normalize_shareholding(_HOLD_ROWS)
+    assert list(hold.columns) == ["date", "foreign_hold_ratio"]
+    assert hold[hold["date"] == pd.Timestamp("2024-01-02")]["foreign_hold_ratio"].iloc[0] == 73.08
+    margin = _normalize_margin(_MARGIN_ROWS)
+    assert list(margin.columns) == ["date", "margin_balance"]
+    assert margin[margin["date"] == pd.Timestamp("2024-01-03")]["margin_balance"].iloc[0] == 13785.0
+
+
+def test_merge_chips_outer_joins_and_stamps() -> None:
+    df = _merge_chips(
+        _normalize_institutional(_INST_ROWS),
+        _normalize_shareholding(_HOLD_ROWS),
+        _normalize_margin(_MARGIN_ROWS),
+        _TW,
+    )
+    assert df["symbol"].unique().tolist() == ["2330.TW"]
+    assert df["currency"].unique().tolist() == ["TWD"]
+    assert df["provider"].unique().tolist() == ["finmind"]
+    # 2024-01-04 exists in shareholding only → outer-joined, other streams NaN.
+    d4 = df[df["date"] == pd.Timestamp("2024-01-04")].iloc[0]
+    assert d4["foreign_hold_ratio"] == 73.05
+    assert pd.isna(d4["foreign_net_shares"]) and pd.isna(d4["margin_balance"])
+
+
+def test_chip_normalizers_empty() -> None:
+    assert _normalize_institutional([]).empty
+    assert _normalize_shareholding([]).empty
+    assert _normalize_margin([]).empty
+    assert _merge_chips(
+        _normalize_institutional([]), _normalize_shareholding([]), _normalize_margin([]), _TW
+    ).empty

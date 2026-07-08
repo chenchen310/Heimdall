@@ -95,6 +95,25 @@ _PRICE_RENAME: dict[str, str] = {
     "Trading_Volume": "volume",
 }
 
+# --- daily chips / flows (roadmap 11.3) -------------------------------------
+# ``TaiwanStockInstitutionalInvestorsBuySell`` ``name`` codes. 外資 (foreign) =
+# the investor line + the foreign-dealer-self line (TWSE aggregates both); 投信 =
+# the trust line. Dealer (自營商 self/hedging) lines are excluded on purpose —
+# they are hedging noise, not a directional signal (see the card's priors).
+_INST_FOREIGN = frozenset({"Foreign_Investor", "Foreign_Dealer_Self"})
+_INST_TRUST = "Investment_Trust"
+_CHIPS_COLUMNS = [
+    "symbol",
+    "date",
+    "foreign_net_shares",
+    "trust_net_shares",
+    "foreign_hold_ratio",
+    "margin_balance",
+    "currency",
+    "provider",
+    "fetched_at",
+]
+
 
 class FinMindProvider(DataProvider):
     """Taiwan prices + fundamentals + monthly revenue via the FinMind API."""
@@ -143,6 +162,32 @@ class FinMindProvider(DataProvider):
         sym = self._require_market(symbol)
         raw = self._get("TaiwanStockMonthRevenue", sym.ticker, start, end)
         return _normalize_month_revenue(raw, sym)
+
+    def daily_chips(self, symbol: str, start: date, end: date) -> pd.DataFrame:
+        """Merged daily TW chip/flow panel — the signature籌碼 streams (roadmap 11.3).
+
+        Outer-joins three FinMind datasets on trading day into one frame:
+        institutional net-buy shares (外資 + 投信), foreign holding ratio, and
+        margin balance. Columns ``[symbol, date, foreign_net_shares,
+        trust_net_shares, foreign_hold_ratio, margin_balance, currency, provider,
+        fetched_at]``; feature construction (and the crucial **+1 trading-day**
+        point-in-time shift) is left to the caller (``research.dataset``).
+
+        These values are published after trading day *d* closes (T+1 for the
+        holding ratio), so a rebalance at *t* must read only through *t−1* — the
+        panel enforces that shift. Fetched per symbol: FinMind's per-**date** bulk
+        query (omit ``data_id``) requires a paid tier (probed 2026-07-08, the free
+        ``register`` level is refused), so whole-market builds loop symbols.
+        """
+        sym = self._require_market(symbol)
+        inst = _normalize_institutional(
+            self._get("TaiwanStockInstitutionalInvestorsBuySell", sym.ticker, start, end)
+        )
+        hold = _normalize_shareholding(self._get("TaiwanStockShareholding", sym.ticker, start, end))
+        margin = _normalize_margin(
+            self._get("TaiwanStockMarginPurchaseShortSale", sym.ticker, start, end)
+        )
+        return _merge_chips(inst, hold, margin, sym)
 
     # -- internals -----------------------------------------------------------
     def _require_market(self, symbol: str) -> Symbol:
@@ -335,6 +380,82 @@ def _normalize_month_revenue(raw: list[dict[str, Any]], sym: Symbol) -> pd.DataF
         }
     )
     return out.sort_values("month").reset_index(drop=True)[cols]
+
+
+def _normalize_institutional(raw: list[dict[str, Any]]) -> pd.DataFrame:
+    """``TaiwanStockInstitutionalInvestorsBuySell`` rows → daily net-buy **shares**.
+
+    Sums ``buy − sell`` per day for the foreign lines (外資 + 外資自營商) and for the
+    trust line (投信) separately; dealer lines are dropped. Returns
+    ``[date, foreign_net_shares, trust_net_shares]``.
+    """
+    cols = ["date", "foreign_net_shares", "trust_net_shares"]
+    if not raw:
+        return pd.DataFrame(columns=cols)
+    df = pd.DataFrame(raw)
+    df["date"] = pd.to_datetime(df["date"])
+    df["net"] = df["buy"].astype(float) - df["sell"].astype(float)
+    foreign = df[df["name"].isin(_INST_FOREIGN)].groupby("date")["net"].sum()
+    trust = df[df["name"] == _INST_TRUST].groupby("date")["net"].sum()
+    out = pd.DataFrame({"foreign_net_shares": foreign, "trust_net_shares": trust})
+    return out.reset_index().sort_values("date").reset_index(drop=True)[cols]
+
+
+def _normalize_shareholding(raw: list[dict[str, Any]]) -> pd.DataFrame:
+    """``TaiwanStockShareholding`` rows → daily foreign holding ratio (percent).
+
+    ``ForeignInvestmentSharesRatio`` is the share of the company held by foreign
+    investors (73.08 = 73.08%). Returns ``[date, foreign_hold_ratio]``.
+    """
+    cols = ["date", "foreign_hold_ratio"]
+    if not raw:
+        return pd.DataFrame(columns=cols)
+    df = pd.DataFrame(raw)
+    out = pd.DataFrame(
+        {
+            "date": pd.to_datetime(df["date"]),
+            "foreign_hold_ratio": df["ForeignInvestmentSharesRatio"].astype(float),
+        }
+    )
+    return out.sort_values("date").reset_index(drop=True)[cols]
+
+
+def _normalize_margin(raw: list[dict[str, Any]]) -> pd.DataFrame:
+    """``TaiwanStockMarginPurchaseShortSale`` rows → daily margin balance.
+
+    ``MarginPurchaseTodayBalance`` is the outstanding margin-buy balance (lots);
+    the unit is irrelevant downstream since the feature is a %-change. Returns
+    ``[date, margin_balance]``.
+    """
+    cols = ["date", "margin_balance"]
+    if not raw:
+        return pd.DataFrame(columns=cols)
+    df = pd.DataFrame(raw)
+    out = pd.DataFrame(
+        {
+            "date": pd.to_datetime(df["date"]),
+            "margin_balance": df["MarginPurchaseTodayBalance"].astype(float),
+        }
+    )
+    return out.sort_values("date").reset_index(drop=True)[cols]
+
+
+def _merge_chips(
+    inst: pd.DataFrame, hold: pd.DataFrame, margin: pd.DataFrame, sym: Symbol
+) -> pd.DataFrame:
+    """Outer-join the three chip streams on trading day into one canonical frame."""
+    if inst.empty and hold.empty and margin.empty:
+        return pd.DataFrame(columns=_CHIPS_COLUMNS)
+    merged = inst.merge(hold, on="date", how="outer").merge(margin, on="date", how="outer")
+    merged = merged.sort_values("date").reset_index(drop=True)
+    for col in ("foreign_net_shares", "trust_net_shares", "foreign_hold_ratio", "margin_balance"):
+        if col not in merged.columns:
+            merged[col] = float("nan")
+    merged["symbol"] = sym.canonical
+    merged["currency"] = sym.currency
+    merged["provider"] = "finmind"
+    merged["fetched_at"] = datetime.now(UTC).replace(tzinfo=None)
+    return merged[_CHIPS_COLUMNS]
 
 
 __all__ = ["FinMindProvider"]
