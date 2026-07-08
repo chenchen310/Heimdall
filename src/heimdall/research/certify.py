@@ -125,6 +125,31 @@ def _monthly_spread(df: pd.DataFrame, q: int = 5) -> list[float]:
     return out
 
 
+def _book_minus_universe(scored: pd.DataFrame, top_n: int) -> tuple[float, float] | None:
+    """From a scored cross-section: (EW top-N book 6m `fwd_6m_rel` mean, EW eligible-universe mean).
+
+    The shared G3 selection unit — used by :func:`certify` and :mod:`heimdall.research.monitor`
+    (12.2) so the certified metric has exactly one home. Returns None if either leg is empty.
+    """
+    ranked = scored.dropna(subset=[_SCORE]).sort_values(_SCORE, ascending=False)
+    book6 = ranked.head(top_n)["fwd_6m_rel"].dropna()
+    pool = scored[scored["eligible"].astype(bool)] if "eligible" in scored.columns else scored
+    univ6 = pool["fwd_6m_rel"].dropna()
+    if not len(book6) or not len(univ6):
+        return None
+    return float(book6.mean()), float(univ6.mean())
+
+
+def cohort_alpha(spec: SignalSpec, cross: pd.DataFrame) -> tuple[float, float] | None:
+    """Score one cross-section and return its (book 6m, equal-weight-universe 6m) relative returns.
+
+    The drift monitor's input (12.2): both legs are benchmark-relative, so the benchmark cancels
+    in ``book − universe``, leaving the selection skill G3 certifies — no benchmark fetch needed.
+    """
+    scored = cross.assign(**{_SCORE: score(spec, cross)})
+    return _book_minus_universe(scored, spec.top_n)
+
+
 # --- the referee ----------------------------------------------------------------
 
 
@@ -165,13 +190,11 @@ def certify(spec: SignalSpec, panel: pd.DataFrame, benchmark_adj: pd.Series) -> 
         ranked = cross.dropna(subset=[_SCORE]).sort_values(_SCORE, ascending=False)
         picks = ranked.head(spec.top_n)
         cohorts_sets.append(set(picks["symbol"]))
-        book6 = picks["fwd_6m_rel"].dropna()
-        # No-skill baseline: equal-weight ALL eligible names with a 6m label (a real alternative,
-        # ~an equal-weight ETF). The benchmark cancels in book − universe, isolating selection.
-        pool = cross[cross["eligible"].astype(bool)] if "eligible" in cross.columns else cross
-        univ6 = pool["fwd_6m_rel"].dropna()
-        if len(book6) and len(univ6):
-            book_ret, univ_ret = float(book6.mean()), float(univ6.mean())
+        # Selection skill: EW top-N book vs the equal-weight eligible universe (a real alternative,
+        # ~an equal-weight ETF). The benchmark cancels in book − universe, isolating stock-picking.
+        bu = _book_minus_universe(cross, spec.top_n)  # cross already carries the score column
+        if bu is not None:
+            book_ret, univ_ret = bu
             portfolio_beats.append(float(book_ret > 0))
             selection_alphas.append(book_ret - univ_ret)
             cohort_rows.append(
@@ -179,7 +202,7 @@ def certify(spec: SignalSpec, panel: pd.DataFrame, benchmark_adj: pd.Series) -> 
                     "date": t.date().isoformat(),
                     "book_rel_6m": book_ret,
                     "alpha_6m": book_ret - univ_ret,
-                    "n_picks": int(len(book6)),
+                    "n_picks": int(picks["fwd_6m_rel"].notna().sum()),
                 }
             )
         nxt = next_of.get(t)

@@ -283,10 +283,19 @@ A `launchd` plist template + `docs/OPERATIONS.md` (weekly: snapshot refresh + pa
 the existing resumable CLIs), or extend the Build-data page with a one-click "refresh all
 certified inputs". Staleness banners already exist (9.2).
 
-### 12.2 Drift monitoring  `[ ]`
+### 12.2 Drift monitoring  `[x]`
 `research/monitor.py` + a monitoring section on Today's Picks: each month append the newest
 realized cohort beat rate to the cert's monitoring series; trailing-12 NW CI upper < 0.5 ⇒ auto
 `under_review` + banner. Tests with synthetic drift.
+
+**Done 2026-07-09.** `research/monitor.py` recomputes each certified signal's realized OOS cohorts
+from the current panel and watches **the certified edge — the G3 selection alpha** (not the
+EW-premium-inflated beat rate; playbook §9 updated for the 12.5 metric): trailing-12 NW 95% CI
+**upper < 0** ⇒ auto `certified → under_review`. Snapshots persist to `signals/monitoring/`; Today's
+Picks shows a drift banner (ranking withheld) for under-review signals and a trailing-skill line for
+healthy ones. CLI `python -m heimdall.research.monitor [--apply]`. Synthetic-drift tests + a UI
+banner test. First real run: `tw-revenue-momentum v1` healthy — trailing-12 skill +16.4% (CI +2.0%
+to +30.9%), no drift.
 
 ### 12.3 Paid-data decision memo  `[ ]`
 Only after ≥ 2 Phase-10 families are certified-or-rejected: write `docs/DATA_DECISION.md` — what
