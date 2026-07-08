@@ -64,10 +64,13 @@ def main(argv: list[str] | None = None) -> int:
     prices = CachedProvider(router.price_provider())
     fundamentals = router.fundamentals_provider()
     monthly_revenue = None
-    if args.market == "tw":  # the third TW stream: 月營收 momentum features (11.2)
+    daily_chips = None
+    if args.market == "tw":  # the extra TW streams: 月營收 (11.2) + 法人籌碼 (11.3)
         from heimdall.data.providers import FinMindProvider
 
-        monthly_revenue = FinMindProvider().monthly_revenue
+        finmind = FinMindProvider()
+        monthly_revenue = finmind.monthly_revenue
+        daily_chips = finmind.daily_chips
 
     progress = build_dataset_iter(
         symbols,
@@ -79,6 +82,7 @@ def main(argv: list[str] | None = None) -> int:
         resume=not args.rebuild,
         min_cross_section=args.min_cross_section,
         monthly_revenue=monthly_revenue,
+        daily_chips=daily_chips,
     )
     last = next(progress)  # the plan
     print(f"Universe: {len(symbols)} symbols | months to build: {last.total_months}")

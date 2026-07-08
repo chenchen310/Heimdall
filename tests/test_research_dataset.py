@@ -396,6 +396,148 @@ def test_us_panel_has_no_revenue_columns_without_the_stream(tmp_path: Path) -> N
     assert "rev_mom_yoy" not in load_panel("US", tmp_path).columns
 
 
+# --- roadmap 11.3: TW chip/flow features (+1 trading-day PIT shift) -----------
+
+
+def _chips_frame(
+    dates: pd.DatetimeIndex,
+    foreign: list[float],
+    trust: list[float],
+    hold: list[float],
+    margin: list[float],
+) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "symbol": "AAA.TW",
+            "date": dates,
+            "foreign_net_shares": foreign,
+            "trust_net_shares": trust,
+            "foreign_hold_ratio": hold,
+            "margin_balance": margin,
+            "currency": "TWD",
+            "provider": "finmind",
+            "fetched_at": pd.Timestamp("2024-05-01"),
+        }
+    )
+
+
+def _flat_price(
+    dates: pd.DatetimeIndex, close: float = 100.0, volume: float = 1_000_000.0
+) -> pd.DataFrame:
+    return pd.DataFrame({"date": dates, "close": close, "volume": volume})
+
+
+def test_flow_features_known_answer_and_shift() -> None:
+    from heimdall.research.dataset import _flow_features
+
+    n = 80
+    dates = pd.bdate_range("2024-01-01", periods=n)
+    k, tk, v, c = 100_000.0, 40_000.0, 1_000_000.0, 100.0
+    # The final row is dated as_of itself: it must be EXCLUDED (the +1-day shift).
+    # Absurd spikes there prove a leak would be caught, not silently absorbed.
+    chips = _chips_frame(
+        dates,
+        foreign=[k] * (n - 1) + [9e12],
+        trust=[tk] * (n - 1) + [9e12],
+        hold=[20.0 + 0.01 * i for i in range(n - 1)] + [9999.0],
+        margin=[10_000.0 * 1.001**i for i in range(n - 1)] + [9e12],
+    )
+    out = _flow_features(chips, _flat_price(dates, c, v), dates[-1])
+    # Σ(net shares × close) over the window ÷ its median dollar volume = n_window × k / v.
+    assert out["foreign_net_buy_21d"] == pytest.approx(21 * k / v)
+    assert out["foreign_net_buy_63d"] == pytest.approx(63 * k / v)
+    assert out["trust_net_buy_21d"] == pytest.approx(21 * tk / v)
+    # ratio ramps 0.01pp/day → 63-day pp change = 0.63; margin +0.1%/day → 1.001**21 − 1.
+    assert out["foreign_hold_delta_63d"] == pytest.approx(0.63)
+    assert out["margin_delta_21d"] == pytest.approx(1.001**21 - 1)
+
+
+def test_flow_features_guards() -> None:
+    from heimdall.research.dataset import _flow_features
+
+    at = pd.Timestamp("2024-06-01")
+    empty = _flow_features(pd.DataFrame(), _flat_price(pd.bdate_range("2024-01-01", periods=1)), at)
+    assert all(pd.isna(x) for x in empty.values())
+
+    # Only 10 usable days (the 11th is the excluded as_of row): every window is short → NaN.
+    dates = pd.bdate_range("2024-01-01", periods=11)
+    chips = _chips_frame(dates, [1.0] * 11, [1.0] * 11, [20.0] * 11, [100.0] * 11)
+    short = _flow_features(chips, _flat_price(dates), dates[-1])
+    assert all(pd.isna(x) for x in short.values())
+
+    # A single gap slides the window (uses the last 21 *available* rows), not NaN,
+    # as long as enough observations remain — daily gaps are noise, not a leak.
+    dates = pd.bdate_range("2024-01-01", periods=30)
+    foreign = [1.0] * 30
+    foreign[10] = float("nan")  # a hole; 28 usable rows remain ≥ 21
+    chips = _chips_frame(dates, foreign, [1.0] * 30, [20.0] * 30, [100.0] * 30)
+    slid = _flow_features(chips, _flat_price(dates), dates[-1])
+    assert slid["foreign_net_buy_21d"] == pytest.approx(21 * 1.0 / 1_000_000.0)
+    # …but too few available rows → NaN (fewer than 21 non-NaN in the window).
+    foreign = [float("nan")] * 15 + [1.0] * 15
+    chips = _chips_frame(dates, foreign, [1.0] * 30, [20.0] * 30, [100.0] * 30)
+    thin = _flow_features(chips, _flat_price(dates), dates[-1])
+    assert pd.isna(thin["foreign_net_buy_21d"])
+
+    # Zero dollar volume → no division by zero, just NaN.
+    dates = pd.bdate_range("2024-01-01", periods=30)
+    chips = _chips_frame(dates, [1.0] * 30, [1.0] * 30, [20.0] * 30, [100.0] * 30)
+    zero_vol = _flow_features(chips, _flat_price(dates, volume=0.0), dates[-1])
+    assert pd.isna(zero_vol["foreign_net_buy_21d"])
+
+
+def test_panel_carries_pit_flow_features_for_tw(tmp_path: Path) -> None:
+    frames = {
+        "0050.TW": _ohlcv_geo("0050.TW", 700, 0.0005),
+        "AAA.TW": _ohlcv_geo("AAA.TW", 700, 0.0),  # flat NT$100, NT$100M/day → eligible
+    }
+    cd = pd.bdate_range("2023-06-01", "2024-08-31")
+    k, tk, v = 100_000.0, 40_000.0, 1_000_000.0
+    chips = _chips_frame(
+        cd,
+        foreign=[k] * len(cd),
+        trust=[tk] * len(cd),
+        hold=[20.0 + 0.01 * i for i in range(len(cd))],
+        margin=[10_000.0 * 1.001**i for i in range(len(cd))],
+    )
+    _drive(
+        build_dataset_iter(
+            ["AAA.TW"],
+            _Prices(frames),
+            _Funds(),
+            "Taiwan",
+            date(2024, 6, 1),
+            date(2024, 7, 31),
+            root=tmp_path,
+            min_cross_section=0,
+            daily_chips=lambda sym, s, e: chips,
+        )
+    )
+    june = load_panel("Taiwan", tmp_path).set_index("date").loc[pd.Timestamp("2024-06-28")]
+    assert june["foreign_net_buy_21d"] == pytest.approx(21 * k / v)
+    assert june["foreign_net_buy_63d"] == pytest.approx(63 * k / v)
+    assert june["trust_net_buy_21d"] == pytest.approx(21 * tk / v)
+    assert june["foreign_hold_delta_63d"] == pytest.approx(0.63)
+    assert june["margin_delta_21d"] == pytest.approx(1.001**21 - 1)
+
+
+def test_us_panel_has_no_flow_columns_without_the_stream(tmp_path: Path) -> None:
+    _drive(
+        build_dataset_iter(
+            ["X.US"],
+            _Prices(_spy_and_x()),
+            _Funds(),
+            "US",
+            date(2023, 6, 1),
+            date(2023, 7, 31),
+            root=tmp_path,
+            min_cross_section=0,
+        )
+    )
+    cols = load_panel("US", tmp_path).columns
+    assert "foreign_net_buy_21d" not in cols and "margin_delta_21d" not in cols
+
+
 def test_hygiene_constants_mirror_playbook() -> None:
     # docs/RESEARCH_PLAYBOOK.md §3 — changing either side alone must fail here.
     assert gates.MIN_PRICE == {"US": 2.0, "Taiwan": 10.0}

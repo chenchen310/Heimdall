@@ -141,6 +141,72 @@ def _revenue_features(monthly: pd.DataFrame, as_of: pd.Timestamp) -> dict[str, f
     return out
 
 
+_FLOW_KEYS = [
+    "foreign_net_buy_21d",
+    "foreign_net_buy_63d",
+    "trust_net_buy_21d",
+    "foreign_hold_delta_63d",
+    "margin_delta_21d",
+]
+
+
+def _flow_features(
+    chips: pd.DataFrame, price: pd.DataFrame, as_of: pd.Timestamp
+) -> dict[str, float]:
+    """TW chip/flow features — 法人籌碼 (roadmap 11.3), all keyed to *t−1* data.
+
+    ``chips`` is ``FinMindProvider.daily_chips`` output. The **+1 trading-day
+    shift** is the point-in-time guard: these streams are published after day
+    *d*'s close, so a rebalance at ``as_of`` may read only rows dated *strictly
+    before* it (``date < as_of``). Features (window = trading days):
+
+    - ``foreign_net_buy_21d`` / ``_63d`` — Σ(net foreign shares × close) over the
+      window ÷ its median daily dollar volume (a signed "days of turnover" of net
+      foreign accumulation; higher = stronger buying);
+    - ``trust_net_buy_21d`` — the same for投信 (trust) flow;
+    - ``foreign_hold_delta_63d`` — percentage-point change in the foreign holding
+      ratio over 63 trading days;
+    - ``margin_delta_21d`` — %-change in the margin balance over 21 trading days
+      (prior direction **negative**: rising retail leverage is crowding).
+
+    Each feature reads the last N *available* observations within the ``< as_of``
+    window (daily gaps are rare data noise, unlike a missing revenue month — the
+    look-ahead guard is the shift, not window-completeness); a feature is NaN only
+    when fewer than N observations exist or its liquidity denominator is ≤ 0.
+    """
+    out = {k: float("nan") for k in _FLOW_KEYS}
+    if chips.empty:
+        return out
+    usable = chips[chips["date"] < as_of]  # +1 trading-day guard: row t sees ≤ t−1 only
+    if usable.empty:
+        return out
+    m = usable.merge(price[["date", "close", "volume"]], on="date", how="inner").sort_values("date")
+    if m.empty:
+        return out
+
+    def _net_buy(col: str, n: int) -> float:
+        sub = m.dropna(subset=[col, "close", "volume"])
+        if len(sub) < n:
+            return float("nan")
+        sub = sub.tail(n)
+        num = float((sub[col].to_numpy(float) * sub["close"].to_numpy(float)).sum())
+        med = float(np.median((sub["close"] * sub["volume"]).to_numpy(float)))
+        return num / med if med > 0 else float("nan")
+
+    out["foreign_net_buy_21d"] = _net_buy("foreign_net_shares", 21)
+    out["foreign_net_buy_63d"] = _net_buy("foreign_net_shares", 63)
+    out["trust_net_buy_21d"] = _net_buy("trust_net_shares", 21)
+
+    hold = m["foreign_hold_ratio"].dropna().to_numpy(float)
+    if len(hold) >= 64:  # need a value 63 trading days back
+        out["foreign_hold_delta_63d"] = float(hold[-1] - hold[-64])
+
+    margin = m["margin_balance"].dropna().to_numpy(float)
+    if len(margin) >= 22 and margin[-22] > 0:
+        out["margin_delta_21d"] = float(margin[-1] / margin[-22] - 1.0)
+    return out
+
+
 def _eligibility(market: str, n_bars: int, raw_close: float, dollar_vol: float) -> tuple[bool, str]:
     """Playbook §3 hygiene; first failing reason wins. NaN inputs fail their check."""
     if n_bars < gates.MIN_HISTORY_BARS:
@@ -165,6 +231,7 @@ def build_dataset_iter(
     min_cross_section: int = gates.MIN_CROSS_SECTION,
     checkpoint_every: int = 6,
     monthly_revenue: Callable[[str, date, date], pd.DataFrame] | None = None,
+    daily_chips: Callable[[str, date, date], pd.DataFrame] | None = None,
 ) -> Iterator[DatasetProgress]:
     """Build (or extend) the panel month by month, yielding progress per month.
 
@@ -205,6 +272,16 @@ def build_dataset_iter(
                 rev_hist[sym] = monthly_revenue(sym, start - timedelta(days=650), end)
             except (ProviderError, NotSupported):
                 rev_hist[sym] = pd.DataFrame()
+
+    # Optional fourth stream (TW): daily chip/flow data for the 11.3 features.
+    # ~250 days of warm-up covers the 63-trading-day windows before the first month.
+    chips_hist: dict[str, pd.DataFrame] = {}
+    if daily_chips is not None:
+        for sym in price_hist:
+            try:
+                chips_hist[sym] = daily_chips(sym, start - timedelta(days=250), end)
+            except (ProviderError, NotSupported):
+                chips_hist[sym] = pd.DataFrame()
 
     # Existing panel + meta: resume skips computed months AND previously-dropped ones.
     existing = pd.DataFrame()
@@ -251,6 +328,8 @@ def build_dataset_iter(
             row.update(_labels(adj_by_sym[sym], bench_adj, t, next_of[t]))
             if monthly_revenue is not None:
                 row.update(_revenue_features(rev_hist.get(sym, pd.DataFrame()), t))
+            if daily_chips is not None:
+                row.update(_flow_features(chips_hist.get(sym, pd.DataFrame()), ohlcv, t))
             ok, why = _eligibility(
                 market,
                 len(hist),
