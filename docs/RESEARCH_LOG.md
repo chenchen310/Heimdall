@@ -121,3 +121,130 @@
   (real IC, but SPY's 2023–25 run was unbeatable by a diversified value book). This arms the
   12.3 trigger: the paid-data decision memo and/or a user-level discussion of the program
   definition — **not** gate-softening. Today's Picks stays honestly empty, as designed.
+
+---
+
+## 004 — tw-price-momentum / ret_12_1 (2026-07-08, model: Opus 4.8)
+
+- Hypothesis: skip-month momentum (`ret_12_1`), with an optional low-volatility tilt, ranks
+  6-month benchmark-relative winners in the liquid Taiwan universe (top-20, monthly rebalance,
+  benchmark `0050.TW`). First TW family of card 11.4.
+- Panel: `panel_tw` (prices-only, no FinMind) built 2026-07-08. **Universe = the 800 most-liquid
+  cached TW/TWO names** — a documented liquidity/survivorship selection *on top of*
+  `current_universe (optimistic)` (see the 11.4 constraint note below); prices deep-backfilled
+  2010→ via yfinance (626 deep, 0 fetch failures). 181 months 2011-06→2026-06; eligible/month
+  min 125, median 263, max 745; 0 dropped (every month clears the 100-name floor).
+- **Development-only evaluations** (2011-06→2019-12, 103 months; no row ≥ 2020 read — a hard
+  assertion in the eval guards the OOS vault):
+
+  | candidate | IC (t) | Q5−Q1 /mo | 6m beat rate (NW-t vs 0.5) | turnover |
+  | --- | --- | --- | --- | --- |
+  | v1 `{ret_12_1}` | +0.011 (0.65) | +1.03% (57% pos.) | **44.5% (−1.44)** | 30% |
+  | v2 `{ret_12_1: 1, vol_63d: −0.5}` | **+0.042 (2.43)** | +1.00% (62% pos.) | **46.2% (−1.00)** | 35% |
+
+- Validation window (2020–2022): **not evaluated** — the development verdict is terminal on the
+  headline (playbook fewer-looks discipline, as in entry 001).
+- **Verdict: FAMILY CLOSED AT DEVELOPMENT.** Both variants' cohort 6m beat rate is *below 50%* in
+  development — an equal-weight top-20 book cannot beat the **TSMC-dominated, cap-weighted 0050**,
+  the same equal-weight-vs-cap-weight headwind that sank US momentum vs SPY (entry 001). G3
+  (≥ 55%) is unreachable. Worth recording: the low-vol tilt's **ranking IC is genuinely strong
+  (t 2.43, clears G1 in-sample)** and its quintile spread is positive in 62% of months — the
+  signal *has* cross-sectional information; it is the benchmark structure, not signal absence,
+  that fails the book. Certifying would waste vault budget on a near-certain G3 failure.
+- OOS attempts spent: **0 of 3** — the vault was never touched.
+- Registry status change: none (never pre-registered).
+- **Evidence for the eventual 12.3 / program-definition discussion:** the IC-vs-beat divergence in
+  v2 is the cleanest case yet that "equal-weight top-20 beat rate vs a cap-weighted single-name-
+  dominated benchmark" may under-credit real cross-sectional signal. Recorded, **not** acted on —
+  the frozen definition stands until the user changes it.
+
+### 11.4 free-data constraint (measured 2026-07-08, model: Opus 4.8)
+
+FinMind's free tier serves ~**600 requests/hour**, enforced as a ~26-min IP ban (403 `ip banned`)
+then 402 `quota reached`. A full TW panel needs per symbol: fundamentals (3) + monthly revenue (1)
++ daily chips (3) = 7 FinMind calls; for the 800-name universe that is ~5,600 calls ≈ **9
+quota-hours** — not buildable in one session. Consequences for 11.4, agreed with the user:
+- **Price momentum** needs no FinMind (cached prices) → evaluated above on the full 800-name universe.
+- **Revenue momentum + flows** were built on a **reduced ~140-name top-liquidity universe** (fits
+  one quota window). See entries 005–006. A full-universe TW build is deferred to a paced crawl
+  (a FinMind stream disk-cache, resumable across quota windows) or a paid FinMind tier.
+
+**Reduced-universe panel (entries 005–006):** 140 most-liquid non-ETF TW names (0050 excluded — it
+is the benchmark), rev+chips fetched into a local stream cache (560 FinMind calls, 1 ban). The
+`min_cross_section = 100` floor vs a 140-name universe drops every month with < 100 eligible, so the
+panel is **2017-08→2026-06, 89 months**: DEV (2017-19) only **11 scattered months** (too thin to
+decide on), VAL (2020-22) **36 months**, OOS (2023+) **35 complete-label months**. Because DEV is
+uselessly thin, the decisive in-sample read below is the robust **validation window** (still
+in-sample; the 2023+ vault was never touched — a hard assertion in the eval enforces it). This is a
+liquidity/survivorship selection *on top of* `current_universe (optimistic)`.
+
+## 005 — tw-revenue-momentum / monthly-revenue YoY + acceleration (2026-07-08, model: Opus 4.8)
+
+- Hypothesis: Taiwan monthly-revenue momentum (`rev_mom_yoy`, `rev_mom_accel`; 11.2 features, PIT on
+  the §36 10th-of-next-month availability) ranks 6-month 0050-relative winners (top-20, monthly).
+- **Development (2017-08→2019-12, 11 months — thin, low-confidence):** `rev_accel` IC +0.025
+  (t 0.84), Q5−Q1 +1.76% (73% pos.), 6m beat **40.5%**; `rev_yoy+accel` IC +0.023 (t 1.04), beat
+  44.1%. All beat rates < 50% on the thin window.
+- **Validation (2020-01→2022-12, 36 months — the decisive in-sample read):**
+
+  | candidate | IC (t) | Q5−Q1 /mo (pos) | 6m beat (NW-t vs 0.5) | turnover |
+  | --- | --- | --- | --- | --- |
+  | `{rev_mom_yoy}` | +0.029 (1.23) | +2.18% (69%) | 47.1% (−0.81) | 36% |
+  | **`{rev_mom_accel}`** | **+0.043 (1.81)** | +2.34% (75%) | **52.8% (+0.62)** | 41% |
+  | `{rev_mom_yoy, rev_mom_accel}` | +0.041 (1.87) | +2.18% (69%) | 50.3% (+0.10) | 39% |
+
+- **Verdict: FAMILY CLOSED AT DEVELOPMENT/VALIDATION.** The revenue-acceleration ranking is real
+  (validation IC +0.043, t 1.81; quintile spread positive in 75% of months) — this is a genuine
+  free TW signal. But the equal-weight top-20 **book** beats 0050 only **52.8%** of 6-month windows
+  (NW-t +0.62, not distinguishable from a coin flip), short of the G3 headline (≥ 55%, NW-t ≥ 2).
+  Advancing to the vault is −EV (US fcf-yield failed OOS from a stronger 57% validation, entry 003).
+- OOS attempts spent: **0 of 3** — vault untouched; budget intact for the user to deploy later.
+- Registry status change: none (never pre-registered).
+
+## 006 — tw-flows / foreign & trust net-buy, holding, margin (2026-07-08, model: Opus 4.8)
+
+- Hypothesis: Taiwan institutional-flow features (11.3: `foreign_net_buy_21d/63d`, `trust_net_buy_21d`,
+  `foreign_hold_delta_63d`, `margin_delta_21d`; +1-trading-day PIT shift) rank 6-month 0050-relative
+  winners (top-20, monthly). Priors registered in the 11.3 card: foreign-flow momentum is the
+  best-documented but most-crowded TW chip signal; margin direction expected negative.
+- **Development (11 months — thin):** `foreign_63d` IC +0.036 (t 1.01), beat **41.8%**; `foreign_21d`
+  IC **−0.031** (short-horizon foreign flow reverses), beat 40.0%. All < 50% on the thin window.
+- **Validation (36 months — the decisive in-sample read):**
+
+  | candidate | IC (t) | Q5−Q1 /mo (pos) | 6m beat (NW-t vs 0.5) | turnover |
+  | --- | --- | --- | --- | --- |
+  | `{foreign_net_buy_63d}` | +0.033 (1.33) | +1.22% (56%) | 50.8% (+0.18) | 39% |
+  | `{foreign_net_buy_21d}` | +0.043 (1.95) | +1.39% (61%) | 52.2% (+0.61) | **68%** |
+  | `{foreign_63d, trust_21d×0.5}` | +0.024 (0.96) | +0.94% (56%) | **52.9% (+0.63)** | 48% |
+  | `{foreign_63d, margin_21d×−0.5}` | +0.038 (1.84) | +0.74% (64%) | 52.4% (+0.48) | 49% |
+
+- **Verdict: FAMILY CLOSED AT DEVELOPMENT/VALIDATION.** Foreign-flow momentum shows the strongest
+  single-feature IC of any TW family (`foreign_21d` validation IC +0.043, t 1.95 — nearly G1's t 2),
+  confirming the literature's prior that it is the best-documented TW chip signal. But again the
+  top-20 book beats 0050 only ~51–53% over 6-month windows (all NW-t < 1, none ≥ G3's 55%); the
+  best book-beat (`foreign+trust`, 52.9%) also isn't significant. `foreign_21d`'s 68% turnover would
+  additionally face the G6 stress band. Short-horizon foreign flow (`foreign_21d`) even had negative
+  dev IC — consistent with the "most-crowded, fastest-decaying" prior. Not worth a vault attempt.
+- OOS attempts spent: **0 of 3** — vault untouched; budget intact.
+- Registry status change: none.
+
+## 007 — 11.4 aggregate TW finding (2026-07-08, model: Opus 4.8)
+
+- Across all three TW families (price momentum on the broad 800-name panel; revenue + flows on the
+  reduced 140-name panel), the story is identical and now spans two markets: **the factors carry
+  real positive cross-sectional IC** (TW validation: revenue t 1.81, flows t 1.95; quintile spreads
+  positive in 56–75% of months) **yet the equal-weight top-20 book's 6-month beat rate vs the
+  TSMC-dominated, cap-weighted 0050 caps at ~53%** — never the G3 headline (55%), never significant.
+  The same equal-weight-vs-cap-weight structure sank every US family vs SPY (entries 001–003).
+- This is the clearest evidence yet that the **frozen success definition** (equal-weight top-20 6m
+  beat rate vs a cap-weighted, single-name-dominated benchmark) may be structurally unable to
+  certify signals that demonstrably *do* rank the cross-section. Strong input for the **12.3
+  program-definition discussion** — candidate remedies to raise with the user (each a definition
+  change requiring sign-off, never a silent gate edit): a benchmark-/cap-weighted book instead of
+  equal-weight; an equal-weight benchmark (e.g. an EW index) as the beat target; or crediting
+  IC/quantile-spread alongside the book beat rate. **Not** grounds to lower G3.
+- The three TW families are **closed, not rejected**: 0 OOS attempts spent, full 3/3 budget intact
+  per family. The user may authorize a vault shot on the single best candidate (`tw-revenue-momentum`
+  `{rev_mom_accel}` or `tw-flows` `{foreign_63d, trust_21d}`) at any time; the disciplined default is
+  to hold until either the success definition is revisited or a fuller-universe TW panel exists.
+- Today's Picks stays honestly empty. No TW signal is certified.
