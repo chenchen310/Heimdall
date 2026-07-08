@@ -126,8 +126,9 @@ def test_oracle_canary_proves_the_harness_has_power(
     assert g["G1_months"].passed
     assert g["G2_mean"].value > 0.05 and g["G2_mean"].passed
     assert g["G2_share"].value == 1.0
-    assert g["G3_rate"].value > 0.9 and g["G3_rate"].passed
-    assert g["G3_t"].value > 10 and g["G3_t"].passed
+    # G3 is now selection alpha vs the equal-weight universe: an oracle book crushes it.
+    assert g["G3_alpha"].value > 0 and g["G3_alpha"].passed
+    assert g["G3_alpha_t"].value > 10 and g["G3_alpha_t"].passed
 
     # …and yet the verdict is REJECTED: an iid oracle replaces essentially the
     # whole top-20 every month, so G6 turnover refuses it. Information alone

@@ -28,10 +28,14 @@ Concretely, the end state is a **Today's Picks** page that:
 | Market order | **US first** (real EDGAR filing dates → trustworthy point-in-time), **Taiwan second** (adds monthly-revenue momentum + institutional-flow factors, and must first fix its synthetic `filed_at`). |
 | Data budget | **Free sources first.** Certify what free data supports; paid data (FMP estimates/revisions) becomes a data-backed decision afterwards, never a prerequisite. |
 
-The displayed "probability" is therefore: *the certified out-of-sample mean cohort beat rate* —
-across monthly rebalance cohorts, the average fraction of picks that beat the benchmark over the
-following 6 months — with a Newey–West 95% confidence interval and the cohort count. Nothing else
-may be presented as a probability.
+The displayed "probability" is therefore: *the certified out-of-sample **portfolio-cohort beat
+rate*** — across monthly rebalance cohorts, the fraction whose equal-weight top-N **book** beats the
+benchmark over the following 6 months — with a Newey–West 95% confidence interval and the cohort
+count. Certification additionally requires **selection skill** (gate G3: the book must beat an
+equal-weight eligible-universe book, so the equal-weight/breadth premium alone cannot certify).
+Nothing else may be presented as a probability. (Metric redefined 2026-07-08 — RESEARCH_LOG 008 /
+ROADMAP 12.5 — after the old individual-pick beat rate proved biased below 50% by
+cap-weight-benchmark concentration; see the playbook §5 rationale.)
 
 ## Non-goals / hard boundaries
 

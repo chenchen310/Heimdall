@@ -59,17 +59,29 @@ def _gate_value(report: dict[str, object], gate: str) -> float:
 
 def _evidence_box(region: str, report: dict[str, object]) -> None:
     """The certified out-of-sample evidence — always shown before any ranking."""
-    lo, hi = cast("list[float]", report["beat_rate_ci95"])
+    lo, hi = cast("list[float]", report["portfolio_beat_ci95"])
     c1, c2, c3, c4 = st.columns(4)
     c1.metric(
-        t("Beat rate (6m vs benchmark)"),
-        f"{cast('float', report['beat_rate_mean']):.0%}",
+        t("Beat rate (6m book vs benchmark)"),
+        f"{cast('float', report['portfolio_beat_rate']):.0%}",
         f"95% CI {lo:.0%}–{hi:.0%}",
         delta_color="off",
     )
-    c2.metric("IC", f"{_gate_value(report, 'G1_ic'):+.3f}")
-    c3.metric(t("Q5−Q1 spread"), f"{_gate_value(report, 'G2_mean'):+.2%}")
+    c2.metric(
+        t("Selection skill (vs equal-weight)"),
+        f"{cast('float', report['selection_alpha_mean']):+.1%}",
+        f"NW-t {cast('float', report['selection_alpha_t']):+.1f}",
+        delta_color="off",
+    )
+    c3.metric("IC", f"{_gate_value(report, 'G1_ic'):+.3f}")
     c4.metric(t("OOS cohorts"), str(len(cast("list[object]", report.get("cohorts", [])))))
+    st.caption(
+        t(
+            "Beat rate = how often the equal-weight book beat the benchmark (includes the "
+            "equal-weight premium); selection skill = return above an equal-weight universe "
+            "book (the certified edge, G3)."
+        )
+    )
     certified_on = str(report.get("generated_at", ""))[:10]
     st.caption(
         t("Certified {d} · OOS window {a} → {b} · benchmark {bench}").format(

@@ -303,6 +303,35 @@ open-market buys − sells ÷ market cap) with a cluster-buy flag; golden-tested
 keyed on the filing timestamp (point-in-time). Prior: moderate, event-like, works at long
 horizons. Pre-register before any OOS touch, as always.
 
+### 12.5 Redefine the success metric — decomposed portfolio + skill  `[x]`
+**Foundational; decided with the user 2026-07-08 (RESEARCH_LOG 008). Do this BEFORE any further
+OOS attempt** — the current G3 is structurally broken (biased low by cap-weight-benchmark
+concentration; the naive portfolio fix is biased high by the equal-weight premium — a no-skill EW
+book beats 0050 in 80.6% of validation cohorts). A §4-rule-4 gate change: one PR, playbook updated
+in the same commit, every certification voided/re-run (there are none → trivial).
+
+Steps:
+1. `research/gates.py`: replace the G3 constants. New **G3 = selection-skill gate**: per-cohort
+   alpha = (EW top-N book 6m `fwd_6m_rel` mean − EW eligible-universe 6m `fwd_6m_rel` mean);
+   require `mean > 0` and `nw_tstat(alpha, null=0, lag=5) >= G3_MIN_SKILL_T = 2.0`. Keep G1, G2,
+   G4, G5, G6 exactly as they are. Mirror the change in playbook §5 (the sync test enforces it).
+2. `research/certify.py`: in the OOS loop, also compute the EW eligible-universe book's `fwd_6m_rel`
+   mean per cohort (mean over all `eligible` rows), the per-cohort selection alpha, and the
+   **portfolio-cohort beat rate** (fraction of cohorts with book `fwd_6m_rel` mean > 0) + its NW CI.
+   New `CertReport` fields: `portfolio_beat_rate`, `portfolio_beat_ci95`, `selection_alpha_mean`,
+   `selection_alpha_t`. G3 now reads the alpha; the displayed probability is `portfolio_beat_rate`.
+3. `docs/NORTH_STAR.md` "displayed probability" + `docs/RESEARCH_PLAYBOOK.md` §5 headline row and the
+   "Displayed probability" paragraph: portfolio-cohort beat rate (vs benchmark) for display; skill
+   alpha (vs EW-universe) for the gate.
+4. `ui/today_page.py`: show the portfolio beat rate + CI as the probability, and the selection-alpha
+   (skill vs equal-weight) as a second evidence line so the EW-premium vs skill split is visible.
+5. Tests (`tests/test_certify.py`): a **no-skill equal-weight book fails the new G3** (alpha ≈ 0),
+   a **skilled book passes**, and the report carries the new fields; update the gate-mirror test.
+6. After it lands: re-evaluate the closed families on the new metric; `tw-revenue-momentum`
+   `{rev_mom_accel}` (validation skill +6.35%, NW-t 2.07) is the first pre-registration candidate —
+   but the 2023+ regime (TSMC AI dominance) may reverse the EW premium and pressure momentum, so a
+   fair test is not a promised pass. Vault stays sealed until pre-registration.
+
 ---
 
 **Sequencing:** 7.1 → 7.2 → 7.3 → 8.1 → 8.2 → 8.3 → 9.1 → 9.2 → 10.x → 11.x → 12.x.

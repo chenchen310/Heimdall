@@ -34,7 +34,7 @@ def test_gates_mirror_playbook() -> None:
     assert gates.OOS_START == "2023-01-01"
     assert gates.G1_MIN_IC == 0.03 and gates.G1_MIN_T == 2.0 and gates.G1_MIN_MONTHS == 24
     assert gates.G2_MIN_POSITIVE_SHARE == 0.55
-    assert gates.G3_MIN_BEAT_RATE == 0.55 and gates.G3_MIN_NW_T == 2.0 and gates.NW_LAG == 5
+    assert gates.G3_MIN_SKILL_T == 2.0 and gates.NW_LAG == 5  # G3 = selection-alpha skill gate
     assert gates.G4_COST_BPS == 20.0
     assert gates.G5_MAX_PARAMS == 4
     assert gates.G6_MAX_TURNOVER == 0.40
@@ -144,8 +144,10 @@ def test_good_signal_certifies_and_window_excludes_open_months() -> None:
     assert all(g.passed for g in report.gates)
     assert report.n_months == 29  # 31 months − 2 with open 6m windows
     assert report.window_start == "2023-01-31"
-    lo, hi = report.beat_rate_ci95
-    assert lo > 0.5 and hi <= 1.0 + 1e-9
+    # G3 skill: the ranked book beats an equal-weight universe with significant alpha.
+    assert report.selection_alpha_mean > 0 and report.selection_alpha_t >= gates.G3_MIN_SKILL_T
+    lo, hi = report.portfolio_beat_ci95  # displayed probability
+    assert 0.0 <= lo <= hi <= 1.0 + 1e-9 and report.portfolio_beat_rate > 0.5
     assert report.mean_turnover <= gates.G6_MAX_TURNOVER
     assert report.survivorship == "current_universe (optimistic)"
 
@@ -159,6 +161,48 @@ def test_noise_signal_is_rejected() -> None:
     assert report.verdict == "REJECTED"
     g1 = [g for g in report.gates if g.gate.startswith("G1")]
     assert any(not g.passed for g in g1)  # no information ⇒ G1 falls
+
+
+def _ew_premium_noise_panel(bench: pd.Series, n_months: int = 31, n_syms: int = 40) -> pd.DataFrame:
+    """Every eligible name beats the benchmark (equal-weight premium > 0), but the signal is pure
+    noise — so the top-N book ≈ the universe and selection alpha ≈ 0."""
+    rng = np.random.default_rng(3)
+    months = list(pd.date_range("2023-01-31", periods=n_months, freq="BME"))
+    rows: list[dict[str, object]] = []
+    for m_idx, t in enumerate(months):
+        nxt = months[m_idx + 1] if m_idx + 1 < len(months) else None
+        bench_m = _bench_month(bench, t, nxt) if nxt is not None else 0.0
+        complete6 = m_idx < n_months - 2
+        for i in range(n_syms):
+            rel6 = 0.05 + float(
+                rng.normal(0, 0.02)
+            )  # all positive ⇒ EW universe beats the benchmark
+            rel1 = 0.01 + float(rng.normal(0, 0.004))
+            rows.append(
+                {
+                    "date": t,
+                    "symbol": f"S{i:02d}",
+                    "eligible": True,
+                    "sig": float(rng.normal(0, 1)),  # pure noise ⇒ random picks
+                    "fwd_1m": rel1 + bench_m,
+                    "fwd_1m_rel": rel1,
+                    "fwd_6m": (rel6 + 0.05) if complete6 else float("nan"),
+                    "fwd_6m_rel": rel6 if complete6 else float("nan"),
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def test_equal_weight_premium_without_skill_fails_g3() -> None:
+    # The redefinition's load-bearing property: a no-skill book that rides the equal-weight premium
+    # beats the benchmark almost every cohort, yet must NOT certify — G3 gates skill, not the tilt.
+    bench = _bench_series()
+    report = certify(_spec(), _ew_premium_noise_panel(bench), bench)
+    assert report.portfolio_beat_rate > 0.9  # the book beats the benchmark almost always…
+    g = {gr.gate: gr for gr in report.gates}
+    assert not g["G3_alpha_t"].passed  # …but the selection alpha is ~0 ⇒ skill gate fails
+    assert abs(report.selection_alpha_mean) < 0.01
+    assert report.verdict == "REJECTED"  # the equal-weight premium alone cannot certify
 
 
 def _turnover_panel(bench: pd.Series, n_fixed: int, rot_size: int) -> pd.DataFrame:

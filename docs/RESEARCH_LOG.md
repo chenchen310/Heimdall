@@ -248,3 +248,47 @@ liquidity/survivorship selection *on top of* `current_universe (optimistic)`.
   `{rev_mom_accel}` or `tw-flows` `{foreign_63d, trust_21d}`) at any time; the disciplined default is
   to hold until either the success definition is revisited or a fuller-universe TW panel exists.
 - Today's Picks stays honestly empty. No TW signal is certified.
+
+## 008 — success-metric redefinition: decomposed portfolio + skill (2026-07-08, model: Opus 4.8)
+
+The "program-definition discussion" that entries 001–003 and 007 kept pointing to, held with the
+user this session. **Decision recorded; implementation is its own card (ROADMAP 12.5) — gates.py is
+NOT changed by this entry, and no result below is certified (all in-sample).**
+
+- **The finding.** The frozen headline metric (G3 = mean cohort **individual-pick** hit rate: the
+  fraction of the top-N picks whose 6m return beats the benchmark) is **structurally biased in both
+  directions**, which is why every US and TW family "failed":
+  - *Biased low.* When the benchmark is cap-weighted and single-name-dominated (0050 ≈ 50% TSMC;
+    SPY ≈ mega-caps), the *median* stock underperforms the index by construction, so the fraction
+    of picks beating it sits < 50% regardless of skill. This one artifact sank Phases 10 + 11.4.
+  - *A naive fix is biased high.* Switching to the **portfolio** beat rate (does the EW top-20 book
+    beat the benchmark?) inverts the bias: measured on validation (TW, 2020–22, 36 months), a
+    **no-skill equal-weight universe book beats 0050 in 80.6% of 6m windows (+5.9%)** and a random
+    top-20 in 70.6% — the pure equal-weight/breadth premium, not selection.
+  - *The honest skill metric* is the book vs the **equal-weight eligible universe** (both are
+    benchmark-relative, so 0050 *and* the EW premium cancel, leaving pure selection). On TW
+    validation: `tw-revenue-momentum {rev_mom_accel}` **+6.35% (NW-t 2.07, 72% of cohorts)**,
+    `{rev_mom_yoy,rev_mom_accel}` +5.10% (t 1.92); every `tw-flows` candidate ≈ 0 (foreign+trust
+    +0.84% t 0.69, foreign_63d +1.03% t 0.44, foreign-margin −0.29%). So among TW's free signals,
+    **monthly-revenue momentum has genuine stock-picking skill; institutional flows are almost
+    entirely the EW premium.** (Rank IC — G1/G2 — is already benchmark-weighting-immune: subtracting
+    a per-cohort constant benchmark does not change within-cohort ranks. Only G3 was broken.)
+- **Decision (user sign-off 2026-07-08): the DECOMPOSED metric.**
+  - **Displayed probability** (Today's Picks + `NORTH_STAR` §"displayed probability"): the
+    **portfolio-cohort beat rate vs the benchmark** — fraction of monthly cohorts whose EW top-N
+    book's 6m return beats 0050/SPY — with its NW 95% CI and cohort count. This is what the investor
+    actually experiences (they hold the book, not isolated names).
+  - **Certification skill gate (the new G3):** the per-cohort **selection alpha** = (EW top-N book
+    6m return − EW eligible-universe 6m return), requiring **mean > 0 and NW-t (lag 5) ≥ 2.0**. This
+    is the real hurdle; it certifies stock-picking above the equal-weight premium, so a no-skill EW
+    book cannot pass. G1, G2, G4, G5, G6 unchanged (G1/G2 are already skill; G4 stays the
+    cost-aware vs-benchmark check, honestly inflated by the EW premium and reported as such).
+- **Unavoidable caveat.** All of the above is in-sample (validation). The 2023+ vault is untouched
+  and decisive, and the 2023–25 regime (TSMC AI dominance, like the US mega-caps) most likely
+  *reverses* the EW premium and pressures momentum — so even revenue-momentum's in-sample skill may
+  not survive OOS. The redefinition gives the families a **fair test on the right metric**; it does
+  not promise a pass. `tw-revenue-momentum {rev_mom_accel}` is the natural first candidate for a
+  pre-registered OOS attempt *after* ROADMAP 12.5 lands (never before — the vault stays sealed).
+- **This is a §4-rule-4 gate change**: ROADMAP 12.5 must alter `research/gates.py` + this playbook
+  §5 in one commit and void/re-run every certification (there are none → trivial), with tests
+  proving a no-skill EW book fails the new G3 and a skilled book passes.
