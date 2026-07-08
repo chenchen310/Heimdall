@@ -59,9 +59,13 @@ class CertReport:
     n_months: int
     verdict: str  # "CERTIFIED" | "REJECTED"
     gates: list[GateResult]
-    beat_rate_mean: float
-    beat_rate_ci95: tuple[float, float]
-    cohorts: list[dict[str, object]]  # {date, beat_rate, n_picks} per rebalance
+    # DISPLAYED probability: fraction of cohorts whose EW top-N book beat the benchmark over 6m.
+    portfolio_beat_rate: float
+    portfolio_beat_ci95: tuple[float, float]
+    # G3 skill: mean per-cohort selection alpha (book 6m − equal-weight-universe 6m), and its NW-t.
+    selection_alpha_mean: float
+    selection_alpha_t: float
+    cohorts: list[dict[str, object]]  # {date, book_rel_6m, alpha_6m, n_picks} per rebalance
     mean_turnover: float
     survivorship: str = SURVIVORSHIP
     generated_at: str = ""
@@ -148,7 +152,10 @@ def certify(spec: SignalSpec, panel: pd.DataFrame, benchmark_adj: pd.Series) -> 
     frames: list[pd.DataFrame] = []
     cohorts_sets: list[set[str]] = []
     cohort_rows: list[dict[str, object]] = []
-    beat_rates: list[float] = []
+    portfolio_beats: list[
+        float
+    ] = []  # per cohort: did the EW top-N book beat the benchmark over 6m?
+    selection_alphas: list[float] = []  # per cohort: book 6m − equal-weight-universe 6m (skill)
     gross_returns: list[float] = []
     bench_returns: list[float] = []
     for t in oos:
@@ -158,12 +165,22 @@ def certify(spec: SignalSpec, panel: pd.DataFrame, benchmark_adj: pd.Series) -> 
         ranked = cross.dropna(subset=[_SCORE]).sort_values(_SCORE, ascending=False)
         picks = ranked.head(spec.top_n)
         cohorts_sets.append(set(picks["symbol"]))
-        valid6 = picks["fwd_6m_rel"].dropna()
-        if len(valid6):
-            rate = float((valid6 > 0).mean())
-            beat_rates.append(rate)
+        book6 = picks["fwd_6m_rel"].dropna()
+        # No-skill baseline: equal-weight ALL eligible names with a 6m label (a real alternative,
+        # ~an equal-weight ETF). The benchmark cancels in book − universe, isolating selection.
+        pool = cross[cross["eligible"].astype(bool)] if "eligible" in cross.columns else cross
+        univ6 = pool["fwd_6m_rel"].dropna()
+        if len(book6) and len(univ6):
+            book_ret, univ_ret = float(book6.mean()), float(univ6.mean())
+            portfolio_beats.append(float(book_ret > 0))
+            selection_alphas.append(book_ret - univ_ret)
             cohort_rows.append(
-                {"date": t.date().isoformat(), "beat_rate": rate, "n_picks": int(len(valid6))}
+                {
+                    "date": t.date().isoformat(),
+                    "book_rel_6m": book_ret,
+                    "alpha_6m": book_ret - univ_ret,
+                    "n_picks": int(len(book6)),
+                }
             )
         nxt = next_of.get(t)
         gross = picks["fwd_1m"].dropna()
@@ -205,24 +222,28 @@ def certify(spec: SignalSpec, panel: pd.DataFrame, benchmark_adj: pd.Series) -> 
         )
     )
 
-    # G3 — the headline: mean cohort 6m beat rate with an overlap-aware t.
-    rate_mean = float(np.mean(beat_rates)) if beat_rates else float("nan")
-    rate_t = (
-        gates.nw_tstat(np.asarray(beat_rates), null=0.5, lag=gates.NW_LAG)
-        if beat_rates
-        else float("nan")
+    # G3 — selection skill: per-cohort alpha (book − equal-weight universe), NW-t vs 0. This is the
+    # gate; the equal-weight/breadth premium cancels, so it credits stock-picking, not the EW tilt.
+    alpha_arr = np.asarray(selection_alphas)
+    alpha_mean = float(np.mean(alpha_arr)) if selection_alphas else float("nan")
+    alpha_t = (
+        gates.nw_tstat(alpha_arr, null=0.0, lag=gates.NW_LAG) if selection_alphas else float("nan")
     )
-    ci = (
-        gates.nw_ci95(np.asarray(beat_rates), lag=gates.NW_LAG)
-        if beat_rates
-        else (float("nan"), float("nan"))
-    )
+    results.append(GateResult("G3_alpha", alpha_mean, 0.0, bool(alpha_mean > 0)))
     results.append(
         GateResult(
-            "G3_rate", rate_mean, gates.G3_MIN_BEAT_RATE, bool(rate_mean >= gates.G3_MIN_BEAT_RATE)
+            "G3_alpha_t", alpha_t, gates.G3_MIN_SKILL_T, bool(alpha_t >= gates.G3_MIN_SKILL_T)
         )
     )
-    results.append(GateResult("G3_t", rate_t, gates.G3_MIN_NW_T, bool(rate_t >= gates.G3_MIN_NW_T)))
+
+    # Displayed probability (not a gate): the portfolio-cohort beat rate vs the benchmark + NW CI.
+    beat_arr = np.asarray(portfolio_beats)
+    port_rate = float(np.mean(beat_arr)) if portfolio_beats else float("nan")
+    port_ci = (
+        gates.nw_ci95(beat_arr, lag=gates.NW_LAG)
+        if portfolio_beats
+        else (float("nan"), float("nan"))
+    )
 
     # G6 turnover (computed before G4 so the cost branch is known).
     turnovers = cohort_turnover(cohorts_sets)
@@ -302,8 +323,10 @@ def certify(spec: SignalSpec, panel: pd.DataFrame, benchmark_adj: pd.Series) -> 
         n_months=len(oos),
         verdict=verdict,
         gates=results,
-        beat_rate_mean=rate_mean,
-        beat_rate_ci95=ci,
+        portfolio_beat_rate=port_rate,
+        portfolio_beat_ci95=port_ci,
+        selection_alpha_mean=alpha_mean,
+        selection_alpha_t=alpha_t,
         cohorts=cohort_rows,
         mean_turnover=mean_turnover,
         generated_at=datetime.now(UTC).isoformat(),
@@ -418,10 +441,14 @@ def main(argv: list[str] | None = None) -> int:
         flag = "PASS" if g.passed else "FAIL"
         note = f"  ({g.note})" if g.note else ""
         print(f"  [{flag}] {g.gate:16s} value={g.value:+.4f} vs {g.threshold:+.4f}{note}")
-    lo, hi = report.beat_rate_ci95
+    lo, hi = report.portfolio_beat_ci95
     print(
-        f"Beat rate {report.beat_rate_mean:.1%} "
+        f"Portfolio beat rate {report.portfolio_beat_rate:.1%} "
         f"(95% CI {lo:.1%}–{hi:.1%}, {len(report.cohorts)} cohorts)"
+    )
+    print(
+        f"Selection skill vs equal-weight universe (G3): "
+        f"{report.selection_alpha_mean:+.2%} (NW-t {report.selection_alpha_t:+.2f})"
     )
     print(f"Survivorship: {report.survivorship}")
     print(f"Report: {report_path(spec)}")

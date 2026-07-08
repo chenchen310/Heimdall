@@ -34,8 +34,14 @@ G1_MIN_MONTHS: int = 24  # minimum OOS months
 
 G2_MIN_POSITIVE_SHARE: float = 0.55  # Q5−Q1 spread positive in ≥ this share of months (mean > 0)
 
-G3_MIN_BEAT_RATE: float = 0.55  # mean cohort 6m benchmark beat rate (the headline probability)
-G3_MIN_NW_T: float = 2.0  # Newey–West t (lag 5) of (cohort rate − 0.5)
+# G3 (selection skill) — per-cohort alpha = (equal-weight top-N book 6m fwd_6m_rel mean − equal-
+# weight eligible-universe 6m fwd_6m_rel mean). Both legs are benchmark-relative, so the benchmark
+# AND the equal-weight/breadth premium cancel, leaving pure stock-picking. Requires mean > 0 and
+# NW-t (lag 5) vs 0 ≥ the floor. The certified probability *displayed* is the portfolio-cohort beat
+# rate vs the benchmark; the *gate* is skill above equal-weighting, so the EW premium alone can't
+# certify. Redefined 2026-07-08 (RESEARCH_LOG 008) — replaced the old individual-pick beat rate,
+# which was biased below 50% by cap-weight-benchmark concentration.
+G3_MIN_SKILL_T: float = 2.0  # Newey–West t (lag 5) of the per-cohort selection alpha, vs 0
 NW_LAG: int = 5  # Bartlett lag for overlapping 6m windows on a monthly cadence
 
 G4_COST_BPS: float = 20.0  # all-in per-side trading cost for the top-N backtest

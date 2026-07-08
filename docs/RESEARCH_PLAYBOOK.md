@@ -68,13 +68,22 @@ All computed on the **OOS window only**, `_rel` labels, eligible rows only. Ever
 | --- | --- | --- |
 | G1 | Mean monthly Spearman IC (score vs `fwd_1m_rel`), plain t-stat, sample | IC ≥ **0.03**, t ≥ **2.0**, ≥ **24** months |
 | G2 | Quintile spread: mean(Q5 − Q1 `fwd_1m_rel`); share of positive months | mean > **0**; positive in ≥ **55%** of months |
-| G3 | **Headline**: mean cohort beat rate — per rebalance, fraction of top-N picks with `fwd_6m_rel` > 0; Newey–West t (lag 5) of (rate − 0.5) | mean ≥ **0.55**, NW-t ≥ **2.0** |
+| G3 | **Selection skill** (the headline gate): per-cohort alpha = (EW top-N book 6m `fwd_6m_rel` mean − EW eligible-universe 6m mean); Newey–West t (lag 5) vs 0 | mean > **0**, NW-t ≥ **2.0** |
 | G4 | Cost-aware top-N monthly backtest (20 bps per side all-in) vs benchmark | OOS CAGR **and** Sharpe both > benchmark |
 | G5 | Stability: split OOS into halves; free-parameter count | mean IC > 0 in **both** halves; ≤ **4** parameters (each nonzero feature weight counts as one) |
 | G6 | Mean one-way monthly turnover of the top-N set | ≤ **40%**; 40–60% → G4 must also pass at 40 bps per side; > 60% → reject |
 
-**Displayed probability** = G3's mean cohort beat rate with its NW 95% CI (`mean ± 1.96·SE_NW`) and
-the cohort count. The UI must always show the CI and `n`, never the point estimate alone.
+**G3 rationale (redefined 2026-07-08, RESEARCH_LOG 008).** The old G3 (mean cohort *individual-pick*
+beat rate ≥ 0.55) was biased below 50% by cap-weight-benchmark concentration (the median stock
+underperforms a single-name-dominated index), and the naive portfolio fix is biased *high* by the
+equal-weight/breadth premium (a no-skill EW book beat 0050 in 80.6% of validation cohorts). G3 now
+gates the **selection alpha vs the equal-weight universe**, where both the benchmark and the EW
+premium cancel — so it certifies stock-picking, not the tilt.
+
+**Displayed probability** = the **portfolio-cohort beat rate** vs the benchmark — the fraction of
+monthly cohorts whose EW top-N *book* beat 0050/SPY over the next 6 months — with its NW 95% CI
+(`mean ± 1.96·SE_NW`) and the cohort count, shown next to the G3 selection-alpha. The UI must always
+show the CI, `n`, and the skill-vs-EW-premium split, never a point estimate alone.
 
 Reference implementations (copy verbatim; no new dependencies):
 

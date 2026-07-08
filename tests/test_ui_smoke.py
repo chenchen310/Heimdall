@@ -293,8 +293,10 @@ def test_today_page_renders_certified_evidence_then_picks(
         json.dumps(
             {
                 "verdict": "CERTIFIED",
-                "beat_rate_mean": 0.61,
-                "beat_rate_ci95": [0.55, 0.67],
+                "portfolio_beat_rate": 0.72,
+                "portfolio_beat_ci95": [0.58, 0.86],
+                "selection_alpha_mean": 0.031,
+                "selection_alpha_t": 2.4,
                 "cohorts": [{"date": "2023-01-31"}] * 30,
                 "window_start": "2023-01-31",
                 "window_end": "2025-06-30",
@@ -317,7 +319,8 @@ def test_today_page_renders_certified_evidence_then_picks(
     at = AppTest.from_file(APP).run(timeout=60)
     _nav(at, "Today's Picks")
     assert not at.exception
-    assert any(m.value == "61%" for m in at.metric)  # the evidence box renders first
+    assert any(m.value == "72%" for m in at.metric)  # portfolio beat rate — evidence box first
+    assert any(m.value == "+3.1%" for m in at.metric)  # the selection-skill (alpha) metric
     assert any("business days old" in w.value for w in at.warning)  # stale-snapshot banner
     picks = at.dataframe[-1].value
     assert picks["symbol"].tolist() == ["A.US", "B.US", "C.US"]  # top-3 by ret_12_1
