@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import date
 
+import numpy as np
 import pandas as pd
 
 from heimdall.data.symbols import parse_symbol
@@ -97,13 +98,61 @@ def _technicals(ohlcv: pd.DataFrame) -> dict[str, float]:
     }
 
 
+def revenue_momentum_features(monthly: pd.DataFrame, as_of: pd.Timestamp) -> dict[str, float]:
+    """TW monthly-revenue momentum — the signature free Taiwan signal (roadmap 11.2).
+
+    Point-in-time on ``filed_at`` (§36: the 10th of the following month, see 11.1):
+    only months filed on/before ``as_of`` exist. Features (both higher-is-better):
+
+    - ``rev_mom_yoy`` — the latest known month's revenue YoY;
+    - ``rev_mom_accel`` — mean YoY of the last 3 known months minus the prior 3,
+      the second derivative that leads inflections.
+
+    Computed on a contiguous monthly calendar (a gap month poisons its windows to
+    NaN rather than silently spanning it); YoY on a non-positive year-ago base is
+    NaN, mirroring ``_growth_yoy``. Shared by the research panel
+    (``research.dataset``) and the live snapshot (``snapshot_row`` below) so a
+    certified TW signal ranks identically whether it's being backtested or shown
+    on Today's Picks.
+    """
+    nan = float("nan")
+    out = {"rev_mom_yoy": nan, "rev_mom_accel": nan}
+    if monthly.empty:
+        return out
+    known = monthly[monthly["filed_at"] <= as_of]
+    if known.empty:
+        return out
+    s = known.sort_values(["month", "filed_at"]).groupby("month")["revenue"].last()
+    s.index = pd.PeriodIndex(s.index, freq="M")
+    full = s.reindex(pd.period_range(s.index.min(), s.index.max(), freq="M"))
+    prev = full.shift(12)
+    yoy = pd.Series(np.where(prev > 0, full / prev - 1.0, np.nan), index=full.index, dtype=float)
+    if pd.notna(yoy.iloc[-1]):
+        out["rev_mom_yoy"] = float(yoy.iloc[-1])
+    if len(yoy) >= 6:
+        last3, prior3 = yoy.iloc[-3:], yoy.iloc[-6:-3]
+        if not (bool(last3.isna().any()) or bool(prior3.isna().any())):
+            out["rev_mom_accel"] = float(last3.mean() - prior3.mean())
+    return out
+
+
 def snapshot_row(
-    symbol: str, ohlcv: pd.DataFrame, fund: pd.DataFrame, as_of: date
+    symbol: str,
+    ohlcv: pd.DataFrame,
+    fund: pd.DataFrame,
+    as_of: date,
+    *,
+    monthly: pd.DataFrame | None = None,
 ) -> dict[str, object]:
     """One snapshot row: technicals (from ``ohlcv``) + point-in-time fundamentals.
 
     Reused by both the cross-section builder (``screener.snapshot``) and the
-    historical factor panel (``factors.panel``) so the metrics are identical.
+    historical factor panel (``factors.panel``/``research.dataset``) so the
+    metrics are identical. ``monthly`` is TW monthly-revenue rows (optional,
+    market-neutral — omit for US or when unavailable): when provided,
+    ``revenue_momentum_features`` is merged in; when ``None`` the
+    ``rev_mom_*`` keys are absent entirely, not NaN-filled, so a US-only
+    snapshot never carries a TW-only column.
     """
     nan = float("nan")
     f = _latest_annual(fund, as_of)
@@ -132,7 +181,7 @@ def snapshot_row(
     eps_growth = _growth_yoy(fund, "eps_diluted", as_of)
     share_change = _growth_yoy(fund, "shares_outstanding", as_of)
 
-    return {
+    row: dict[str, object] = {
         "symbol": symbol,
         "as_of": pd.Timestamp(as_of),
         # Currency follows the market (US→USD, TW/TWO→TWD) — never assume USD, or a
@@ -176,3 +225,6 @@ def snapshot_row(
         if not fund.empty
         else pd.NaT,
     }
+    if monthly is not None:
+        row.update(revenue_momentum_features(monthly, pd.Timestamp(as_of)))
+    return row

@@ -293,7 +293,10 @@ def test_meta_sidecar_contents(tmp_path: Path) -> None:
     assert set(meta["eligible_per_month"]) == set(meta["months"])
 
 
-# --- roadmap 11.2: TW monthly-revenue momentum (PIT on filed_at) --------------
+# --- roadmap 11.2: TW monthly-revenue momentum, panel integration -------------
+# The pure-function tests for revenue_momentum_features itself live in
+# tests/test_snapshot.py (it moved to factors.metrics, shared with the live
+# snapshot); these test build_dataset_iter's wiring of the injected stream.
 
 
 def _rev_frame(rows: list[tuple[str, float]]) -> pd.DataFrame:
@@ -316,41 +319,6 @@ _REV_SERIES: list[tuple[str, float]] = (
     + [(f"2024-{m:02d}-01", 110.0) for m in range(1, 6)]
     + [("2024-06-01", 150.0)]
 )
-
-
-def test_revenue_features_known_answer_and_pit_flip() -> None:
-    from heimdall.research.dataset import _revenue_features
-
-    rev = _rev_frame(_REV_SERIES)
-    # 2024-07-05: June (filed 7/10) is NOT yet knowable → latest known is May.
-    before = _revenue_features(rev, pd.Timestamp("2024-07-05"))
-    assert before["rev_mom_yoy"] == pytest.approx(0.10)  # May 110 / 100 − 1
-    # 2024-07-10: June becomes knowable → the feature flips to June's YoY.
-    after = _revenue_features(rev, pd.Timestamp("2024-07-10"))
-    assert after["rev_mom_yoy"] == pytest.approx(0.50)  # June 150 / 100 − 1
-    # accel = mean(Apr,May,Jun YoY) − mean(Jan,Feb,Mar YoY) = .2333 − .10
-    assert after["rev_mom_accel"] == pytest.approx((0.10 + 0.10 + 0.50) / 3 - 0.10)
-
-
-def test_revenue_features_guards() -> None:
-    from heimdall.research.dataset import _revenue_features
-
-    late = pd.Timestamp("2025-01-15")
-    # Too little history: 10 months has no 12-month-ago base → NaN.
-    short = _rev_frame([(f"2024-{m:02d}-01", 100.0) for m in range(1, 11)])
-    out = _revenue_features(short, late)
-    assert pd.isna(out["rev_mom_yoy"]) and pd.isna(out["rev_mom_accel"])
-    # Non-positive year-ago base → NaN, never a fake percent.
-    zero_base = _rev_frame([("2023-06-01", 0.0), ("2024-06-01", 150.0)])
-    assert pd.isna(_revenue_features(zero_base, late)["rev_mom_yoy"])
-    # A gap month poisons the windows it touches (contiguous-calendar rule):
-    gapped = _rev_frame([r for r in _REV_SERIES if r[0] != "2024-03-01"])
-    out = _revenue_features(gapped, late)
-    assert out["rev_mom_yoy"] == pytest.approx(0.50)  # June itself is fine
-    assert pd.isna(out["rev_mom_accel"])  # prior-3 window spans the hole
-    # Empty frame → NaN dict.
-    empty = _revenue_features(pd.DataFrame(), late)
-    assert pd.isna(empty["rev_mom_yoy"]) and pd.isna(empty["rev_mom_accel"])
 
 
 def test_panel_carries_pit_revenue_features_for_tw(tmp_path: Path) -> None:

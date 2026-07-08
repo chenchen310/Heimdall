@@ -128,12 +128,17 @@ def _quick_tab() -> None:
 
 
 def _run_in_process(symbols: list[str], *, resume: bool) -> None:
+    from heimdall.data.providers import FinMindProvider
+
     prices = CachedProvider(router.price_provider())
     funds = router.fundamentals_provider()
+    monthly_revenue = FinMindProvider().monthly_revenue  # no-op for non-TW symbols
     bar = st.progress(0.0, text=t("Starting…"))
     done = built = total = 0
     failures: dict[str, int] = {}
-    for p in build_snapshot_iter(symbols, prices, funds, date.today(), resume=resume):
+    for p in build_snapshot_iter(
+        symbols, prices, funds, date.today(), resume=resume, monthly_revenue=monthly_revenue
+    ):
         done, built, total, failures = p.done, p.built, p.total, p.failures
         if total:
             bar.progress(min(done / total, 1.0), text=f"{done}/{total} · {p.last_symbol}")

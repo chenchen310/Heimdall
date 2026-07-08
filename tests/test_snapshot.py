@@ -15,7 +15,12 @@ import pytest
 
 from heimdall.data.base import DataProvider, NotSupported, ProviderError
 from heimdall.data.schema import FUNDAMENTALS_COLUMNS, OHLCV_COLUMNS
-from heimdall.factors.metrics import _latest_annual, _revenue_growth_yoy, snapshot_row
+from heimdall.factors.metrics import (
+    _latest_annual,
+    _revenue_growth_yoy,
+    revenue_momentum_features,
+    snapshot_row,
+)
 from heimdall.screener.snapshot import (
     build_row,
     build_snapshot_iter,
@@ -310,3 +315,145 @@ def test_vol_63d_windowed_and_annualized() -> None:
     assert m["vol_63d"] == pytest.approx(0.0, abs=1e-9)
     short = snapshot_row("X.US", _ohlcv_series([100.0] * 60), _empty_fund(), date(2024, 6, 1))
     assert pd.isna(short["vol_63d"])
+
+
+# --- fix: TW monthly-revenue momentum wired into the LIVE snapshot -----------
+# 11.2 added revenue_momentum_features only to the offline research panel
+# (research.dataset) — the live snapshot (screener.snapshot -> Today's Picks)
+# never computed it, so a certified tw-revenue-momentum spec could never rank a
+# real pick no matter how often the snapshot was rebuilt. Fixed by moving the
+# math to factors.metrics (one shared home) and threading it through
+# snapshot_row / build_row / build_snapshot_iter, exactly as 11.2 did for the
+# research panel.
+
+
+def _rev_frame(rows: list[tuple[str, float]]) -> pd.DataFrame:
+    months = pd.to_datetime([m for m, _ in rows])
+    return pd.DataFrame(
+        {
+            "symbol": "AAA.TW",
+            "month": months,
+            "filed_at": months + pd.DateOffset(months=1, days=9),  # §36: 10th of next month
+            "revenue": [r for _, r in rows],
+            "currency": "TWD",
+            "provider": "finmind",
+            "fetched_at": pd.Timestamp("2024-08-01"),
+        }
+    )
+
+
+_REV_SERIES: list[tuple[str, float]] = (
+    [(f"2023-{m:02d}-01", 100.0) for m in range(1, 13)]
+    + [(f"2024-{m:02d}-01", 110.0) for m in range(1, 6)]
+    + [("2024-06-01", 150.0)]
+)
+
+
+def test_revenue_momentum_features_known_answer_and_pit_flip() -> None:
+    rev = _rev_frame(_REV_SERIES)
+    # 2024-07-05: June (filed 7/10) is NOT yet knowable → latest known is May.
+    before = revenue_momentum_features(rev, pd.Timestamp("2024-07-05"))
+    assert before["rev_mom_yoy"] == pytest.approx(0.10)  # May 110 / 100 − 1
+    # 2024-07-10: June becomes knowable → the feature flips to June's YoY.
+    after = revenue_momentum_features(rev, pd.Timestamp("2024-07-10"))
+    assert after["rev_mom_yoy"] == pytest.approx(0.50)  # June 150 / 100 − 1
+    # accel = mean(Apr,May,Jun YoY) − mean(Jan,Feb,Mar YoY) = .2333 − .10
+    assert after["rev_mom_accel"] == pytest.approx((0.10 + 0.10 + 0.50) / 3 - 0.10)
+
+
+def test_revenue_momentum_features_guards() -> None:
+    late = pd.Timestamp("2025-01-15")
+    short = _rev_frame([(f"2024-{m:02d}-01", 100.0) for m in range(1, 11)])
+    out = revenue_momentum_features(short, late)
+    assert pd.isna(out["rev_mom_yoy"]) and pd.isna(out["rev_mom_accel"])
+    zero_base = _rev_frame([("2023-06-01", 0.0), ("2024-06-01", 150.0)])
+    assert pd.isna(revenue_momentum_features(zero_base, late)["rev_mom_yoy"])
+    gapped = _rev_frame([r for r in _REV_SERIES if r[0] != "2024-03-01"])
+    out = revenue_momentum_features(gapped, late)
+    assert out["rev_mom_yoy"] == pytest.approx(0.50)  # June itself is fine
+    assert pd.isna(out["rev_mom_accel"])  # prior-3 window spans the hole
+    empty = revenue_momentum_features(pd.DataFrame(), late)
+    assert pd.isna(empty["rev_mom_yoy"]) and pd.isna(empty["rev_mom_accel"])
+
+
+def test_snapshot_row_merges_revenue_momentum_when_monthly_given() -> None:
+    # Known-answer + PIT flip through the ACTUAL live-snapshot entry point (not
+    # the pure function directly) — proves the as_of wiring, not just the math.
+    rev = _rev_frame(_REV_SERIES)
+    row = snapshot_row(
+        "2330.TW", _ohlcv_at(40.0, n=260), _empty_fund(), date(2024, 7, 5), monthly=rev
+    )
+    assert row["rev_mom_yoy"] == pytest.approx(0.10)  # June not yet filed on 7/5
+    row2 = snapshot_row(
+        "2330.TW", _ohlcv_at(40.0, n=260), _empty_fund(), date(2024, 7, 10), monthly=rev
+    )
+    assert row2["rev_mom_yoy"] == pytest.approx(0.50)  # …filed by 7/10
+
+
+def test_snapshot_row_omits_revenue_momentum_without_monthly() -> None:
+    # Default (no `monthly`): the keys are ABSENT, not NaN — matches the research
+    # panel's "US carries no rev_mom_* column at all" contract (test_research_dataset).
+    row = snapshot_row("X.US", _ohlcv_at(40.0), _empty_fund(), date(2024, 6, 1))
+    assert "rev_mom_yoy" not in row and "rev_mom_accel" not in row
+
+
+class _RevenueProvider:
+    """A ``monthly_revenue``-shaped callable: real data for TW, NotSupported for US."""
+
+    def __init__(self, rev: pd.DataFrame) -> None:
+        self._rev = rev
+        self.calls: list[str] = []
+
+    def __call__(self, symbol: str, start: date, end: date) -> pd.DataFrame:
+        self.calls.append(symbol)
+        if not symbol.endswith(".TW"):
+            raise NotSupported(f"no monthly revenue for {symbol}")
+        return self._rev
+
+
+def test_build_row_wires_revenue_momentum_for_tw() -> None:
+    fn = _RevenueProvider(_rev_frame(_REV_SERIES))
+    row = build_row(
+        "2330.TW", _Prices(_ohlcv()), _NoFundamentals(), date(2024, 7, 10), monthly_revenue=fn
+    )
+    assert row is not None
+    assert row["rev_mom_yoy"] == pytest.approx(0.50)
+    assert fn.calls == ["2330.TW"]
+
+
+def test_build_row_gives_nan_not_omission_for_us_when_callable_provided() -> None:
+    # A mixed-market build (--market all, or pasted mixed symbols) must produce ONE
+    # consistent schema: the columns exist for every row, NaN where inapplicable —
+    # never present-for-some-rows/absent-for-others in the same table.
+    fn = _RevenueProvider(_rev_frame(_REV_SERIES))
+    row = build_row(
+        "X.US", _Prices(_ohlcv()), _NoFundamentals(), date(2024, 7, 10), monthly_revenue=fn
+    )
+    assert row is not None
+    assert "rev_mom_yoy" in row and pd.isna(row["rev_mom_yoy"])
+    assert fn.calls == ["X.US"]  # attempted, not skipped — NotSupported is caught, not guessed
+
+
+def test_build_row_without_monthly_revenue_omits_columns_entirely() -> None:
+    # The default (no callable passed at all): unchanged pre-fix behavior.
+    row = build_row("2330.TW", _Prices(_ohlcv()), _NoFundamentals(), date(2024, 7, 10))
+    assert row is not None
+    assert "rev_mom_yoy" not in row
+
+
+def test_build_snapshot_iter_mixed_market_gets_one_consistent_schema(tmp_path: Path) -> None:
+    fn = _RevenueProvider(_rev_frame(_REV_SERIES))
+    prices = _Prices(_ohlcv())
+    for _ in build_snapshot_iter(
+        ["2330.TW", "X.US"],
+        prices,
+        _NoFundamentals(),
+        date(2024, 7, 10),
+        root=tmp_path,
+        monthly_revenue=fn,
+    ):
+        pass
+    snap = load_snapshot(tmp_path).set_index("symbol")
+    assert "rev_mom_yoy" in snap.columns  # present for BOTH rows of the one table
+    assert snap.loc["2330.TW", "rev_mom_yoy"] == pytest.approx(0.50)
+    assert pd.isna(snap.loc["X.US", "rev_mom_yoy"])
