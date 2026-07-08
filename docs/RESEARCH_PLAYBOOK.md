@@ -168,9 +168,14 @@ registry. If it doesn't appear, the status isn't `certified`; fix the process, n
 
 ## 9. Post-certification monitoring (Phase 12.2)
 
-Each month append the newest cohort's realized beat rate to the certification's monitoring series.
-If the trailing-12-cohort NW 95% CI upper bound falls below 0.5, the signal flips to
-`under_review` automatically and Today's Picks shows a warning banner. No silent decay.
+Each month, `heimdall.research.monitor` recomputes the realized OOS cohorts from the current panel
+and appends the newest to the certification's monitoring series. The monitored quantity is **what was
+certified — the G3 selection alpha** (per-cohort EW top-N book 6m minus EW eligible-universe 6m), not
+the EW-premium-inflated beat rate (updated for the 12.5 decomposed metric; the alpha's null is 0, the
+old beat rate's was 0.5). If the **trailing-12-cohort NW 95% CI upper bound falls below 0** — i.e. the
+skill has gone significantly negative — the signal flips to `under_review` automatically and Today's
+Picks shows a warning banner instead of its ranking. No silent decay. (The trailing beat rate is
+still tracked and displayed, but the auto-flip guards the certified edge, not the tilt.)
 
 ## 10. Anti-patterns (named, so reviews can cite them)
 

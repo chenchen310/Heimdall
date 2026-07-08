@@ -23,6 +23,7 @@ import streamlit as st
 from heimdall.data.symbols import REGION_CURRENCY
 from heimdall.research import registry
 from heimdall.research.benchmark import BENCHMARK
+from heimdall.research.monitor import TRAILING, load_monitoring
 from heimdall.research.spec import SignalSpec, load_spec
 from heimdall.research.today import freshness, todays_picks
 from heimdall.screener.snapshot import MONETARY_FIELDS
@@ -37,17 +38,57 @@ def _root() -> Path:
     return registry.registry_path().parent.parent
 
 
-def _certified_specs(region: str) -> list[tuple[SignalSpec, dict[str, object]]]:
-    """(spec, registry entry) for every certified signal of this market."""
+def _specs_by_status(region: str, status: str) -> list[tuple[SignalSpec, dict[str, object]]]:
+    """(spec, registry entry) for every signal of this market in the given lifecycle status."""
     out: list[tuple[SignalSpec, dict[str, object]]] = []
     for entry in cast("list[dict[str, object]]", registry.load_registry()["signals"]):
-        if entry["status"] != "certified":
+        if entry["status"] != status:
             continue
         p = Path(str(entry["spec_path"]))
         spec = load_spec(p if p.is_absolute() else _root() / p)
         if spec.market == region:
             out.append((spec, entry))
     return out
+
+
+def _drift_banner(spec: SignalSpec) -> None:
+    """Honest notice for a signal that was certified then flagged by drift monitoring (12.2)."""
+    mon = load_monitoring(spec.name, spec.version, _root())
+    if mon is not None:
+        hi = cast("list[float]", mon["trailing_alpha_ci95"])[1]
+        st.warning(
+            t(
+                "⚠️ {name} v{v} — certified, then flagged by drift monitoring: post-certification "
+                "selection skill went significantly negative (trailing-{n} {a:+.1%}, 95% CI upper "
+                "{hi:+.1%} < 0). Under review — its ranking is withheld until it re-certifies or "
+                "retires."
+            ).format(
+                name=spec.name,
+                v=spec.version,
+                n=mon["trailing_n"],
+                a=cast("float", mon["trailing_alpha_mean"]),
+                hi=hi,
+            )
+        )
+    else:
+        st.warning(
+            t("⚠️ {name} v{v} — under review (post-certification drift). Ranking withheld.").format(
+                name=spec.name, v=spec.version
+            )
+        )
+
+
+def _monitoring_line(spec: SignalSpec) -> None:
+    """A one-line post-certification health note under a still-certified signal's evidence box."""
+    mon = load_monitoring(spec.name, spec.version, _root())
+    if mon is None or int(cast("int", mon.get("trailing_n", 0))) < TRAILING:
+        return
+    st.caption(
+        t(
+            "Post-cert monitoring: trailing-{n} selection skill {a:+.1%} "
+            "— drift alarm not triggered."
+        ).format(n=mon["trailing_n"], a=cast("float", mon["trailing_alpha_mean"]))
+    )
 
 
 def _gate_value(report: dict[str, object], gate: str) -> float:
@@ -102,8 +143,9 @@ def render() -> None:
     )
     region = market_radio(["US", "Taiwan"], key="today_market")
 
-    specs = _certified_specs(region)
-    if not specs:
+    specs = _specs_by_status(region, "certified")
+    under_review = _specs_by_status(region, "under_review")
+    if not specs and not under_review:
         st.info(
             t(
                 "No certified signal yet for this market — an honest empty state. "
@@ -112,6 +154,11 @@ def render() -> None:
             )
         )
         return  # the rule: nothing renders without a certified registry row
+
+    for spec, _entry in under_review:  # drift-flagged signals get an honest banner, no ranking
+        _drift_banner(spec)
+    if not specs:
+        return  # only under-review signals — the banner is the whole story
 
     try:
         snap = snapshot()
@@ -137,6 +184,7 @@ def render() -> None:
             st.error(f"certification report unreadable: {exc}")
             continue
         _evidence_box(region, report)
+        _monitoring_line(spec)
 
         try:
             picks = todays_picks(spec, snap)

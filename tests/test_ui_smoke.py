@@ -333,6 +333,63 @@ def test_today_page_renders_certified_evidence_then_picks(
     assert "🎯 Today's Picks" in _ZH  # zh strings present
 
 
+def test_today_page_shows_drift_banner_for_under_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from heimdall.research import registry as reg
+    from heimdall.research.spec import SignalSpec
+
+    _force_english(monkeypatch)
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_today_snapshot(tmp_path)
+    _point_registry_at(tmp_path, monkeypatch)
+
+    spec = SignalSpec.model_validate(
+        {
+            "name": "us-x",
+            "family": "us-fam",
+            "market": "US",
+            "version": 1,
+            "features": {"ret_12_1": 1.0},
+            "top_n": 3,
+        }
+    )
+    (tmp_path / "signals" / "specs").mkdir(parents=True)
+    (tmp_path / "signals" / "specs" / "us-x.json").write_text(spec.model_dump_json())
+    reg.add(spec, "signals/specs/us-x.json", root=tmp_path)
+    reg.transition("us-x", 1, "registered", root=tmp_path)
+    reg.transition("us-x", 1, "certified", cert_report="r.json", oos_attempt=1, root=tmp_path)
+    reg.transition("us-x", 1, "under_review", root=tmp_path)  # drift monitor flipped it
+    mondir = tmp_path / "signals" / "monitoring"
+    mondir.mkdir(parents=True)
+    (mondir / "us-x_v1.json").write_text(
+        json.dumps(
+            {
+                "name": "us-x",
+                "version": 1,
+                "status": "under_review",
+                "n_cohorts": 20,
+                "trailing_n": 12,
+                "trailing_alpha_mean": -0.05,
+                "trailing_alpha_ci95": [-0.12, -0.01],
+                "trailing_beat_rate": 0.4,
+                "drift": True,
+                "flipped": True,
+                "generated_at": "2026-08-01T00:00:00+00:00",
+                "cohorts": [],
+            }
+        )
+    )
+    st.cache_data.clear()
+
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Today's Picks")
+    assert not at.exception
+    warnings = " ".join(w.value.lower() for w in at.warning)
+    assert "under review" in warnings and "skill" in warnings  # the honest drift banner
+    assert not at.dataframe  # an under-review signal's ranking is withheld
+
+
 def test_sidebar_nav_is_grouped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
     _write_snapshot(tmp_path)  # default Screener page renders cleanly
