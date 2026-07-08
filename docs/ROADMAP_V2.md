@@ -252,10 +252,20 @@ Steps:
    (expect decay); trust flows are shorter-lived with quarter-end distortions; dealer flows are
    hedging noise — excluded on purpose.
 
-### 11.4 Certify TW families  `[ ]`
+### 11.4 Certify TW families  `[x]`
 Build `panel_tw` (7.3 CLI), then run 10.x-style cards for: monthly-revenue momentum, price
 momentum, flows. Benchmark `0050.TW`. Note in the log that TW history via FinMind may start later
 than 2010 — splits shrink accordingly (validation/OOS boundaries stay fixed).
+
+**Done 2026-07-08 (RESEARCH_LOG 004–007).** All three families **closed at development/validation,
+0 OOS attempts** — factors carry real cross-sectional IC (TW validation: revenue t 1.81, flows
+t 1.95) but the equal-weight top-20 book's 6m beat rate vs the TSMC-dominated 0050 caps at ~53%,
+never clearing G3's 55% — the same equal-weight-vs-cap-weight structure that sank every US family.
+Constraint met: FinMind free tier ≈ 600 req/hr (≈ 26-min IP bans) makes a full 800-name multi-stream
+build ≈ 9 quota-hours, so price momentum ran on the broad 800-name (prices-only) panel and
+revenue/flows on a reduced 140-name top-liquidity panel (dev 2017-19 shrank to 11 months; val/OOS
+robust). Budget intact; a full-universe TW build (paced FinMind stream cache or paid tier) is the
+open follow-on. Aggregate finding strengthens the 12.3 program-definition case.
 
 ### 11.5 TW Chips (籌碼) dashboard — descriptive lens, NOT a signal  `[ ]`
 **Goal:** the daily "who is buying" view, kept firmly outside certification. **Files:**
