@@ -336,3 +336,47 @@ checks pass:
   US panels); G3_alpha_t cleared the bar by a hair (2.02 ≥ 2.0); and 2023–25 was an AI-boom regime
   unusually kind to revenue-acceleration names. Post-cert drift monitoring (12.2) is the honest next
   guard — if the trailing-12-cohort skill decays, it flips to `under_review`.
+
+## 010 — tw-price-factors / harder universe, skill-metric search (2026-07-09, model: Opus 4.8)
+
+- Goal: on a **harder, less-biased TW universe** and under the 12.5 decomposed metric (selection
+  alpha vs the equal-weight universe — the certified G3, via the shared `certify.cohort_alpha`),
+  search for a price-based strategy other than revenue momentum.
+- **Harder universe (the point of this entry).** Prices-only `panel_tw` over the **full 2,130-name**
+  TW universe, not a liquidity-cherry-picked subset: every cached symbol is fed in and the panel's
+  monthly point-in-time hygiene (NT$10 / NT$50M 21-day dollar-vol / 252 bars) decides each month's
+  eligible set, so a name liquid in 2013 but illiquid now is correctly eligible in 2013 and not now.
+  All names deep-warmed to 2010 via yfinance (**1,432 with pre-2013 history**, up from 625; 168
+  legitimately absent — delisted/never-listed, the accepted free-data survivorship gap). Result:
+  **181 months, eligible/month 141–744 (0 dropped), DEV 103 months / VAL 36 / OOS 42** — a *full*
+  development window, vs the 11 scattered months the 140-name cert panel could muster (entry 005).
+- **Development (2011-06→2019-12, 103 months; OOS vault never read — a hard assert guards it):**
+  a coherent story — **trend/relative-strength has 6-month alpha, skip-month momentum is dead:**
+
+  | candidate | IC (t) [G1] | selection alpha (NW-t) [G3] | turnover |
+  | --- | --- | --- | --- |
+  | `{ret_12_1}` (US-classic momentum) | +0.010 (0.61) | −1.54% (−1.04) | 34% |
+  | `{ret_6m}` | −0.003 (−0.17) | +3.27% (+2.10) | 44% |
+  | `{pct_above_sma_200}` | −0.003 (−0.15) | +4.16% (+2.77) | 48% |
+  | `{vol_63d:−1}` (low-vol) | +0.067 (3.08) | +0.87% (+0.68) | 27% |
+  | **`{vol_63d:−1, ret_6m:1}`** | **+0.069 (3.53)** | **+3.90% (+4.36)** | 51% |
+  | **`{vol_63d:−1, pct_above_sma_200:1}`** | **+0.067 (3.27)** | **+3.82% (+3.75)** | 52% |
+
+  Trend factors carry the alpha but ~0 one-month IC (fail G1); low-vol carries the IC but ~0 alpha
+  (fail G3); the **low-vol × trend combination clears BOTH gates in-sample** (the low-vol anomaly ×
+  relative strength — 2 parameters). Reversal/RSI-oversold were strongly *negative* (−3.5%/−2.6%),
+  confirming the trend direction, not mean-reversion.
+- **Validation (2020-01→2022-12, 36 months — the decisive single look): every candidate collapses.**
+  `{vol_63d:−1, ret_6m:1}` +3.90% (t 4.36) → **−2.61% (NW-t −0.87)**; `{vol_63d:−1, sma200:1}`
+  +3.82% → **+0.08% (t 0.03)**; `above_sma200` +4.16% → +1.41% (0.28); nothing has significant
+  positive alpha in *both* windows. The strong dev signal is **regime-dependent / dev-overfit** —
+  it does not survive the COVID-crash / melt-up / 2022-rate-shock window.
+- **Verdict: FAMILY CLOSED AT VALIDATION.** No new certifiable price strategy. Validation did its
+  job — caught a candidate that cleared both gates in development and saved a vault attempt.
+- OOS attempts spent: **0 of 3** (family `tw-price-momentum` / low-vol-trend). Registry: no change.
+- Honesty caveats: (1) ~15 candidates were compared in development, so the strong dev numbers carry
+  multiple-comparison selection — the validation collapse is consistent with that. (2) The harder
+  universe still can't include *fully* delisted names (no free source), so it lowers but does not
+  eliminate survivorship bias. (3) This says nothing about revenue momentum (entry 009), which is
+  certified on the reduced 140-name panel and unaffected; re-certifying it on this harder universe
+  is a worthwhile future step but needs FinMind (monthly revenue) across ~700 names (quota-bound).
