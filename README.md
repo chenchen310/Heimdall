@@ -37,6 +37,25 @@ No API keys are needed to start — yfinance (US + TW prices), SEC EDGAR (US fun
 (macro), and FinMind (Taiwan) are all free. Copy `.env.example` to `.env` for higher quotas
 (`FINMIND_TOKEN`), paid sources (`FMP_API_KEY`), or the optional AI report layer (`ANTHROPIC_API_KEY`).
 
+## Deploying (Streamlit Community Cloud)
+
+Community Cloud does not run `uv sync` — it installs from `requirements.txt`, which does **not**
+carry `pyproject.toml`'s optional extras. Because `ui/app.py` eagerly imports every page (backtest,
+factors, ETF, macro, rotation…), the deployed app needs the union of the `data` + `backtest` +
+`analytics` + `ui` (+ `personas`, if you'll set `ANTHROPIC_API_KEY`) extras just to boot, not only
+`ui`. `requirements.txt` is a pinned export of that set — regenerate it whenever `pyproject.toml`
+dependencies change:
+
+```bash
+uv export --frozen --no-dev --no-hashes \
+  --extra data --extra backtest --extra analytics --extra ui --extra personas \
+  -o requirements.txt
+```
+
+Set the app's main file to `src/heimdall/ui/app.py` and add any secrets (`FINMIND_TOKEN`,
+`FMP_API_KEY`, `ANTHROPIC_API_KEY`, `FRED_API_KEY`) via the Cloud app's Secrets, not `.env` (which
+is gitignored and never deployed).
+
 ## Documentation
 
 - [CLAUDE.md](CLAUDE.md) — architecture overview, commands, and conventions (start here)
