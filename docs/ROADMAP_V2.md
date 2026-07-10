@@ -276,12 +276,18 @@ right after it. The page must carry a fixed caption — *descriptive chip data, 
 signal; Today's Picks ignores this page* — in both languages. **Don't:** render anything that
 looks like a recommendation ranking.
 
+> Scheduled (2026-07-11) as card **15.1** — Phase 15 wave 1. Execute this card's text verbatim;
+> mark both checkboxes in the same PR.
+
 ## Phase 12 — Operations & evolution
 
 ### 12.1 Scheduled refresh  `[ ]`
 A `launchd` plist template + `docs/OPERATIONS.md` (weekly: snapshot refresh + panel extension via
 the existing resumable CLIs), or extend the Build-data page with a one-click "refresh all
 certified inputs". Staleness banners already exist (9.2).
+
+> Folded into card **16.2** (scheduled refresh + notifications), Phase 16 — execute there; mark
+> both checkboxes in the same PR.
 
 ### 12.2 Drift monitoring  `[x]`
 `research/monitor.py` + a monitoring section on Today's Picks: each month append the newest
@@ -302,6 +308,9 @@ Only after ≥ 2 Phase-10 families are certified-or-rejected: write `docs/DATA_D
 free signals achieved, what FMP estimates/revisions would add, cost vs measured gap. A memo, not
 an integration; the user decides.
 
+> User decision 2026-07-11: the trigger is armed but this card stays **unscheduled** — write the
+> memo only when the user asks. Not part of the Phase 13–16 waves.
+
 ### 12.4 US insider-transactions feature (Form 4) — the honest US "smart money"  `[ ]`
 **Reality note (binding):** the US has **no public daily institutional flow**. Retail-app "money
 flow" for US stocks is a price/volume proxy (tick-rule buy/sell imbalance) — it may be added as a
@@ -311,6 +320,9 @@ lag (cloning evidence weak). The credible free option is SEC **Form 4** insider 
 open-market buys − sells ÷ market cap) with a cluster-buy flag; golden-tested from saved filings;
 keyed on the filing timestamp (point-in-time). Prior: moderate, event-like, works at long
 horizons. Pre-register before any OOS touch, as always.
+
+> Scheduled (2026-07-11) as card **13.3** — Phase 13 wave 3. Execute this card's text verbatim;
+> mark both checkboxes in the same PR.
 
 ### 12.5 Redefine the success metric — decomposed portfolio + skill  `[x]`
 **Foundational; decided with the user 2026-07-08 (RESEARCH_LOG 008). Do this BEFORE any further
@@ -341,7 +353,419 @@ Steps:
    but the 2023+ regime (TSMC AI dominance) may reverse the EW premium and pressure momentum, so a
    fair test is not a promised pass. Vault stays sealed until pre-registration.
 
+## Phase 13 — Signal expansion (US re-evaluation + free features; TW full universe)
+
+> Program decided with the user 2026-07-11 (the four-need expansion; needs 2–3 are Phases 14–15).
+> Binding choices: **US** = (a) re-evaluate the closed families under the 12.5 decomposed metric,
+> (b) new *free* feature families — the 12.3 paid-data memo stays armed but **unscheduled** (write
+> it only when the user asks). **TW** = free paced FinMind crawl, no paid tier. Execution order:
+> the wave plan at the bottom of this file (it overrides top-to-bottom across Phases 11.5–16).
+> Vault discipline is unchanged and explicit: every card that could touch OOS (**13.2, 13.6,
+> 13.8**) must stop and get a **recorded user go/no-go before pre-registering**. A REJECTED
+> verdict, honestly logged, completes a card.
+
+### 13.1 US re-evaluation under the decomposed metric  `[ ]`
+
+**Goal:** the 001–003 US families died under the *old, structurally biased* G3; nobody has ever
+measured their selection alpha. Re-score them (plus the entry-010 combos) on Dev/Validation only.
+**Files:** new `src/heimdall/research/evaluate.py`, `tests/test_research_evaluate.py`, a
+RESEARCH_LOG entry.
+
+Steps:
+1. `evaluate(spec, panel, window) -> EvalReport` — the same math as certification (import
+   `certify.cohort_alpha` and the existing IC/spread/turnover paths; do **not** fork formulas),
+   but windowed. **Hard guard, tested: raise if the window end ≥ `gates.OOS_START`** — dev/val
+   evaluation becomes a sanctioned reusable path instead of per-session ad-hoc scripts.
+2. Verify the candidate columns exist in `panel_us` (`ret_12_1`, `roic`, `fcf_margin`,
+   `operating_margin`, `fcf_yield`, `ret_6m`, `pct_above_sma_200`, `vol_63d`); any missing ⇒
+   extend the panel first (7.3 CLI, resumable).
+3. Pre-stated candidates — no additions mid-session (tempted ⇒ stop and ask): `{ret_12_1}`,
+   `{roic, fcf_margin, operating_margin}` equal, `{fcf_yield}`, `{ret_6m}`, `{pct_above_sma_200}`,
+   `{vol_63d: −1}`, `{vol_63d: −1, ret_6m: 1}`, `{vol_63d: −1, pct_above_sma_200: 1}`.
+4. DEV (2010–2019) on all eight; advance to the **single** VAL look only candidates with dev
+   selection-alpha NW-t ≥ 2 **and** dev IC t ≥ 2 (the entry-010 precedent).
+5. RESEARCH_LOG entry: dev + val tables, count of looks (full disclosure), per-candidate verdict
+   (advance to 13.2 / closed).
+
+DoD: OOS-window-refused test; parity test (evaluate ≡ certify gate math on the same synthetic
+rows); log entry committed; quality gates green.
+**Don't:** read any row ≥ 2023-01-01 (hard assert in the run); no weight tuning after the VAL
+look; no pre-registration here — that is 13.2's decision.
+
+### 13.2 US survivor: pre-register + one OOS attempt (conditional)  `[ ]`
+
+**Goal:** one disciplined vault shot for the best 13.1 survivor — only if one exists.
+**Files:** `signals/specs/<name>.json`, RESEARCH_LOG entry, `signals/certifications/…`.
+
+Steps:
+1. Precondition: a 13.1 candidate with VAL selection-alpha NW-t ≥ 2 and VAL IC alive. None ⇒
+   record "closed — no candidate" on this card; done.
+2. **Stop and ask the user (mandatory; the ruling is copied verbatim into the log entry):**
+   (a) authorize spending the family's OOS attempt; (b) *if* the candidate is `{fcf_yield}` with
+   the identical spec hash `ade91883…`, ask whether the run counts as a **12.5 void-and-rerun**
+   (§4 rule 4 voids old-gate certifications; a free re-run of the same frozen spec) or as
+   **attempt 2/3** of `us-value-quality` (the conservative reading).
+3. Pre-register (playbook §8), commit, run the certify CLI; registry transitions through code only.
+
+DoD: verdict logged either way; immutable report committed if run.
+**Don't:** touch the vault before the recorded go; never adjust weights after seeing an OOS number.
+
+### 13.3 US insider-transactions feature — execute card 12.4  `[ ]`
+
+**Card 12.4 verbatim** (Form 4 provider + `insider_net_buy_90d` + cluster-buy flag, point-in-time
+on the filing timestamp), sequenced into this phase's feature wave. Mark both checkboxes in the
+same PR. The feature then enters the `us-insider` family in 13.6.
+
+### 13.4 US earnings-surprise (PEAD) features — estimate-free  `[ ]`
+
+**Goal:** the post-earnings-drift axis without paid analyst estimates.
+**Files:** `src/heimdall/research/dataset.py` (panel-only features),
+`tests/test_research_dataset.py`.
+
+Steps (US rows; every input is already normalized by the EDGAR provider — `eps_diluted` quarterly
+rows carry `filed_at`; **don't touch providers**):
+1. `sue` — standardized unexpected earnings: latest (EPS_q − EPS_{q−4}) ÷ std of the last 8 such
+   YoY changes, using only quarterly rows with `filed_at` ≤ the row's month-end; NaN if < 8
+   observations. Direction **+**.
+2. `earn_gap` — announcement reaction: (stock − benchmark) return over the first trading bar ≥
+   the latest `filed_at` within the past 65 trading days; NaN when no filing in the window.
+   Direction **+** (drift continues the initial reaction).
+3. Feature-table doc lines (direction + one-line rationale), per playbook §7.
+4. Extend `panel_us` (resumable CLI; EDGAR is cached — no rate concerns).
+
+DoD: the mandatory **PIT leak test** (a quarterly filed after month-end *t* must not move row *t*)
+plus known-answer tests covering the q−4 alignment, the 8-obs std window, and `earn_gap`'s
+first-bar-≥-`filed_at` rule; suite green.
+**Don't:** key anything off fiscal period end; don't synthesize EPS from net income when the tag
+is missing (report coverage instead).
+
+### 13.5 US issuance / asset-growth / gross-profitability features  `[ ]`
+
+**Goal:** three documented free axes orthogonal to the already-tested roic/margin set.
+**Files:** `src/heimdall/research/dataset.py`, `tests/test_research_dataset.py`.
+
+Steps (annual EDGAR rows, `filed_at`-keyed, already normalized — `shares_outstanding`, `assets`,
+`gross_profit` all exist in `METRIC_SPECS`):
+1. `net_issuance_12m` — YoY % change in `shares_outstanding` between consecutive annual rows.
+   Direction **−** (issuance is bad news; buybacks good).
+2. `asset_growth` — YoY % change in `assets`. Direction **−** (the asset-growth anomaly).
+3. `gross_profitability` — `gross_profit ÷ assets` (Novy-Marx). Direction **+**. NaN when the
+   `GrossProfit` tag is absent — report dev-window coverage in the 13.6 log entry.
+4. PIT leak + known-answer tests per feature; feature-table doc lines; extend `panel_us`.
+
+DoD: tests as above; gates green.
+**Don't:** derive gross profit from revenue − COGS (COGS isn't normalized; coverage honesty over
+completeness); don't touch providers.
+
+### 13.6 US new-feature families — research card  `[ ]`
+
+**Goal:** playbook §7 end-to-end over the 13.3–13.5 features. Family boundaries (binding for the
+3-attempt budget): `us-insider` = the insider features; `us-pead` = {sue, earn_gap};
+`us-issuance-quality` = {net_issuance_12m, asset_growth, gross_profitability}. A composite that
+crosses these boundaries is a **new family** (`us-composite-…`), never billed to an existing one.
+
+Steps:
+1. Pre-stated candidates per family: each single feature + one equal-weight composite per family;
+   ≤ 4 parameters each. Evaluate with 13.1's `evaluate` on DEV; single VAL look for dev survivors
+   (same advance bars as 13.1 step 4).
+2. One RESEARCH_LOG entry per family evaluated (tables + look counts). Honest closures complete
+   the card — never force a vault attempt.
+3. Any VAL survivor: **stop and ask the user** before pre-registering (13.2's protocol).
+
+DoD: log entries committed; zero OOS reads outside a user-authorized, pre-registered certify run.
+**Don't:** mix family budgets; don't add candidates mid-session.
+
+### 13.7 FinMind paced crawler (full-TW streams, free tier)  `[ ]`
+
+**Goal:** the full ~2,130-name TW streams on disk without a paid tier. The 11.4 constraint
+measured ~5,600 calls ≈ 9 quota-hours — make that a background chore, not a blocked session.
+**Files:** new `src/heimdall/data/finmind_crawl.py`, `tests/test_finmind_crawl.py`.
+
+Steps:
+1. Locate the stream cache the 005/006 build used (RESEARCH_LOG 004 note) and **reuse that
+   format/path** — one cache, never a second format. If the streams are cached inside the
+   provider path, the crawler is simply a paced pre-warmer calling the same
+   `FinMindProvider.monthly_revenue` / `.daily_chips` / fundamentals methods.
+2. CLI `uv run python -m heimdall.data.finmind_crawl --market tw
+   [--datasets revenue,chips,fundamentals] [--budget-per-hour 550]`: iterate `tw_symbols()`; a
+   per-(symbol, dataset) progress-ledger JSON makes re-runs skip completed work; pace under the
+   hourly budget; on 402/403 sleep until the window resets (~26-min bans — log and wait, never
+   crash).
+3. Progress + ETA prints in the `screener.build` mould; safe to interrupt at any point.
+
+DoD: interrupt-then-rerun makes **zero** duplicate calls (ledger test with a fake provider);
+backoff unit-tested from canned 402/403 responses; no network in tests. Operator note: run
+detached/overnight or across days.
+**Don't:** bypass the provider's rate limiter; don't invent a second cache format.
+
+### 13.8 Full-universe `panel_tw` + revenue-momentum v2 (user-gated)  `[ ]`
+
+**Goal:** rebuild the TW panel on the full universe (entry 010's hard substrate), re-evaluate the
+closed TW candidates fairly, and — with sign-off — take revenue momentum's v2 shot, removing the
+140-name-selection caveat from the program's only certified signal.
+**Files:** panel via the 7.3 CLI (separate root), RESEARCH_LOG entries, spec v2 JSON if authorized.
+
+Steps:
+1. Precondition: 13.7 complete for revenue + chips (+ fundamentals if feasible).
+2. Build the full panel to a **separate root** (`data/research/full/`; `dataset.py` already takes
+   `root`) — the shipped `panel_tw` is `tw-revenue-momentum v1`'s certified **and monitoring**
+   substrate and must stay untouched until the v2 decision.
+3. Free re-eval (13.1's `evaluate`; DEV + single VAL look), pre-stated: `{rev_mom_accel}`,
+   `{rev_mom_yoy, rev_mom_accel}`, `{foreign_net_buy_63d}`,
+   `{foreign_net_buy_63d, trust_net_buy_21d: 0.5}`.
+4. **Stop and ask the user:** (a) spend `tw-revenue-momentum` attempt **2/3** on v2 (same recipe,
+   genuinely new substrate — §4 rule 2 compliant)? (b) confirm the panel-promotion rule: v2
+   certifies ⇒ promote the full panel to the standard path and retire v1 via the sanctioned
+   lifecycle ("re-certified as new version"); v2 fails ⇒ the 140-name panel stays shipped (v1 and
+   its monitoring stand) and the full panel remains a research artifact. `tw-flows` gets **no**
+   vault touch without its own separate authorization.
+5. If authorized: pre-register, certify, registry through code.
+
+DoD: log entry with dev/val tables; if run, immutable report + the promotion rule executed
+exactly; gates green.
+**Don't:** overwrite the certified panel before the decision; don't let a v2 failure silently
+discredit v1 — record the divergence honestly instead.
+
+### 13.9 TDCC big-holder provider + concentration feature  `[ ]`
+
+**Goal:** the weekly 集保 (TDCC) shareholding-dispersion file as a canonical provider + a
+point-in-time concentration feature. Double-serves need 3 (card 15.3). FinMind's equivalent
+dataset is paid-tier; the TDCC open-data portal serves the weekly whole-market file free.
+**Files:** new `src/heimdall/data/providers/tdcc.py`, `tests/test_tdcc.py` (golden from a saved
+CSV excerpt), `src/heimdall/research/dataset.py` feature + tests.
+
+Steps:
+1. Provider: fetch + normalize the weekly file (canonical `TICKER.TW`, `data_date`, bracket
+   level, holder count, shares, %). Keep the raw file per data-discipline; delta-only (skip weeks
+   already stored). Verify the bracket→lot mapping against the portal's definition table inside
+   the golden test (the ≥ 400-lot brackets are the "大戶" set).
+2. Availability rule (PIT): the weekly file is published *after* its data date — verify the
+   observed lag on the portal, encode `available_at = data_date + observed lag` in the provider,
+   document it in the docstring. Ambiguous ⇒ stop and ask.
+3. Feature `big_holder_ratio_delta_4w` (TW rows): pp change over 4 weekly files of the ≥ 400-lot
+   share-%; a row may only read files with `available_at` ≤ its month-end (**PIT leak test
+   mandatory**). Direction prior **+** (rising concentration = large-holder accumulation).
+
+DoD: golden + PIT + known-answer tests; gates green. Researching this feature later = its own
+`tw-bigholder` family card, not part of this one.
+**Don't:** FinMind's paid `TaiwanStockHoldingSharesPer`; no scraping beyond the official
+open-data endpoint.
+
+## Phase 14 — Sector focus (quant core + optional AI brief)
+
+> Need 2, decided 2026-07-11: the page itself is **computed** (rotation/breadth/flows); news and
+> named-authority views live only in an **optional, clearly-labelled AI commentary** (personas
+> pattern — the app is fully functional without it, and nothing here feeds any certified
+> computation). Every page in Phases 14–15 carries the 11.5 fixed caption in both languages:
+> *descriptive data, not a certified signal; Today's Picks ignores this page.*
+
+### 14.1 Sector classification on the snapshot  `[ ]`
+
+**Goal:** one `sector` string per snapshot row, both markets.
+**Files:** `src/heimdall/screener/universe.py`, `src/heimdall/screener/build.py` (carry the
+field), `docs/DATA_SOURCES.md` (one line on the chosen US source), tests.
+
+Steps:
+1. TW: `_parse_tw_info` already reads `industry_category` — persist a symbol→industry map beside
+   the cached universe file instead of discarding it.
+2. US: probe in order, take the first workable, document the choice: (a) a sector field already
+   present in cached universe/snapshot artifacts; (b) EDGAR `submissions` JSON `sicDescription`
+   (one cached request per symbol under the EDGAR rate limit); (c) a committed static CSV
+   fallback.
+3. Snapshot rows gain `sector` ("Unknown" when missing — never drop a row). i18n: TW categories
+   are already zh; add zh glosses for the ~dozen US sector groups in `i18n.py`.
+
+DoD: mapping known-answer tests (one TW, one US, one Unknown); existing snapshot tests untouched.
+**Don't:** per-symbol yfinance `.info` loops (rate-fragile, unofficial).
+
+### 14.2 Sector-focus page  `[ ]`
+
+**Goal:** the daily/weekly/monthly answer to "which industries lead, and who inside them".
+**Files:** new `src/heimdall/ui/sector_page.py`, `app.py` (nav group "Analyst lenses"),
+`i18n.py`, `tests/test_ui_smoke.py`.
+
+Steps:
+1. Window toggle 日/週/月 = 1/5/21 trading days over cached adjusted closes.
+2. Per sector (equal-weight over members with data): window return vs the market benchmark,
+   member count, breadth (% of members with `pct_above_sma_200 > 0` from the snapshot); ranked
+   table.
+3. TW-only block: 法人分產業 net buy over the window, reading 15.2's daily bulk cache; cache
+   absent ⇒ an info hint pointing at 15.2 — no crash, no fetch storm.
+4. Drill-down expander per sector: members ranked by window return, RS vs the sector mean.
+5. The phase's fixed caption, both languages.
+
+DoD: AppTest smokes — renders from a snapshot fixture, caption present, missing-chips hint path;
+zh strings; gates green.
+**Don't:** anything that reads as a buy list; no LLM on this page.
+
+### 14.3 Optional AI sector brief (personas layer)  `[ ]`
+
+**Goal:** on-demand news/authority context for a chosen sector — bull *and* bear cases with
+cited sources — as personas-pattern commentary.
+**Files:** `src/heimdall/personas/templates.py` (+ reuse `client.py`/`render.py`), the
+`src/heimdall/ui/_personas.py` hook used from `sector_page.py`, disk cache under
+`data/reports/sector_briefs/` (gitignored), template-render test (no API call).
+
+Steps:
+1. Payload = 14.2's computed stats for the sector + its quant-ranked top/bottom members. The
+   brief may **only** discuss tickers from that payload — the LLM never picks or re-ranks names.
+2. Template requirements: web-search the window's sector news + named-authority views; every
+   claim cited with a link; an explicit bull case and bear case; fixed header — *AI commentary,
+   not a certified signal, not investment advice* — in both languages.
+3. Claude API with the web-search tool enabled (read the `claude-api` skill for current model ids
+   and search pricing; default to a current model). Cache by (sector, window, as-of date);
+   regenerate only on explicit click; surface the ~$0.05–0.15 per-brief cost in the button help.
+4. The page stays fully functional without the `personas` extra (existing `_personas.py` gating).
+
+DoD: template golden test; UI degrades gracefully without the extra; caption present.
+**Don't:** auto-generate on page load; nothing from a brief feeds any computation or ranking.
+
+## Phase 15 — TW money-flow lenses (法人・大戶・投信代理)
+
+> Need 3, decided 2026-07-11: institutional flows (daily) + TDCC big holders (weekly), with 投信
+> net buy/sell as the **active-money proxy** — the user explicitly chose **not** to scrape
+> per-ETF PCF holdings; do not add such scrapers. Everything here is descriptive; the 11.5
+> caption rule binds every view.
+
+### 15.1 Per-stock chips dashboard — execute card 11.5  `[ ]`
+
+**Card 11.5 verbatim** (per-symbol 外資/投信 cumulative net buy vs price, foreign holding %,
+margin balance; market top-10 lists). Wave 1: its data layer (11.3) is already wired. Mark both
+checkboxes in the same PR.
+
+### 15.2 Market-wide money-flow page  `[ ]`
+
+**Goal:** where TW money went — day/week/month, market-wide.
+**Files:** `src/heimdall/data/providers/finmind.py` (bulk per-date methods + golden tests), a
+per-(dataset, date) disk cache, new `src/heimdall/ui/flows_page.py`, `i18n.py`,
+`tests/test_ui_smoke.py`.
+
+Steps:
+1. Bulk per-date fetch (the 11.3 step-1 probe, now load-bearing): query each chip dataset with
+   `start_date == end_date` and **no** `data_id` → whole market in ~1 request/day/dataset. If the
+   free tier refuses bulk, fall back to a cached-universe loop and label the coverage on-page.
+2. Cache per (dataset, date) parquet, delta-only — a month of history ≈ 60–90 requests, well
+   inside quota.
+3. Page, with 日/週/月 = 1/5/21-session aggregation: market net buy by investor type
+   (外資/投信/自營); by-sector rollup (needs 14.1 — hide the block gracefully if `sector` is
+   absent); top-N net buy/sell names by NT$ value (net shares × close); **投信 streak ranking**
+   (consecutive net-buy/-sell days) labelled 「主動資金代理 — 含全體投信基金（主動+被動+非ETF）」;
+   foreign holding-ratio Δ ranking.
+4. Fixed caption; zh strings.
+
+DoD: aggregation known-answer tests on synthetic frames; bulk-path golden test from saved JSON;
+AppTest smoke incl. the no-cache empty state; gates green.
+**Don't:** per-ETF holdings scrapers (user decision 2026-07-11); nothing presented as a
+recommendation ranking.
+
+### 15.3 Big-holder (大戶) weekly view  `[ ]`
+
+**Goal:** the "大戶動向" lens on its honest weekly cadence. Needs 13.9.
+**Files:** extend `flows_page.py` (weekly tab) + the per-symbol view in `chips_page.py`,
+`i18n.py`, tests.
+
+Steps:
+1. Weekly tab on the flows page: top risers/fallers in the ≥ 400-lot holders' share-% (4-week Δ),
+   filtered by the §3 liquidity floor so micro-caps don't dominate; 月 view = trailing 4 files vs
+   the prior 4.
+2. Per-symbol overlay in the chips dashboard: big-holder % vs price (dual axis), weekly points.
+3. Same fixed caption; state the weekly publication lag on-page (from 13.9's `available_at`).
+
+DoD: known-answer Δ math tests; AppTest smoke; zh strings; gates green.
+**Don't:** interpolate the weekly series to daily; no ranking framed as picks.
+
+## Phase 16 — Trust & usability layer
+
+> Need 4, decided 2026-07-11: three scheduled cards + a backlog. Recorded **non-goals**
+> (unchanged institutions): no paid 分點/broker-branch data, no sub-month signals, no
+> social-sentiment scraping, no black-box weight optimizers. 12.3 stays armed-but-unscheduled.
+
+### 16.1 Forward performance ledger (live track record)  `[ ]`
+
+**Goal:** freeze each month's certified picks and show the realized, costed track record — the
+strongest honest trust feature the app can have.
+**Files:** new `src/heimdall/research/ledger.py`, `signals/ledger/` (committed), a Today's Picks
+section, `tests/test_research_ledger.py`.
+
+Steps:
+1. `freeze(signal, snapshot)` → `signals/ledger/{name}_v{v}/{YYYY-MM}.json` (as_of, spec hash,
+   picks + scores). Append-only: a second freeze of the same month refuses, mirroring
+   certification immutability. Only months ≥ the certification date — **no backfill** (pre-cert
+   history is the OOS report's job; backfilled rows would masquerade as live).
+2. Realized view: each frozen cohort's forward returns vs the benchmark and vs the EW eligible
+   universe, recomputed from the panel — the same sanctioned post-2023 monitoring basis as 12.2
+   (cite it in the module docstring); cumulative "followed every month" equity curve at G4's
+   20 bps per side.
+3. UI: track-record table + curve + the survivorship stamp and certification date, beside the
+   existing evidence box.
+
+DoD: freeze-idempotency test; known-answer curve math incl. costs; AppTest smoke; gates green.
+**Don't:** backfill; don't track non-certified signals; don't drop the stamp.
+
+### 16.2 Scheduled refresh + notifications (completes 12.1)  `[ ]`
+
+**Goal:** the weekly chore runs itself and pings the user only when something needs them.
+**Files:** `docs/OPERATIONS.md`, a launchd plist template (checked in), new
+`src/heimdall/ops/notify.py` (CLI-altitude module: may import research/data; imported by no core
+module), tests.
+
+Steps:
+1. Weekly launchd job chaining the existing resumable CLIs: snapshot refresh → panel extension →
+   `research.monitor` → (first weekday of the month) `ledger.freeze`.
+2. Notifier with pluggable channels from `.env`: SMTP email and/or a Telegram bot token (LINE
+   Notify is discontinued — do not use). Unset ⇒ print-only dry run. Events: cohort frozen;
+   certified → under_review flip; snapshot staleness > 5 business days; job failure.
+3. `docs/OPERATIONS.md`: install/verify/uninstall steps + what each notification means.
+
+DoD: message-formatting + dry-run tests (no network); plist passes `plutil -lint`; mark **12.1
+`[x]`** in the same PR with a "completed by 16.2" note.
+**Don't:** schedulers that require the Streamlit app to be running; no notification spam (one
+digest per run).
+
+### 16.3 Monthly rebalance helper  `[ ]`
+
+**Goal:** from "here are the picks" to "here is exactly what to change", with costs — an
+execution aid, never an order system.
+**Files:** new `src/heimdall/research/rebalance.py` (pure math), a Today's Picks section, tests.
+
+Steps:
+1. Diff current picks vs the latest frozen cohort (16.1): added / dropped / kept.
+2. Allocation calculator: budget input → equal-weight targets → share counts. TW: 1,000-share
+   board lots with an odd-lot toggle; US: whole shares. Costs: TW 0.1425% fee per side + 0.3%
+   sell tax (editable constants); US flat-or-bps setting.
+3. CSV export (symbol, side, shares, reference close, est. cost). Fixed caption: *an execution
+   aid, not an order system, not advice; orders are placed at your broker* — both languages.
+
+DoD: known-answer lot/cost tests (incl. odd-lot rounding and the sell-tax asymmetry); AppTest
+smoke; zh strings.
+**Don't:** broker-API integration; no sizing schemes beyond equal weight (that would be a spec
+change requiring certification).
+
+### 16.B Backlog — promote to a full card with the user before executing
+
+- **Regime dashboard** — benchmark concentration (top-name weight), EW−CW return spread,
+  certified signals' trailing skill; descriptive only, never a gate.
+- **Real-holdings risk view** — the user's actual portfolio through the Bridgewater risk module,
+  side by side with the picks book.
+- **Data-integrity sentinel** — yfinance-vs-TWSE close spot-checks, scheduled seam scans, a
+  staleness rollup across datasets.
+- **TW event calendar** — 月營收 dates, ex-div, 股東會 short-recall windows, 處置股 list;
+  display-only (a 處置股 hygiene filter would be a §3 change → its own card + re-certification).
+- **Multi-signal combiner** — unlocks at ≥ 2 certified signals; an equal-weight blend is its own
+  spec + family through the full pipeline.
+
 ---
 
 **Sequencing:** 7.1 → 7.2 → 7.3 → 8.1 → 8.2 → 8.3 → 9.1 → 9.2 → 10.x → 11.x → 12.x.
-The first "north-star moment" is completing 9.2 + one certified 10.x signal.
+The first "north-star moment" is completing 9.2 + one certified 10.x signal. ✅ Reached
+2026-07-09 via the TW route (`tw-revenue-momentum v1`).
+
+**Phases 13–16 sequencing (2026-07-11)** — waves override top-to-bottom; within a wave, any
+order:
+
+- **Wave 1 (independent):** 13.1 · 15.1 (=11.5) · 13.7 (start early — it runs across quota
+  windows in the background).
+- **Wave 2:** 13.8 (needs 13.7) · 15.2 · 14.1 → 14.2.
+- **Wave 3:** 13.9 → 15.3 · 13.3 (=12.4) → 13.4 → 13.5 → 13.6 · 14.3 · 16.1 → 16.2 → 16.3.
+- 13.2 runs whenever 13.1 produces a survivor. 12.3 stays unscheduled until the user asks. Every
+  vault touch (13.2, 13.6, 13.8) stops for a recorded user go/no-go first.
