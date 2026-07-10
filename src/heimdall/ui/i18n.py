@@ -46,6 +46,20 @@ _ZH: dict[str, str] = {
     "Optimize": "最佳化",
     "Save": "儲存",
     "Years of history": "歷史年數",
+    # --- shared nav / empty states (_nav, _freshness) ---
+    "This page needs a snapshot to work, and none exists yet.": (
+        "這個頁面需要「選股快照」才能運作，目前還沒有建立。"
+    ),
+    "Go build one": "前往建立",
+    "Refresh it now": "立即更新",
+    "Or from a terminal: `uv run python -m heimdall.screener.build`": (
+        "或用終端機：`uv run python -m heimdall.screener.build`"
+    ),
+    "fresh": "新鮮",
+    "aging": "略舊",
+    "stale": "已過期",
+    "updated today": "今天更新",
+    "bdays old": "個營業日前",
     # --- AI report (_personas) ---
     "🤖 AI report (optional)": "🤖 AI 報告（選用）",
     "Set `ANTHROPIC_API_KEY` in `.env` and install the `personas` extra "
@@ -56,9 +70,6 @@ _ZH: dict[str, str] = {
     "Writing report via Claude…": "正在透過 Claude 撰寫報告…",
     # --- screener ---
     "📊 Screener": "📊 選股器",
-    "No snapshot found. Build one first:\n\n`uv run python -m heimdall.screener.build`": (
-        "找不到快照，請先建立：\n\n`uv run python -m heimdall.screener.build`"
-    ),
     "Snapshot is empty.": "快照是空的。",
     "Market": "市場",
     "US": "美股",
@@ -99,12 +110,13 @@ _ZH: dict[str, str] = {
     "Only signals that passed out-of-sample certification render here — nothing else, ever.": (
         "只有通過樣本外認證的訊號會出現在這裡——除此之外,永遠不顯示任何排名。"
     ),
-    "No certified signal yet for this market — an honest empty state. "
-    "The referee (docs/RESEARCH_PLAYBOOK.md) has passed nothing; the first "
-    "candidates are registered in Phase 10 of docs/ROADMAP_V2.md.": (
-        "這個市場目前沒有任何已認證的訊號——誠實留白。"
-        "裁判(docs/RESEARCH_PLAYBOOK.md)尚未放行任何訊號;"
-        "第一批候選將在 docs/ROADMAP_V2.md 的 Phase 10 登記。"
+    "No certified signal yet for this market. Every ranking shown here must first "
+    "pass strict statistical testing on data it has never been tuned on — most "
+    "candidate signals fail, and none currently qualifies. This is intentional "
+    "honesty, not a bug: nothing is shown here until a signal has actually earned it.": (
+        "這個市場目前沒有已認證的訊號。這裡顯示的每一個排名，都必須先通過嚴格的"
+        "「樣本外」統計檢驗——大多數候選訊號會失敗，目前也還沒有任何一個通過。"
+        "這是刻意的誠實留白，不是故障：沒有訊號真正通過驗證之前，這裡不會顯示任何排名。"
     ),
     "Snapshot is {n} business days old — refresh it on the Build data page.": (
         "快照已 {n} 個營業日未更新——請到「建立資料」頁重新整理。"
@@ -209,6 +221,9 @@ _ZH: dict[str, str] = {
     "Scenarios — illustrative P/E bands (15× / 22× / 30× latest EPS)": (
         "情境 — 示意性 P/E 區間（最新 EPS 的 15× / 22× / 30×）"
     ),
+    "Bear scenario": "空頭情境",
+    "Base scenario": "中性情境",
+    "Bull scenario": "多頭情境",
     # --- technical ---
     "📐 Technical — Morgan Stanley lens": "📐 技術面 — Morgan Stanley 視角",
     "Trading Plan Summary": "交易計畫摘要",
@@ -290,9 +305,6 @@ _ZH: dict[str, str] = {
     "Cheap & profitable": "便宜又賺錢",
     "Oversold quality": "超賣的好公司",
     "Above 200-day trend": "站上年線",
-    "No snapshot. Build one: `uv run python -m heimdall.screener.build`": (
-        "找不到快照，請先建立：`uv run python -m heimdall.screener.build`"
-    ),
     "No rows for this market in the snapshot.": "快照中沒有這個市場的資料。",
     "No panel data (network/symbol issue).": "沒有面板資料（網路／代號問題）。",
     "⚠️ Over a **current** universe these results carry survivorship bias — today's "

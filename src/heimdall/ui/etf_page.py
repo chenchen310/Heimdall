@@ -9,6 +9,7 @@ import streamlit as st
 
 from heimdall.analytics import optimize_portfolio, prices_wide
 from heimdall.data.symbols import SymbolError, parse_symbol
+from heimdall.ui import _glossary
 from heimdall.ui._data import get_ohlcv
 from heimdall.ui._personas import ai_report
 from heimdall.ui.i18n import t
@@ -45,9 +46,11 @@ def render() -> None:
             return
 
     cols = st.columns(3)
-    cols[0].metric("Expected return", f"{pw.expected_return:.1%}")
-    cols[1].metric("Volatility", f"{pw.volatility:.1%}")
-    cols[2].metric("Sharpe", f"{pw.sharpe:.2f}")
+    cols[0].metric(
+        "Expected return", f"{pw.expected_return:.1%}", help=_glossary.help("expected_return")
+    )
+    cols[1].metric("Volatility", f"{pw.volatility:.1%}", help=_glossary.help("annual_vol"))
+    cols[2].metric("Sharpe", f"{pw.sharpe:.2f}", help=_glossary.help("sharpe"))
     st.subheader(t("Weights"))
     st.bar_chart(pd.Series(pw.weights))
     st.caption(t("History-optimized weights are noisy — a starting point, not gospel."))

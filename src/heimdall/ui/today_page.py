@@ -27,8 +27,11 @@ from heimdall.research.monitor import TRAILING, load_monitoring
 from heimdall.research.spec import SignalSpec, load_spec
 from heimdall.research.today import freshness, todays_picks
 from heimdall.screener.snapshot import MONETARY_FIELDS
+from heimdall.ui import _glossary
 from heimdall.ui._data import snapshot
+from heimdall.ui._freshness import freshness_word
 from heimdall.ui._markets import market_radio
+from heimdall.ui._nav import no_snapshot_cta, switch_to
 from heimdall.ui.i18n import t
 
 _STALE_BDAYS = 5
@@ -107,15 +110,21 @@ def _evidence_box(region: str, report: dict[str, object]) -> None:
         f"{cast('float', report['portfolio_beat_rate']):.0%}",
         f"95% CI {lo:.0%}–{hi:.0%}",
         delta_color="off",
+        help=_glossary.help("beat_rate_book"),
     )
     c2.metric(
         t("Selection skill (vs equal-weight)"),
         f"{cast('float', report['selection_alpha_mean']):+.1%}",
         f"NW-t {cast('float', report['selection_alpha_t']):+.1f}",
         delta_color="off",
+        help=_glossary.help("selection_skill"),
     )
-    c3.metric("IC", f"{_gate_value(report, 'G1_ic'):+.3f}")
-    c4.metric(t("OOS cohorts"), str(len(cast("list[object]", report.get("cohorts", [])))))
+    c3.metric("IC", f"{_gate_value(report, 'G1_ic'):+.3f}", help=_glossary.help("ic"))
+    c4.metric(
+        t("OOS cohorts"),
+        str(len(cast("list[object]", report.get("cohorts", [])))),
+        help=_glossary.help("oos_cohorts"),
+    )
     st.caption(
         t(
             "Beat rate = how often the equal-weight book beat the benchmark (includes the "
@@ -148,9 +157,10 @@ def render() -> None:
     if not specs and not under_review:
         st.info(
             t(
-                "No certified signal yet for this market — an honest empty state. "
-                "The referee (docs/RESEARCH_PLAYBOOK.md) has passed nothing; the first "
-                "candidates are registered in Phase 10 of docs/ROADMAP_V2.md."
+                "No certified signal yet for this market. Every ranking shown here must first "
+                "pass strict statistical testing on data it has never been tuned on — most "
+                "candidate signals fail, and none currently qualifies. This is intentional "
+                "honesty, not a bug: nothing is shown here until a signal has actually earned it."
             )
         )
         return  # the rule: nothing renders without a certified registry row
@@ -163,10 +173,11 @@ def render() -> None:
     try:
         snap = snapshot()
     except FileNotFoundError:
-        st.warning(
-            t("No snapshot found. Build one first:\n\n`uv run python -m heimdall.screener.build`")
-        )
+        no_snapshot_cta(key="today_nosnap")
         return
+    word = freshness_word(snap)
+    if word:
+        st.caption(word)
     stale = freshness(snap)
     if stale > _STALE_BDAYS:
         st.warning(
@@ -174,6 +185,7 @@ def render() -> None:
                 n=stale
             )
         )
+        switch_to("Build data", key="today_stale_cta", label="🗂 " + t("Refresh it now"))
 
     currency = REGION_CURRENCY[region]
     for spec, entry in specs:

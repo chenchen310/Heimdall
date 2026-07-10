@@ -10,8 +10,11 @@ from heimdall.screener import store
 from heimdall.screener.engine import evaluate
 from heimdall.screener.model import Predicate, Screen
 from heimdall.screener.snapshot import MONETARY_FIELDS, split_by_region
+from heimdall.ui import _glossary
 from heimdall.ui._data import snapshot
+from heimdall.ui._freshness import freshness_word
 from heimdall.ui._markets import market_radio
+from heimdall.ui._nav import no_snapshot_cta
 from heimdall.ui.i18n import t
 
 # Scalar-comparison operators exposed in the table editor (lists/between via saved JSON).
@@ -47,9 +50,7 @@ def render() -> None:
     try:
         full = snapshot()
     except FileNotFoundError:
-        st.warning(
-            t("No snapshot found. Build one first:\n\n`uv run python -m heimdall.screener.build`")
-        )
+        no_snapshot_cta(key="screener_nosnap")
         return
 
     # US and Taiwan report in different currencies (USD vs TWD); mixing them in one
@@ -63,7 +64,9 @@ def render() -> None:
     currency = REGION_CURRENCY[region]
 
     as_of = pd.to_datetime(snap["as_of"]).max().date() if "as_of" in snap else "n/a"
-    st.caption(f"{len(snap)} {t('symbols')} · {currency} · {t('as of')} {as_of}")
+    word = freshness_word(snap)
+    caption = f"{len(snap)} {t('symbols')} · {currency} · {t('as of')} {as_of}"
+    st.caption(f"{caption} · {word}" if word else caption)
     fields = _numeric_fields(snap)
 
     # --- choose a starting point: preset or saved screen --------------------
@@ -172,6 +175,12 @@ def render() -> None:
         colcfg["added"] = st.column_config.CheckboxColumn(
             "➕", pinned=True, help=t("Appears only because a condition is off")
         )
+    for col in display.columns:  # hover help for every field the glossary knows
+        if col in colcfg:
+            continue
+        text = _glossary.help(col.split(" (")[0])  # strip a currency suffix like " (USD)"
+        if text:
+            colcfg[col] = st.column_config.Column(help=text)
     st.dataframe(display, width="stretch", hide_index=True, column_config=colcfg)
 
     # --- save the current screen --------------------------------------------

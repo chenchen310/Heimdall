@@ -7,6 +7,7 @@ from datetime import date, timedelta
 import streamlit as st
 
 from heimdall.analytics import SECTOR_ETFS, sector_rotation
+from heimdall.ui import _glossary
 from heimdall.ui._data import get_ohlcv
 from heimdall.ui._personas import ai_report
 from heimdall.ui.i18n import t
@@ -28,9 +29,13 @@ def render() -> None:
         rep = sector_rotation(etfs)
 
     cols = st.columns(3)
-    cols[0].metric(t("Tilt"), rep.tilt)
-    cols[1].metric("Offense score", f"{rep.offense_score:.1%}")
-    cols[2].metric("Defense score", f"{rep.defense_score:.1%}")
+    cols[0].metric(t("Tilt"), rep.tilt, help=_glossary.help("tilt"))
+    cols[1].metric(
+        "Offense score", f"{rep.offense_score:.1%}", help=_glossary.help("offense_defense_score")
+    )
+    cols[2].metric(
+        "Defense score", f"{rep.defense_score:.1%}", help=_glossary.help("offense_defense_score")
+    )
     st.dataframe(
         rep.ranks[["sector", "ret_1m", "ret_3m", "ret_6m", "score", "rank"]].round(3),
         width="stretch",

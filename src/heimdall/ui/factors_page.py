@@ -14,8 +14,10 @@ from heimdall.factors.panel import PanelData, build_panel
 from heimdall.factors.scoring import DEFAULT_WEIGHTS, FACTOR_NAMES, factor_scores
 from heimdall.factors.validate import information_coefficient, quantile_spread
 from heimdall.screener.snapshot import DEFAULT_UNIVERSE, TW_UNIVERSE, split_by_region
+from heimdall.ui import _glossary
 from heimdall.ui._data import snapshot
 from heimdall.ui._markets import market_radio
+from heimdall.ui._nav import no_snapshot_cta
 from heimdall.ui.i18n import t
 
 # Curated per-market universe for the point-in-time portfolio backtest. Returns are
@@ -73,7 +75,7 @@ def _ranking_tab(region: str) -> None:
     try:
         snap = split_by_region(snapshot()).get(region)
     except FileNotFoundError:
-        st.warning(t("No snapshot. Build one: `uv run python -m heimdall.screener.build`"))
+        no_snapshot_cta(key="factors_nosnap")
         return
     if snap is None or snap.empty:
         st.warning(t("No rows for this market in the snapshot."))
@@ -91,16 +93,22 @@ def _ranking_tab(region: str) -> None:
         "revenue_growth_yoy",
     ]
     show = [c for c in cols if c in scored.columns]
-    st.dataframe(
-        scored[show].round(1),
-        width="stretch",
-        hide_index=True,
-        column_config={
-            "composite_score": st.column_config.ProgressColumn(
-                "composite", min_value=0, max_value=100, format="%d"
-            )
-        },
-    )
+    colcfg: dict[str, object] = {
+        "composite_score": st.column_config.ProgressColumn(
+            "composite",
+            min_value=0,
+            max_value=100,
+            format="%d",
+            help=_glossary.help("composite_score"),
+        )
+    }
+    for col in show:
+        if col in colcfg:
+            continue
+        text = _glossary.help(col)
+        if text:
+            colcfg[col] = st.column_config.Column(help=text)
+    st.dataframe(scored[show].round(1), width="stretch", hide_index=True, column_config=colcfg)
 
 
 def _portfolio_tab(region: str) -> None:
@@ -136,10 +144,20 @@ def _portfolio_tab(region: str) -> None:
 
     f, b = res.stats["factor_topN"], res.stats["equal_weight"]
     cols = st.columns(4)
-    cols[0].metric("Factor CAGR", f"{f['cagr']:.1%}", f"{f['cagr'] - b['cagr']:+.1%} vs benchmark")
-    cols[1].metric("Factor Sharpe", f"{f['sharpe']:.2f}", f"{f['sharpe'] - b['sharpe']:+.2f}")
-    cols[2].metric("Max drawdown", f"{f['max_drawdown']:.1%}")
-    cols[3].metric("Mean IC", f"{ic.mean_ic:+.3f}", f"t={ic.t_stat:.1f}")
+    cols[0].metric(
+        "Factor CAGR",
+        f"{f['cagr']:.1%}",
+        f"{f['cagr'] - b['cagr']:+.1%} vs benchmark",
+        help=_glossary.help("cagr"),
+    )
+    cols[1].metric(
+        "Factor Sharpe",
+        f"{f['sharpe']:.2f}",
+        f"{f['sharpe'] - b['sharpe']:+.2f}",
+        help=_glossary.help("sharpe"),
+    )
+    cols[2].metric("Max drawdown", f"{f['max_drawdown']:.1%}", help=_glossary.help("max_drawdown"))
+    cols[3].metric("Mean IC", f"{ic.mean_ic:+.3f}", f"t={ic.t_stat:.1f}", help=_glossary.help("ic"))
 
     fig = go.Figure()
     for name, color in [("factor_topN", "#2962ff"), ("equal_weight", "#9e9e9e")]:

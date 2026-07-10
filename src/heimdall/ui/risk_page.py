@@ -8,6 +8,7 @@ import streamlit as st
 
 from heimdall.analytics import risk_report
 from heimdall.data.symbols import SymbolError, parse_symbol
+from heimdall.ui import _glossary
 from heimdall.ui._data import get_ohlcv
 from heimdall.ui._personas import ai_report
 from heimdall.ui.i18n import t
@@ -35,15 +36,19 @@ def render() -> None:
 
     st.subheader(t("Risk dashboard"))
     row1 = st.columns(4)
-    row1[0].metric("Annual vol", f"{r.annual_vol:.1%}")
-    row1[1].metric(f"Beta vs {benchmark}", f"{r.beta:.2f}")
-    row1[2].metric("Max drawdown", f"{r.max_drawdown:.1%}")
-    row1[3].metric("Liquidity", r.liquidity)
+    row1[0].metric("Annual vol", f"{r.annual_vol:.1%}", help=_glossary.help("annual_vol"))
+    row1[1].metric(f"Beta vs {benchmark}", f"{r.beta:.2f}", help=_glossary.help("beta"))
+    row1[2].metric("Max drawdown", f"{r.max_drawdown:.1%}", help=_glossary.help("max_drawdown"))
+    row1[3].metric("Liquidity", r.liquidity, help=_glossary.help("liquidity"))
     row2 = st.columns(4)
-    row2[0].metric("VaR 95% (1-day)", f"{r.var_95:.2%}")
-    row2[1].metric("CVaR 95% (1-day)", f"{r.cvar_95:.2%}")
-    row2[2].metric("Sharpe", f"{r.sharpe:.2f}")
-    row2[3].metric("Recession stress", f"{r.recession_stress:.1%}")
+    row2[0].metric("VaR 95% (1-day)", f"{r.var_95:.2%}", help=_glossary.help("var_95"))
+    row2[1].metric("CVaR 95% (1-day)", f"{r.cvar_95:.2%}", help=_glossary.help("cvar_95"))
+    row2[2].metric("Sharpe", f"{r.sharpe:.2f}", help=_glossary.help("sharpe"))
+    row2[3].metric(
+        "Recession stress",
+        f"{r.recession_stress:.1%}",
+        help=_glossary.help("recession_stress"),
+    )
     st.caption(
         f"Correlation to {benchmark}: {r.correlation:.2f} · recession stress = Beta × a −30% "
         "market shock (illustrative). Treat all figures as point estimates."

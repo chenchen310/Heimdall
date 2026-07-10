@@ -63,11 +63,12 @@ def test_default_language_is_traditional_chinese(
     # No language chosen yet — the sidebar selector's first option (繁體中文) is default.
     monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
     _write_snapshot(tmp_path)
+    _point_registry_at(tmp_path, monkeypatch)  # isolate from the real repo's registry.json
     st.cache_data.clear()
 
     at = AppTest.from_file(APP).run(timeout=60)
     assert not at.exception
-    assert [h.value for h in at.header] == ["📊 選股器"]
+    assert [h.value for h in at.header] == ["🎯 今日候選"]  # the new default landing page
     lang_select = [s for s in at.sidebar.selectbox if "Language" in s.label][0]
     assert lang_select.value == "繁體中文"
 
@@ -79,6 +80,7 @@ def test_screener_page_renders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 
     _force_english(monkeypatch)
     at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Screener")  # Today's Picks is the default landing page now
 
     assert not at.exception  # the script ran cleanly (empty ElementList)
     assert [h.value for h in at.header] == ["📊 Screener"]
@@ -167,6 +169,7 @@ def test_screener_labels_money_columns_and_keeps_symbol(
 
     _force_english(monkeypatch)
     at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Screener")
     assert not at.exception
     cols = list(at.dataframe[-1].value.columns)
     assert "symbol" in cols  # kept (and pinned via column_config)
@@ -190,6 +193,7 @@ def test_screener_warns_loading_money_screen_in_other_market(
 
     _force_english(monkeypatch)
     at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Screener")
     [s for s in at.selectbox if s.label == "…or load saved"][0].set_value("us-bigcap").run()
     at.radio[0].set_value("Taiwan").run()  # a different-currency market
     assert any("market_cap" in w.value for w in at.warning)
@@ -215,6 +219,7 @@ def test_screener_disabled_condition_widens_and_marks_extra(
 
     _force_english(monkeypatch)
     at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Screener")
     [s for s in at.selectbox if s.label == "…or load saved"][0].set_value("explore").run()
     assert not at.exception
     out = at.dataframe[-1].value
@@ -392,7 +397,8 @@ def test_today_page_shows_drift_banner_for_under_review(
 
 def test_sidebar_nav_is_grouped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
-    _write_snapshot(tmp_path)  # default Screener page renders cleanly
+    _write_snapshot(tmp_path)
+    _point_registry_at(tmp_path, monkeypatch)  # isolate the default (Today's Picks) landing page
     st.cache_data.clear()
 
     _force_english(monkeypatch)
@@ -413,6 +419,22 @@ def test_sidebar_nav_is_grouped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     headers = " ".join(m.value for m in at.sidebar.markdown)
     for group in ("Help", "Data", "Stock picking", "Backtest", "Analyst lenses"):
         assert group in headers
+
+
+def test_default_landing_page_is_todays_picks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The north-star page renders first, with no navigation — the Phase 1 fix for a new
+    user's first paint being a dead-end "no snapshot" warning on the Screener."""
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_snapshot(tmp_path)
+    _point_registry_at(tmp_path, monkeypatch)
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    assert not at.exception
+    assert [h.value for h in at.header] == ["🎯 Today's Picks"]
 
 
 def test_guide_page_renders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

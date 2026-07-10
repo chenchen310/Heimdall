@@ -69,7 +69,7 @@ st.sidebar.title("🛡️ Heimdall")
 i18n.language_selector()
 
 # Render each group as a header + its page buttons; the active page is highlighted.
-st.session_state.setdefault("page", "Screener")
+st.session_state.setdefault("page", "Today's Picks")
 for _group, _names in NAV.items():
     st.sidebar.markdown(f"**{i18n.t(_group)}**")
     for _name in _names:

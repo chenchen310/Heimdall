@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 from heimdall.analytics import technical_report
 from heimdall.data.symbols import SymbolError, parse_symbol
 from heimdall.factors.indicators import bollinger
+from heimdall.ui import _glossary
 from heimdall.ui._data import get_ohlcv
 from heimdall.ui._personas import ai_report
 from heimdall.ui.i18n import t
@@ -36,16 +38,20 @@ def render() -> None:
     st.subheader(t("Trading Plan Summary"))
     box = st.columns(5)
     box[0].metric("Price", f"{tr.price:.2f}")
-    box[1].metric("Entry", f"{s.entry:.2f}")
-    box[2].metric("Stop", f"{s.stop:.2f}", f"-{s.risk:.2f}")
-    box[3].metric("Target 1 (1R)", f"{s.targets[0]:.2f}")
+    box[1].metric("Entry", f"{s.entry:.2f}", help=_glossary.help("entry_stop_target"))
+    box[2].metric(
+        "Stop", f"{s.stop:.2f}", f"-{s.risk:.2f}", help=_glossary.help("entry_stop_target")
+    )
+    box[3].metric("Target 1 (1R)", f"{s.targets[0]:.2f}", help=_glossary.help("entry_stop_target"))
     trend = "/".join(tr.trend[k][0].upper() for k in ("short", "medium", "long"))
-    box[4].metric("Trend S/M/L", trend)
+    box[4].metric("Trend S/M/L", trend, help=_glossary.help("trend_sml"))
     row = st.columns(4)
-    row[0].metric("RSI(14)", f"{tr.rsi_14:.0f}")
-    row[1].metric("ATR(14)", f"{tr.atr_14:.2f}")
-    row[2].metric("Bollinger %B", f"{tr.bollinger['percent_b']:.2f}")
-    row[3].metric("MA cross", tr.ma_cross or "—")
+    row[0].metric("RSI(14)", f"{tr.rsi_14:.0f}", help=_glossary.help("rsi_14"))
+    row[1].metric("ATR(14)", f"{tr.atr_14:.2f}", help=_glossary.help("atr_14"))
+    row[2].metric(
+        "Bollinger %B", f"{tr.bollinger['percent_b']:.2f}", help=_glossary.help("bollinger_pctb")
+    )
+    row[3].metric("MA cross", tr.ma_cross or "—", help=_glossary.help("ma_cross"))
 
     # --- chart: candlestick + Bollinger + support/resistance + setup levels ---
     view = ohlcv.tail(180)
@@ -94,9 +100,12 @@ def render() -> None:
 
     cols = st.columns(2)
     cols[0].caption(t("Support / Resistance"))
-    cols[0].write({"support": tr.support, "resistance": tr.resistance})
+    sr_rows = [{"level": f"R{i + 1}", "price": round(p, 2)} for i, p in enumerate(tr.resistance)]
+    sr_rows += [{"level": f"S{i + 1}", "price": round(p, 2)} for i, p in enumerate(tr.support)]
+    cols[0].dataframe(pd.DataFrame(sr_rows), width="stretch", hide_index=True)
     cols[1].caption(t("Fibonacci retracement"))
-    cols[1].write(tr.fibonacci)
+    fib_rows = [{"ratio": k, "price": round(v, 2)} for k, v in tr.fibonacci.items()]
+    cols[1].dataframe(pd.DataFrame(fib_rows), width="stretch", hide_index=True)
 
     payload = {
         "symbol": symbol,

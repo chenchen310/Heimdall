@@ -9,6 +9,7 @@ import streamlit as st
 
 from heimdall.analytics import fundamental_report
 from heimdall.data.symbols import SymbolError, parse_symbol
+from heimdall.ui import _glossary
 from heimdall.ui._data import get_fundamentals, get_monthly_revenue, get_ohlcv
 from heimdall.ui._personas import ai_report
 from heimdall.ui.i18n import t
@@ -43,11 +44,19 @@ def render() -> None:
     # --- Rating Summary Box ---
     st.subheader(t("Rating Summary"))
     box = st.columns(5)
-    box[0].metric("Rating", rep.rating)
-    box[1].metric("Score", f"{rep.rating_score:.0f}/100" if pd.notna(rep.rating_score) else "n/a")
-    box[2].metric("P/E", f"{rep.valuation.get('pe', float('nan')):.1f}")
-    box[3].metric("P/S", f"{rep.valuation.get('ps', float('nan')):.1f}")
-    box[4].metric("Rev CAGR", f"{rep.growth.get('revenue_cagr', float('nan')):.1%}")
+    box[0].metric("Rating", rep.rating, help=_glossary.help("rating_score"))
+    box[1].metric(
+        "Score",
+        f"{rep.rating_score:.0f}/100" if pd.notna(rep.rating_score) else "n/a",
+        help=_glossary.help("rating_score"),
+    )
+    box[2].metric("P/E", f"{rep.valuation.get('pe', float('nan')):.1f}", help=_glossary.help("pe"))
+    box[3].metric("P/S", f"{rep.valuation.get('ps', float('nan')):.1f}", help=_glossary.help("ps"))
+    box[4].metric(
+        "Rev CAGR",
+        f"{rep.growth.get('revenue_cagr', float('nan')):.1%}",
+        help=_glossary.help("rev_cagr"),
+    )
 
     # --- history ---
     hist = rep.history
@@ -68,7 +77,16 @@ def render() -> None:
     right.subheader(t("Bear case"))
     right.markdown("\n".join(f"- {x}" for x in rep.bear) or "—")
     st.caption(t("Scenarios — illustrative P/E bands (15× / 22× / 30× latest EPS)"))
-    st.write({k: round(v, 2) for k, v in rep.scenarios.items()})
+    scen_cols = st.columns(3)
+    for i, (key, mult, label) in enumerate(
+        [
+            ("bear", "15×", t("Bear scenario")),
+            ("base", "22×", t("Base scenario")),
+            ("bull", "30×", t("Bull scenario")),
+        ]
+    ):
+        if key in rep.scenarios:
+            scen_cols[i].metric(f"{label} ({mult})", f"{rep.scenarios[key]:.2f}")
 
     if sym.market in ("TW", "TWO"):
         _monthly_revenue_panel(symbol)

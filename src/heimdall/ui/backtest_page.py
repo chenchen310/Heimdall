@@ -24,6 +24,7 @@ from heimdall.backtest.setup import trade_setup
 from heimdall.backtest.strategies import STRATEGIES, Param, Strategy
 from heimdall.backtest.sweep import sweep
 from heimdall.data.symbols import SymbolError, parse_symbol
+from heimdall.ui import _glossary
 from heimdall.ui._data import get_ohlcv
 from heimdall.ui.i18n import t
 
@@ -103,12 +104,12 @@ def render() -> None:
 
     # --- headline metrics ---------------------------------------------------
     cols = st.columns(6)
-    cols[0].metric("Total return", f"{m['total_return']:.1%}")
-    cols[1].metric("CAGR", f"{m['cagr']:.1%}")
-    cols[2].metric("Sharpe", f"{m['sharpe']:.2f}")
-    cols[3].metric("Max drawdown", f"{m['max_drawdown']:.1%}")
-    cols[4].metric("Win rate", f"{m['win_rate']:.0%}")
-    cols[5].metric("Trades", f"{int(m['n_trades'])}")
+    cols[0].metric("Total return", f"{m['total_return']:.1%}", help=_glossary.help("total_return"))
+    cols[1].metric("CAGR", f"{m['cagr']:.1%}", help=_glossary.help("cagr"))
+    cols[2].metric("Sharpe", f"{m['sharpe']:.2f}", help=_glossary.help("sharpe"))
+    cols[3].metric("Max drawdown", f"{m['max_drawdown']:.1%}", help=_glossary.help("max_drawdown"))
+    cols[4].metric("Win rate", f"{m['win_rate']:.0%}", help=_glossary.help("win_rate"))
+    cols[5].metric("Trades", f"{int(m['n_trades'])}", help=_glossary.help("n_trades"))
     st.caption(t("Costs and next-bar-open fills applied — treat as an optimistic upper bound."))
 
     # --- equity + drawdown --------------------------------------------------
@@ -140,11 +141,17 @@ def _trade_setup_panel(ohlcv: object) -> None:
         mult = st.slider(t("ATR stop multiple"), 1.0, 5.0, 2.0, step=0.5)
         s = trade_setup(ohlcv, atr_mult=mult)  # type: ignore[arg-type]
         a, b, c, d = st.columns(4)
-        a.metric("Entry", f"{s.entry:.2f}")
-        b.metric("Stop", f"{s.stop:.2f}", f"-{s.risk:.2f}")
-        c.metric("ATR(14)", f"{s.atr:.2f}")
+        a.metric("Entry", f"{s.entry:.2f}", help=_glossary.help("entry_stop_target"))
+        b.metric(
+            "Stop", f"{s.stop:.2f}", f"-{s.risk:.2f}", help=_glossary.help("entry_stop_target")
+        )
+        c.metric("ATR(14)", f"{s.atr:.2f}", help=_glossary.help("atr_14"))
         d.metric("Risk/share", f"{s.risk:.2f}")
-        st.write({f"Target {int(r)}R": f"{t:.2f}" for r, t in zip(s.rr, s.targets, strict=True)})
+        target_cols = st.columns(len(s.targets))
+        for col, r, price in zip(target_cols, s.rr, s.targets, strict=True):
+            col.metric(
+                f"Target {int(r)}R", f"{price:.2f}", help=_glossary.help("entry_stop_target")
+            )
 
 
 def _sweep_panel(
