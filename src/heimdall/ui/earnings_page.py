@@ -1,4 +1,8 @@
-"""Earnings dashboard (JPM lens) — surprise history, beat rate, consensus (FMP)."""
+"""Earnings tab (Stock Workbench, JPM lens) — surprise history, beat rate, consensus (FMP).
+
+Takes ``symbol`` from the workbench's shared picker — no header, no symbol input of
+its own, so it composes cleanly as one of several ``st.tabs`` bodies.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +10,6 @@ import pandas as pd
 import streamlit as st
 
 from heimdall.analytics import earnings_report
-from heimdall.data.symbols import SymbolError, parse_symbol
 from heimdall.ui import _glossary
 from heimdall.ui._data import fmp_provider
 from heimdall.ui._personas import ai_report
@@ -19,16 +22,8 @@ def _fmt(v: float, pct: bool = False) -> str:
     return f"{v:+.1%}" if pct else f"{v:.2f}"
 
 
-def render() -> None:
-    st.header(t("📰 Earnings — JPM lens"))
+def render(symbol: str) -> None:
     st.caption(t("Consensus estimates and the earnings calendar are paid data (via FMP)."))
-    symbol = st.text_input(t("Symbol"), "AAPL.US")
-    try:
-        parse_symbol(symbol)
-    except SymbolError as exc:
-        st.error(str(exc))
-        return
-
     try:
         with st.spinner("Fetching earnings (FMP)…"):
             earnings = fmp_provider().get_earnings_dates(symbol)

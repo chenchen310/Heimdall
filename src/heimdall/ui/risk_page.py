@@ -1,4 +1,8 @@
-"""Risk dashboard (Bridgewater lens) — vol, Beta, drawdown, VaR/CVaR, stress."""
+"""Risk tab (Stock Workbench, Bridgewater lens) — vol, Beta, drawdown, VaR/CVaR, stress.
+
+Takes ``symbol`` from the workbench's shared picker; the benchmark stays a small
+tab-local control (defaults ``SPY.US``) since it's specific to this one lens.
+"""
 
 from __future__ import annotations
 
@@ -14,13 +18,9 @@ from heimdall.ui._personas import ai_report
 from heimdall.ui.i18n import t
 
 
-def render() -> None:
-    st.header(t("⚖️ Risk — Bridgewater lens"))
-    c1, c2 = st.columns([2, 1])
-    symbol = c1.text_input(t("Symbol"), "AAPL.US")
-    benchmark = c2.text_input(t("Benchmark"), "SPY.US")
+def render(symbol: str) -> None:
+    benchmark = st.text_input(t("Benchmark"), "SPY.US", key="wb_risk_benchmark")
     try:
-        parse_symbol(symbol)
         parse_symbol(benchmark)
     except SymbolError as exc:
         st.error(str(exc))

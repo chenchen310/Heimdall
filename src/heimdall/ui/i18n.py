@@ -21,8 +21,10 @@ _ZH: dict[str, str] = {
     "Analyst lenses": "分析師視角",
     "Help": "說明",
     "Guide": "使用說明",
+    "Glossary": "指標辭典",
     "Screener": "選股器",
     "Today's Picks": "今日候選",
+    "Stock Workbench": "個股工作台",
     "Build data": "建立資料",
     "Chart": "個股圖",
     "Fundamental": "基本面",
@@ -38,7 +40,6 @@ _ZH: dict[str, str] = {
         "隨時可重建快照：\n\n`uv run python -m heimdall.screener.build`"
     ),
     # --- common inputs / buttons ---
-    "Symbol": "代號",
     "Symbol (TICKER.MARKET)": "代號（TICKER.MARKET）",
     "Benchmark": "基準",
     "Method": "方法",
@@ -105,6 +106,14 @@ _ZH: dict[str, str] = {
     "Quick start": "快速上手",
     "Reading the numbers — conventions": "看數字的通則",
     "How to read each page": "如何閱讀各分頁的指標",
+    # --- glossary ---
+    "📚 Indicator Glossary": "📚 指標辭典",
+    "What every metric means and how to read it — the same text shown in "
+    "the ⓘ tooltips across the app.": (
+        "每個指標的意思與怎麼看——跟全站 ⓘ 提示框顯示的是同一份內容。"
+    ),
+    "Search (name or keyword)": "搜尋（名稱或關鍵字）",
+    "No indicators match your search.": "沒有符合搜尋的指標。",
     # --- today's picks ---
     "🎯 Today's Picks": "🎯 今日候選",
     "Only signals that passed out-of-sample certification render here — nothing else, ever.": (
@@ -199,13 +208,21 @@ _ZH: dict[str, str] = {
     "Stopped. The partial snapshot is kept; start again to resume.": (
         "已停止。部分快照已保留;再次開始即可續跑。"
     ),
+    # --- stock workbench ---
+    "🔎 Stock Workbench": "🔎 個股工作台",
+    "One symbol, every analyst lens — pick once, explore below.": (
+        "輸入一次代號，下方切換各分析師視角。"
+    ),
+    "Overview": "總覽",
+    "Quick pick from snapshot": "從快照快速挑選",
+    "No snapshot yet — type a symbol directly.": "尚無快照——請直接輸入代號。",
+    "A one-line read from each lens — open a tab below for the full picture.": (
+        "每個視角一句話結論——點下方分頁看完整內容。"
+    ),
     # --- chart ---
-    "📈 Chart": "📈 個股圖",
     "Lookback (days)": "回看天數",
     "No price data for {symbol}.": "{symbol} 沒有價格資料。",
     # --- fundamental ---
-    "🏛 Fundamental — Goldman lens": "🏛 基本面 — Goldman 視角",
-    "Symbol (e.g. AAPL.US, 2330.TW)": "代號（例如 AAPL.US、2330.TW）",
     "No fundamentals found. US filers come from EDGAR (e.g. AAPL.US); "
     "Taiwan from FinMind (e.g. 2330.TW).": (
         "查無基本面。美股來自 EDGAR（例如 AAPL.US）；台股來自 FinMind（例如 2330.TW）。"
@@ -225,16 +242,13 @@ _ZH: dict[str, str] = {
     "Base scenario": "中性情境",
     "Bull scenario": "多頭情境",
     # --- technical ---
-    "📐 Technical — Morgan Stanley lens": "📐 技術面 — Morgan Stanley 視角",
     "Trading Plan Summary": "交易計畫摘要",
     "Support / Resistance": "支撐 / 壓力",
     "Fibonacci retracement": "斐波那契回撤",
     # --- risk ---
-    "⚖️ Risk — Bridgewater lens": "⚖️ 風險 — Bridgewater 視角",
     "Risk dashboard": "風險儀表板",
     "No price data for the symbol or benchmark.": "標的或基準沒有價格資料。",
     # --- earnings ---
-    "📰 Earnings — JPM lens": "📰 財報 — JPM 視角",
     "Consensus estimates and the earnings calendar are paid data (via FMP).": (
         "共識預期與財報日曆屬付費資料（來自 FMP）。"
     ),

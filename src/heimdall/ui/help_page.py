@@ -69,21 +69,23 @@ _CONVENTIONS = {
     ),
 }
 
-# Sidebar-style grouping (mirrors app.NAV, minus the guide itself).
+# Sidebar-style grouping (mirrors app.NAV, minus the guide itself). Chart, Fundamental,
+# Technical, Risk, and Earnings are tabs inside Stock Workbench, not separate pages —
+# but each still gets its own expander here since the *reading* guide doesn't care
+# where a lens is mounted.
 _SECTIONS: dict[str, list[str]] = {
     "Data": ["Build data"],
-    "Stock picking": ["Screener", "Chart"],
-    "Backtest": ["Backtest"],
-    "Analyst lenses": [
+    "Stock picking": [
+        "Stock Workbench",
+        "Chart",
         "Fundamental",
         "Technical",
         "Risk",
         "Earnings",
-        "Rotation",
-        "Factors",
-        "ETF Portfolio",
-        "Macro",
+        "Screener",
     ],
+    "Backtest": ["Backtest"],
+    "Analyst lenses": ["Rotation", "Factors", "ETF Portfolio", "Macro"],
 }
 
 # Per-page guide, focused on *reading* the indicators. {page: {icon, en, zh}}.
@@ -106,6 +108,25 @@ _PAGES: dict[str, dict[str, str]] = {
             "沒設的話部分標的只會有股價。\n"
             "- **快速**分頁＝數十到數百檔，網站內跑、有進度條。**全市場**分頁＝VTI／全台股的背景爬取，"
             "可離開頁面、可續跑。"
+        ),
+    },
+    "Stock Workbench": {
+        "icon": "🔎",
+        "en": (
+            "One symbol, every per-stock lens — pick it once at the top, then explore via "
+            "tabs.\n\n"
+            "- **Overview** — a one-line read from each lens (rating, trend, risk, next "
+            "earnings); open a tab below for the full picture. Any lens that fails (e.g. no "
+            "FMP key) just shows '—', it never blocks the others.\n"
+            "- **Chart / Fundamental / Technical / Risk / Earnings** — the same dashboards as "
+            "before, just sharing one symbol input instead of five."
+        ),
+        "zh": (
+            "一次輸入代號，切換分頁看每個視角。\n\n"
+            "- **總覽** — 每個視角一句話結論（評級、趨勢、風險、下次財報）；想看完整內容點下方"
+            "分頁。任一視角失敗（例如沒設 FMP 金鑰）只會顯示「—」，不會卡住其他視角。\n"
+            "- **個股圖 / 基本面 / 技術面 / 風險 / 財報** — 跟之前一樣的儀表板，只是共用同一個"
+            "代號輸入，不用重複打五次。"
         ),
     },
     "Screener": {

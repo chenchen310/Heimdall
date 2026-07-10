@@ -1,4 +1,8 @@
-"""Fundamental dashboard (Goldman lens) — rating box, history, bull/bear, scenarios."""
+"""Fundamental tab (Stock Workbench, Goldman lens) — rating box, history, bull/bear, scenarios.
+
+Takes ``symbol`` from the workbench's shared picker — no header, no symbol input of
+its own, so it composes cleanly as one of several ``st.tabs`` bodies.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +12,7 @@ import pandas as pd
 import streamlit as st
 
 from heimdall.analytics import fundamental_report
-from heimdall.data.symbols import SymbolError, parse_symbol
+from heimdall.data.symbols import parse_symbol
 from heimdall.ui import _glossary
 from heimdall.ui._data import get_fundamentals, get_monthly_revenue, get_ohlcv
 from heimdall.ui._personas import ai_report
@@ -19,15 +23,7 @@ def _f(v: object, n: int = 3) -> float | None:
     return None if v is None or pd.isna(v) else round(float(v), n)  # JSON-safe (no NaN)
 
 
-def render() -> None:
-    st.header(t("🏛 Fundamental — Goldman lens"))
-    symbol = st.text_input(t("Symbol (e.g. AAPL.US, 2330.TW)"), "AAPL.US")
-    try:
-        sym = parse_symbol(symbol)
-    except SymbolError as exc:
-        st.error(str(exc))
-        return
-
+def render(symbol: str) -> None:
     fund = get_fundamentals(symbol)
     if fund.empty:
         st.warning(
@@ -88,7 +84,7 @@ def render() -> None:
         if key in rep.scenarios:
             scen_cols[i].metric(f"{label} ({mult})", f"{rep.scenarios[key]:.2f}")
 
-    if sym.market in ("TW", "TWO"):
+    if parse_symbol(symbol).market in ("TW", "TWO"):
         _monthly_revenue_panel(symbol)
 
     payload = {

@@ -1,4 +1,8 @@
-"""Technical dashboard (Morgan Stanley lens) — trading plan, levels, and chart."""
+"""Technical tab (Stock Workbench, Morgan Stanley lens) — trading plan, levels, chart.
+
+Takes ``symbol`` from the workbench's shared picker — no header, no symbol input of
+its own, so it composes cleanly as one of several ``st.tabs`` bodies.
+"""
 
 from __future__ import annotations
 
@@ -9,7 +13,6 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from heimdall.analytics import technical_report
-from heimdall.data.symbols import SymbolError, parse_symbol
 from heimdall.factors.indicators import bollinger
 from heimdall.ui import _glossary
 from heimdall.ui._data import get_ohlcv
@@ -17,15 +20,7 @@ from heimdall.ui._personas import ai_report
 from heimdall.ui.i18n import t
 
 
-def render() -> None:
-    st.header(t("📐 Technical — Morgan Stanley lens"))
-    symbol = st.text_input(t("Symbol (TICKER.MARKET)"), "AAPL.US")
-    try:
-        parse_symbol(symbol)
-    except SymbolError as exc:
-        st.error(str(exc))
-        return
-
+def render(symbol: str) -> None:
     end = date.today()
     ohlcv = get_ohlcv(symbol, end - timedelta(days=420), end)
     if ohlcv.empty:

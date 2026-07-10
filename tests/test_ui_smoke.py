@@ -407,14 +407,17 @@ def test_sidebar_nav_is_grouped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     # Every page is a sidebar button…
     labels = {b.label for b in at.sidebar.button}
     assert {
+        "Guide",
+        "Glossary",
         "Today's Picks",
+        "Stock Workbench",
         "Build data",
         "Screener",
-        "Chart",
         "Backtest",
         "Factors",
         "Macro",
     } <= labels
+    assert "Chart" not in labels  # folded into Stock Workbench, no longer its own page
     # …under its group header.
     headers = " ".join(m.value for m in at.sidebar.markdown)
     for group in ("Help", "Data", "Stock picking", "Backtest", "Analyst lenses"):
@@ -437,6 +440,28 @@ def test_default_landing_page_is_todays_picks(
     assert [h.value for h in at.header] == ["🎯 Today's Picks"]
 
 
+def test_stock_workbench_invalid_symbol_stops_before_any_tab(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The shared picker validates before ``st.tabs()`` renders, so a symbol that fails
+    ``parse_symbol`` never reaches a lens tab — and never triggers that tab's network
+    calls. Seeding session_state before the first ``run()`` keeps this test network-free:
+    the default "AAPL.US" is replaced before the script ever executes once."""
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))  # no snapshot → quick-pick stays hidden
+    _point_registry_at(tmp_path, monkeypatch)
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP)
+    at.session_state["page"] = "Stock Workbench"
+    at.session_state["wb_symbol"] = "not-a-symbol"
+    at.run(timeout=60)
+
+    assert not at.exception
+    assert [h.value for h in at.header] == ["🔎 Stock Workbench"]
+    assert any("not canonical" in e.value for e in at.error)
+
+
 def test_guide_page_renders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))  # guide needs no snapshot
     st.cache_data.clear()
@@ -448,3 +473,23 @@ def test_guide_page_renders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     assert [h.value for h in at.header] == ["📖 User guide"]
     # one collapsible guide per page (12) + the conventions expander
     assert len(at.expander) >= 12
+
+
+def test_glossary_page_renders_and_searches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))  # glossary needs no snapshot
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Glossary")
+    assert not at.exception
+    assert [h.value for h in at.header] == ["📚 Indicator Glossary"]
+    assert len(at.subheader) >= 5  # one per populated category, unfiltered
+
+    at.text_input[0].set_value("sharpe").run()
+    assert not at.exception
+    body = " ".join(m.value for m in at.markdown)
+    assert "`sharpe`" in body
+    assert "`pe`" not in body  # narrowed away by the search

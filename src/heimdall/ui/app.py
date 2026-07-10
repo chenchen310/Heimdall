@@ -15,31 +15,25 @@ st.set_page_config(page_title="Heimdall", page_icon="🛡️", layout="wide")
 from heimdall.ui import (  # noqa: E402  (after set_page_config)
     backtest_page,
     build_page,
-    chart_page,
-    earnings_page,
     etf_page,
     factors_page,
-    fundamental_page,
+    glossary_page,
     help_page,
     i18n,
     macro_page,
-    risk_page,
     rotation_page,
     screener_page,
-    technical_page,
     today_page,
+    workbench_page,
 )
 
 PAGES = {
     "Guide": help_page.render,
+    "Glossary": glossary_page.render,
     "Today's Picks": today_page.render,
+    "Stock Workbench": workbench_page.render,
     "Screener": screener_page.render,
     "Build data": build_page.render,
-    "Chart": chart_page.render,
-    "Fundamental": fundamental_page.render,
-    "Technical": technical_page.render,
-    "Risk": risk_page.render,
-    "Earnings": earnings_page.render,
     "Backtest": backtest_page.render,
     "Factors": factors_page.render,
     "Macro": macro_page.render,
@@ -47,22 +41,15 @@ PAGES = {
     "ETF Portfolio": etf_page.render,
 }
 
-# Pages grouped by purpose — one labelled section each in the sidebar.
+# Pages grouped by purpose — one labelled section each in the sidebar. Chart,
+# Fundamental, Technical, Risk, and Earnings are no longer separate entries: they
+# are tabs inside Stock Workbench (one shared symbol instead of five copies of it).
 NAV: dict[str, list[str]] = {
-    "Help": ["Guide"],
+    "Help": ["Guide", "Glossary"],
     "Data": ["Build data"],
-    "Stock picking": ["Today's Picks", "Screener", "Chart"],
+    "Stock picking": ["Today's Picks", "Stock Workbench", "Screener"],
     "Backtest": ["Backtest"],
-    "Analyst lenses": [
-        "Fundamental",
-        "Technical",
-        "Risk",
-        "Earnings",
-        "Rotation",
-        "Factors",
-        "ETF Portfolio",
-        "Macro",
-    ],
+    "Analyst lenses": ["Rotation", "Factors", "ETF Portfolio", "Macro"],
 }
 
 st.sidebar.title("🛡️ Heimdall")

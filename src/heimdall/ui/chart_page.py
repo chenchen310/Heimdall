@@ -1,4 +1,8 @@
-"""Chart page — Plotly candlestick with MA overlays, RSI, and MACD subplots."""
+"""Chart tab (Stock Workbench) — Plotly candlestick with MA overlays, RSI, and MACD subplots.
+
+Takes ``symbol`` from the workbench's shared picker — no header, no symbol input of
+its own, so it composes cleanly as one of several ``st.tabs`` bodies.
+"""
 
 from __future__ import annotations
 
@@ -8,23 +12,13 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from heimdall.data.symbols import SymbolError, parse_symbol
 from heimdall.factors.indicators import macd, rsi, sma
 from heimdall.ui._data import get_ohlcv
 from heimdall.ui.i18n import t
 
 
-def render() -> None:
-    st.header(t("📈 Chart"))
-    c1, c2 = st.columns([1, 2])
-    symbol = c1.text_input(t("Symbol (TICKER.MARKET)"), "AAPL.US")
-    lookback = c2.slider(t("Lookback (days)"), 90, 1500, 365)
-
-    try:
-        parse_symbol(symbol)
-    except SymbolError as exc:
-        st.error(str(exc))
-        return
+def render(symbol: str) -> None:
+    lookback = st.slider(t("Lookback (days)"), 90, 1500, 365, key="wb_chart_lookback")
 
     end = date.today()
     df = get_ohlcv(symbol, end - timedelta(days=lookback), end)
