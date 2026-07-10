@@ -37,6 +37,15 @@ _KEY = "wb_symbol"
 _QUICKPICK_KEY = "wb_quickpick"
 
 
+def open_symbol(symbol: str) -> None:
+    """Navigate to the Workbench with ``symbol`` pre-filled — the hand-off other pages
+    (e.g. a Screener result row) use to jump straight to the full per-stock picture
+    instead of the user re-typing the ticker on another page."""
+    st.session_state[_KEY] = symbol
+    st.session_state["page"] = "Stock Workbench"
+    st.rerun()
+
+
 def render() -> None:
     st.header(t("🔎 Stock Workbench"))
     st.caption(t("One symbol, every analyst lens — pick once, explore below."))

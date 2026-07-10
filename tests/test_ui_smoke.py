@@ -42,6 +42,14 @@ def _nav(at: AppTest, label: str) -> AppTest:
     return at
 
 
+def _apply(at: AppTest) -> AppTest:
+    """Click the Screener's "Apply" button — confirms whichever preset/saved screen
+    is previewed in the dropdown, since selecting it alone no longer touches the
+    working table (the P2 fix for silently-clobbered edits)."""
+    [b for b in at.button if "Apply" in b.label][0].click().run()
+    return at
+
+
 def _write_snapshot(data_dir: Path) -> None:
     snap = pd.DataFrame(
         {
@@ -173,6 +181,15 @@ def test_screener_labels_money_columns_and_keeps_symbol(
     assert not at.exception
     cols = list(at.dataframe[-1].value.columns)
     assert "symbol" in cols  # kept (and pinned via column_config)
+    assert "market_cap" not in cols  # not filtered/sorted on — hidden by default (P2 fix)
+
+    # Add it explicitly via "+ Show more columns" — it should then show, labeled with
+    # its currency, exactly like the fields shown by default already do.
+    [m for m in at.multiselect if m.label == "+ Show more columns"][0].set_value(
+        ["market_cap"]
+    ).run()
+    assert not at.exception
+    cols = list(at.dataframe[-1].value.columns)
     assert "market_cap (USD)" in cols and "market_cap" not in cols  # labelled with currency
 
 
@@ -221,11 +238,247 @@ def test_screener_disabled_condition_widens_and_marks_extra(
     at = AppTest.from_file(APP).run(timeout=60)
     _nav(at, "Screener")
     [s for s in at.selectbox if s.label == "…or load saved"][0].set_value("explore").run()
+    _apply(at)
     assert not at.exception
     out = at.dataframe[-1].value
     assert "added" in out.columns  # the ➕ marker column
     assert bool(out.loc[out["symbol"] == "A.US", "added"].iloc[0]) is True
     assert any("➕" in c.value for c in at.caption)
+
+
+def test_screener_default_columns_are_narrow_but_include_filtered_fields(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_snapshot(tmp_path)
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Screener")
+    cols = list(at.dataframe[-1].value.columns)
+    assert set(cols) == {"symbol", "pe", "roe", "net_margin"}  # exactly the predicate fields
+    assert "rsi_14" not in cols and "pct_above_sma_200" not in cols  # not filtered on — hidden
+
+
+def test_screener_pool_stats_panel_shows_min_median_max(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from heimdall.ui import _glossary
+
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_snapshot(tmp_path)  # pe = [10.0, 40.0] -> median 25
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Screener")
+    stats = at.dataframe[1].value  # editor is [0]; pool-stats panel is [1]
+    row = stats[stats["Field"].str.endswith(_glossary.label("pe"))]
+    assert not row.empty
+    assert row.iloc[0]["Min"] == "10.00×"
+    assert row.iloc[0]["Median"] == "25.00×"
+    assert row.iloc[0]["Max"] == "40.00×"
+
+
+def test_screener_switching_preset_without_apply_does_not_touch_editor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_snapshot(tmp_path)
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Screener")
+    assert at.dataframe[0].value["field"].tolist() == ["pe", "roe", "net_margin"]
+
+    # Browsing a different preset previews it (see the caption) but must not silently
+    # discard whatever is in the working table — the P2 fix.
+    [s for s in at.selectbox if s.label == "Start from preset"][0].set_value(
+        "Oversold quality"
+    ).run()
+    assert not at.exception
+    assert any("RSI" in c.value for c in at.caption)  # the preview line updated…
+    assert at.dataframe[0].value["field"].tolist() == ["pe", "roe", "net_margin"]  # …editor didn't
+
+    # Only clicking Apply actually swaps the working table.
+    _apply(at)
+    assert not at.exception
+    assert at.dataframe[0].value["field"].tolist() == ["rsi_14", "revenue_growth_yoy"]
+
+
+def test_screener_between_predicate_filters_a_range(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # pe = 10, 15, 40 — "between 10 and 20" (inclusive) keeps A and B, excludes C.
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_money_snapshot(tmp_path, ["A.US", "B.US", "C.US"])
+    store.save_screen(
+        Screen(name="mid-pe", predicates=[Predicate(field="pe", op="between", value=[10, 20])]),
+        root=tmp_path,
+    )
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Screener")
+    [s for s in at.selectbox if s.label == "…or load saved"][0].set_value("mid-pe").run()
+    _apply(at)
+    assert not at.exception
+    assert at.dataframe[-1].value["symbol"].tolist() == ["A.US", "B.US"]
+
+
+def test_screener_factor_score_preset_runs_without_crashing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_snapshot(tmp_path)
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Screener")
+    [s for s in at.selectbox if s.label == "Start from preset"][0].set_value(
+        "All-around (composite)"
+    ).run()
+    _apply(at)
+    assert not at.exception
+    # factor_scores() ran over the snapshot, so the composite score is a real column —
+    # not just a preset label with nothing behind it.
+    assert "composite_score" in at.dataframe[-1].value.columns
+
+
+def test_screener_result_row_can_open_stock_workbench(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_snapshot(tmp_path)
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Screener")
+    assert at.dataframe[-1].value["symbol"].tolist() == ["A.US"]  # default preset, one match
+
+    # Programmatically set the results table's selection (the documented way to drive
+    # st.dataframe(on_select=...) in tests — mirrors a user clicking the row). Unlike a
+    # real frontend, AppTest doesn't keep resubmitting a widget's last state on its own,
+    # so the selection has to be re-asserted before every run that depends on it.
+    at.session_state["screener_results"] = {"selection": {"rows": [0]}}
+    at.run(timeout=60)
+    assert not at.exception
+    open_buttons = [b for b in at.button if "A.US" in b.label]
+    assert open_buttons  # "Open A.US in Stock Workbench →" appeared once the row was selected
+
+    at.session_state["screener_results"] = {"selection": {"rows": [0]}}
+    open_buttons[0].click().run(timeout=60)
+    assert not at.exception
+    assert [h.value for h in at.header] == ["🔎 Stock Workbench"]
+    assert at.session_state["wb_symbol"] == "A.US"
+
+
+def test_screener_sort_follows_preset(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_snapshot(tmp_path)
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Screener")
+    assert [s for s in at.selectbox if s.label == "Rank by"][0].value == "pe"  # default preset
+    assert [t_ for t_ in at.toggle if t_.label == "Ascending"][0].value is True
+
+    [s for s in at.selectbox if s.label == "Start from preset"][0].set_value(
+        "Above 200-day trend"
+    ).run()
+    _apply(at)
+    assert not at.exception
+    assert [s for s in at.selectbox if s.label == "Rank by"][0].value == "pct_above_sma_200"
+    assert [t_ for t_ in at.toggle if t_.label == "Ascending"][0].value is False
+
+
+def test_screener_manual_sort_choice_persists_until_preset_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_snapshot(tmp_path)
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Screener")
+    [s for s in at.selectbox if s.label == "Rank by"][0].set_value("rsi_14").run()
+    assert not at.exception
+    assert [s for s in at.selectbox if s.label == "Rank by"][0].value == "rsi_14"
+
+    # An unrelated interaction (Limit) must not reset the user's manual sort choice.
+    [n for n in at.number_input if n.label == "Limit"][0].set_value(2).run()
+    assert not at.exception
+    assert [s for s in at.selectbox if s.label == "Rank by"][0].value == "rsi_14"
+
+    # Merely *browsing* a different preset (no Apply yet) must not touch it either.
+    [s for s in at.selectbox if s.label == "Start from preset"][0].set_value(
+        "All-around (composite)"
+    ).run()
+    assert not at.exception
+    assert [s for s in at.selectbox if s.label == "Rank by"][0].value == "rsi_14"
+
+    # Only clicking Apply re-applies that preset's own natural sort.
+    _apply(at)
+    assert not at.exception
+    assert [s for s in at.selectbox if s.label == "Rank by"][0].value == "composite_score"
+
+
+def test_screener_loading_saved_screen_applies_its_own_sort(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_snapshot(tmp_path)
+    store.save_screen(
+        Screen(
+            name="by-rsi",
+            predicates=[Predicate(field="pe", op="<", value=100)],
+            sort_by="rsi_14",
+            ascending=False,
+        ),
+        root=tmp_path,
+    )
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Screener")
+    [s for s in at.selectbox if s.label == "…or load saved"][0].set_value("by-rsi").run()
+    _apply(at)
+    assert not at.exception
+    assert [s for s in at.selectbox if s.label == "Rank by"][0].value == "rsi_14"
+    assert [t_ for t_ in at.toggle if t_.label == "Ascending"][0].value is False
+
+
+def test_screener_saved_screen_with_unknown_sort_field_falls_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_snapshot(tmp_path)
+    store.save_screen(
+        Screen(
+            name="stale-sort",
+            predicates=[Predicate(field="pe", op="<", value=100)],
+            sort_by="some_removed_field",
+            ascending=False,
+        ),
+        root=tmp_path,
+    )
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Screener")
+    [s for s in at.selectbox if s.label == "…or load saved"][0].set_value("stale-sort").run()
+    _apply(at)
+    assert not at.exception  # no crash from a sort field that no longer exists
+    assert [s for s in at.selectbox if s.label == "Rank by"][0].value == "pe"
 
 
 def _write_today_snapshot(data_dir: Path) -> None:

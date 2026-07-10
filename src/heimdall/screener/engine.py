@@ -7,6 +7,7 @@ erroring. Missing data therefore excludes, never silently includes.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import cast
 
 import pandas as pd
@@ -61,3 +62,41 @@ def evaluate(screen: Screen, snapshot: pd.DataFrame) -> pd.DataFrame:
     if screen.limit is not None:
         out = out.head(screen.limit)
     return out.reset_index(drop=True)
+
+
+@dataclass(frozen=True)
+class FunnelStep:
+    """One enabled predicate's effect, in screen order.
+
+    ``alone`` is how many rows pass this predicate by itself; ``remaining`` is how many
+    are left once it's AND-ed with every enabled predicate before it. Comparing the two
+    across steps shows which condition narrowed the result the most — the thing a user
+    widening a 0-match screen needs to see first.
+    """
+
+    predicate: Predicate
+    alone: int
+    remaining: int
+
+
+def funnel(screen: Screen, snapshot: pd.DataFrame) -> list[FunnelStep]:
+    """Per-condition pass counts, in screen order, for enabled predicates only.
+
+    Disabled predicates are skipped, mirroring :func:`evaluate` — they don't constrain
+    the result, so they have no cumulative effect to report.
+    """
+    cumulative = pd.Series(True, index=snapshot.index)
+    steps = []
+    for predicate in screen.predicates:
+        if not predicate.enabled:
+            continue
+        alone_mask = _mask(snapshot, predicate)
+        cumulative &= alone_mask
+        steps.append(
+            FunnelStep(
+                predicate=predicate,
+                alone=int(alone_mask.sum()),
+                remaining=int(cumulative.sum()),
+            )
+        )
+    return steps

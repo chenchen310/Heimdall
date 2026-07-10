@@ -68,6 +68,61 @@ _ENTRIES: dict[str, dict[str, str]] = {
         "en": "Shares outstanding × price — the market's total value for the company.",
         "zh": "流通股數 × 股價——市場對這家公司的總價值評價。",
     },
+    # --- raw fundamentals (size / line items behind the ratios above) ---
+    "revenue": {
+        "category": "fundamental",
+        "direction": "neutral",
+        "en": "Total sales for the most recent fiscal year known as of today.",
+        "zh": "截至今日已知的最近一個會計年度總營收。",
+    },
+    "net_income": {
+        "category": "fundamental",
+        "direction": "higher",
+        "en": "Bottom-line profit for the most recent fiscal year known as of today.",
+        "zh": "截至今日已知的最近一個會計年度淨利。",
+    },
+    "eps_diluted": {
+        "category": "fundamental",
+        "direction": "higher",
+        "en": "Diluted earnings per share — net income ÷ shares including dilutive securities.",
+        "zh": "稀釋每股盈餘——淨利 ÷ 計入潛在稀釋證券後的股數。",
+    },
+    "ebitda": {
+        "category": "fundamental",
+        "direction": "higher",
+        "en": "Operating profit plus depreciation & amortisation — a cash-like operating profit.",
+        "zh": "營業利益加折舊攤銷——近似現金基礎的營運獲利。",
+    },
+    "equity": {
+        "category": "fundamental",
+        "direction": "neutral",
+        "en": "Total shareholders' equity — assets minus liabilities.",
+        "zh": "股東權益總額——資產減負債。",
+    },
+    "fcf": {
+        "category": "fundamental",
+        "direction": "higher",
+        "en": "Free cash flow — operating cash flow minus capital expenditure.",
+        "zh": "自由現金流——營運現金流減資本支出。",
+    },
+    "ev": {
+        "category": "fundamental",
+        "direction": "neutral",
+        "en": "Enterprise value — market cap plus net debt, the theoretical cost to buy the firm.",
+        "zh": "企業價值——市值加淨負債，理論上買下整家公司的成本。",
+    },
+    "net_debt": {
+        "category": "fundamental",
+        "direction": "lower",
+        "en": "Long-term debt minus cash. Negative means more cash than debt.",
+        "zh": "長期負債減現金。負值代表現金比負債還多。",
+    },
+    "shares_outstanding": {
+        "category": "fundamental",
+        "direction": "neutral",
+        "en": "Total shares outstanding — the share count behind market cap and per-share figures.",
+        "zh": "流通在外股數——市值與每股數據的計算基礎。",
+    },
     # --- profitability / growth (fundamental) ---
     "gross_margin": {
         "category": "fundamental",
@@ -123,6 +178,18 @@ _ENTRIES: dict[str, dict[str, str]] = {
         "en": "Compound annual revenue growth across the years shown. Higher is stronger.",
         "zh": "所示會計年度區間的營收年複合成長率。越高代表成長越強勁、越持續。",
     },
+    "rev_mom_yoy": {
+        "category": "fundamental",
+        "direction": "higher",
+        "en": "Latest known month's Taiwan revenue vs. the same month last year.",
+        "zh": "台股最新已知月營收，與去年同月相比的年增率。",
+    },
+    "rev_mom_accel": {
+        "category": "fundamental",
+        "direction": "higher",
+        "en": "Revenue momentum acceleration — recent 3-month YoY average minus the prior 3.",
+        "zh": "營收動能加速度——近 3 個月年增率平均，減去前 3 個月的平均。",
+    },
     # --- leverage / share count (fundamental) ---
     "debt_to_equity": {
         "category": "fundamental",
@@ -162,6 +229,30 @@ _ENTRIES: dict[str, dict[str, str]] = {
         "zh": "以公開規則算出的 0–100 分（利潤率、成長、負債、自由現金流、估值）——不是主觀判斷。",
     },
     # --- technical / momentum ---
+    "price": {
+        "category": "technical",
+        "direction": "neutral",
+        "en": "Latest close price, adjusted for splits/dividends.",
+        "zh": "最新收盤價，已還原股利與分割調整。",
+    },
+    "sma_20": {
+        "category": "technical",
+        "direction": "neutral",
+        "en": "20-day simple moving average — the short-term trend line.",
+        "zh": "20 日簡單移動平均——短期趨勢線。",
+    },
+    "sma_50": {
+        "category": "technical",
+        "direction": "neutral",
+        "en": "50-day simple moving average — the medium-term trend line.",
+        "zh": "50 日簡單移動平均——中期趨勢線。",
+    },
+    "sma_200": {
+        "category": "technical",
+        "direction": "neutral",
+        "en": "200-day simple moving average — the long-term trend line.",
+        "zh": "200 日簡單移動平均——長期趨勢線。",
+    },
     "rsi_14": {
         "category": "technical",
         "direction": "neutral",
@@ -191,6 +282,30 @@ _ENTRIES: dict[str, dict[str, str]] = {
         "direction": "higher",
         "en": "Total price return over the trailing 12 months.",
         "zh": "近 12 個月的累計價格報酬。",
+    },
+    "ret_12_1": {
+        "category": "technical",
+        "direction": "higher",
+        "en": (
+            "12-month return excluding the most recent month — classic momentum (UMD), "
+            "since the last month tends to reverse."
+        ),
+        "zh": "近 12 個月報酬，排除最近 1 個月——經典動能算法（UMD），因為最近一個月常出現反轉。",
+    },
+    "vol_63d": {
+        "category": "technical",
+        "direction": "lower",
+        "en": (
+            "Annualised volatility from the last 63 trading days — shorter and more reactive "
+            "than the Risk page's Annual vol."
+        ),
+        "zh": "近 63 個交易日的年化波動度——比「風險」頁的年化波動度視窗更短、反應更快。",
+    },
+    "dollar_vol_21d": {
+        "category": "technical",
+        "direction": "higher",
+        "en": "Median daily dollar volume over the last 21 sessions — a liquidity gauge.",
+        "zh": "近 21 個交易日的每日成交金額中位數——用來衡量流動性與可交易性。",
     },
     "pct_above_sma_200": {
         "category": "technical",
@@ -424,6 +539,78 @@ def help(key: str) -> str:
     if entry is None:
         return ""
     return entry.get(current_lang(), entry.get("en", ""))
+
+
+def category(key: str) -> str:
+    """``key``'s persona/lens category; empty string if unknown."""
+    entry = _ENTRIES.get(key)
+    return entry.get("category", "") if entry is not None else ""
+
+
+#: Short display labels for the Screener's field picker — a name a non-technical user
+#: recognizes at a glance, unlike the raw snapshot column key. Deliberately scoped to
+#: the snapshot's screenable fields (``screener.snapshot``) rather than every glossary
+#: entry: other pages already write their own inline labels via ``t()``.
+_LABELS: dict[str, dict[str, str]] = {
+    "price": {"en": "Price", "zh": "股價"},
+    "sma_20": {"en": "20-day average", "zh": "20 日均線"},
+    "sma_50": {"en": "50-day average", "zh": "50 日均線"},
+    "sma_200": {"en": "200-day average", "zh": "200 日均線"},
+    "rsi_14": {"en": "RSI (14d)", "zh": "RSI（14 日）"},
+    "ret_3m": {"en": "3-month return", "zh": "3 個月報酬"},
+    "ret_6m": {"en": "6-month return", "zh": "6 個月報酬"},
+    "ret_12m": {"en": "12-month return", "zh": "12 個月報酬"},
+    "ret_12_1": {"en": "12-1 month momentum", "zh": "12 減 1 月動能"},
+    "vol_63d": {"en": "63-day volatility", "zh": "63 日波動度"},
+    "dollar_vol_21d": {"en": "21-day $ volume", "zh": "21 日成交金額"},
+    "pct_above_sma_200": {"en": "% above 200-day avg", "zh": "距 200 日均線 %"},
+    "market_cap": {"en": "Market cap", "zh": "市值"},
+    "revenue": {"en": "Revenue", "zh": "營收"},
+    "net_income": {"en": "Net income", "zh": "淨利"},
+    "eps_diluted": {"en": "EPS (diluted)", "zh": "每股盈餘（稀釋）"},
+    "ebitda": {"en": "EBITDA", "zh": "EBITDA"},
+    "equity": {"en": "Equity", "zh": "股東權益"},
+    "shares_outstanding": {"en": "Shares outstanding", "zh": "流通股數"},
+    "net_debt": {"en": "Net debt", "zh": "淨負債"},
+    "ev": {"en": "Enterprise value", "zh": "企業價值"},
+    "fcf": {"en": "Free cash flow", "zh": "自由現金流"},
+    "pe": {"en": "P/E", "zh": "本益比"},
+    "ps": {"en": "P/S", "zh": "股價營收比"},
+    "peg": {"en": "PEG", "zh": "PEG 比率"},
+    "ev_ebitda": {"en": "EV/EBITDA", "zh": "EV/EBITDA"},
+    "ev_fcf": {"en": "EV/FCF", "zh": "EV/FCF"},
+    "fcf_yield": {"en": "FCF yield", "zh": "自由現金流殖利率"},
+    "net_margin": {"en": "Net margin", "zh": "淨利率"},
+    "gross_margin": {"en": "Gross margin", "zh": "毛利率"},
+    "operating_margin": {"en": "Operating margin", "zh": "營業利益率"},
+    "fcf_margin": {"en": "FCF margin", "zh": "自由現金流利率"},
+    "roe": {"en": "ROE", "zh": "股東權益報酬率"},
+    "roic": {"en": "ROIC", "zh": "投入資本回報率"},
+    "debt_to_equity": {"en": "Debt / equity", "zh": "負債權益比"},
+    "net_debt_to_ebitda": {"en": "Net debt / EBITDA", "zh": "淨負債 / EBITDA"},
+    "interest_coverage": {"en": "Interest coverage", "zh": "利息保障倍數"},
+    "revenue_growth_yoy": {"en": "Revenue growth (YoY)", "zh": "營收年增率"},
+    "eps_growth_yoy": {"en": "EPS growth (YoY)", "zh": "EPS 年增率"},
+    "share_dilution_yoy": {"en": "Share dilution (YoY)", "zh": "股數稀釋率"},
+    "buyback_yield": {"en": "Buyback yield", "zh": "庫藏股殖利率"},
+    "rev_mom_yoy": {"en": "Revenue momentum (YoY)", "zh": "營收動能年增率"},
+    "rev_mom_accel": {"en": "Revenue momentum accel.", "zh": "營收動能加速度"},
+    # Cross-sectional factor scores (heimdall.factors.scoring) — not in the persisted
+    # snapshot; the Screener computes these on the fly, so the picker needs labels too.
+    "value_score": {"en": "Value score", "zh": "價值分數"},
+    "quality_score": {"en": "Quality score", "zh": "品質分數"},
+    "momentum_score": {"en": "Momentum score", "zh": "動能分數"},
+    "growth_score": {"en": "Growth score", "zh": "成長分數"},
+    "composite_score": {"en": "Composite score", "zh": "綜合分數"},
+}
+
+
+def label(key: str) -> str:
+    """Short display label for ``key`` in the current language; the raw key if unknown."""
+    entry = _LABELS.get(key)
+    if entry is None:
+        return key
+    return entry.get(current_lang(), entry.get("en", key))
 
 
 @dataclass(frozen=True)

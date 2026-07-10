@@ -88,6 +88,51 @@ MONETARY_FIELDS: frozenset[str] = frozenset(
         "eps_diluted",
         "equity",
         "fcf",
+        "dollar_vol_21d",
+    }
+)
+
+# Snapshot columns stored as a decimal fraction (0.15 == 15%). Typing a threshold in the
+# screener's editor as a raw fraction is an easy-to-miss trap (a user wanting "ROE above
+# 15%" naturally types 15, not 0.15) — the UI converts to/from percentage points at the
+# editing boundary for exactly these fields, so the number on screen always matches the
+# number a human would say out loud.
+PERCENT_FIELDS: frozenset[str] = frozenset(
+    {
+        "ret_3m",
+        "ret_6m",
+        "ret_12m",
+        "ret_12_1",
+        "vol_63d",
+        "pct_above_sma_200",
+        "fcf_yield",
+        "net_margin",
+        "gross_margin",
+        "operating_margin",
+        "fcf_margin",
+        "roe",
+        "roic",
+        "revenue_growth_yoy",
+        "eps_growth_yoy",
+        "share_dilution_yoy",
+        "buyback_yield",
+        "rev_mom_yoy",
+        "rev_mom_accel",
+    }
+)
+
+# Unitless ratios/multiples (e.g. "22.4x") — not a percentage, not currency, so the UI
+# suffixes them with "×" rather than "%" to avoid the two being confused for each other.
+MULTIPLE_FIELDS: frozenset[str] = frozenset(
+    {
+        "pe",
+        "ps",
+        "peg",
+        "ev_ebitda",
+        "ev_fcf",
+        "debt_to_equity",
+        "net_debt_to_ebitda",
+        "interest_coverage",
     }
 )
 

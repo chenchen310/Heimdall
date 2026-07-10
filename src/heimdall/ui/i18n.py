@@ -101,6 +101,37 @@ _ZH: dict[str, str] = {
         "此條件組是為「{m}（{c}）」建立的，且用到金額欄位（如 market_cap），"
         "其門檻可能無法套用到 {cur}。"
     ),
+    "Grouped: fundamental fields first, then technical.": "已分組：基本面欄位在前，技術面在後。",
+    "Percent-like fields (ROE, margins, growth…) are in percentage "
+    "points — type 15 for 15%, not 0.15.": (
+        "百分比類欄位（ROE、利潤率、成長率…）以百分點輸入——15% 請打 15，不是 0.15。"
+    ),
+    "has a value": "有數值",
+    "🔻 Funnel — which condition narrows the most": "🔻 篩選漏斗——哪個條件篩掉最多",
+    "Condition": "條件",
+    "Alone": "單獨符合",
+    "Remaining": "累計剩餘",
+    "Biggest cut: {cond} ({drop} stock(s) removed).": "篩掉最多的條件：{cond}（刷掉 {drop} 檔）。",
+    "between": "介於",
+    "and": "到",
+    "…to": "…到",
+    'The range\'s upper bound — only used when Op is "between".': (
+        "範圍的上界——運算子為 between 時才使用。"
+    ),
+    "Open {symbol} in Stock Workbench →": "在個股工作台開啟 {symbol} →",
+    "Cheap (value)": "便宜（價值型）",
+    "High quality": "體質優良",
+    "Strong momentum": "動能強勁",
+    "All-around (composite)": "全能型（綜合分數）",
+    'Apply "{name}"': "套用「{name}」",
+    "(no conditions)": "（無條件）",
+    "📏 Pool context for your fields (min / median / max)": (
+        "📏 你選的欄位在這個池子裡的數值範圍（最小／中位數／最大）"
+    ),
+    "Min": "最小",
+    "Median": "中位數",
+    "Max": "最大",
+    "+ Show more columns": "＋ 顯示更多欄位",
     # --- user guide ---
     "📖 User guide": "📖 使用說明",
     "Quick start": "快速上手",

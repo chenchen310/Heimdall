@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from heimdall.screener import store
-from heimdall.screener.engine import evaluate
+from heimdall.screener.engine import evaluate, funnel
 from heimdall.screener.model import Predicate, Screen
 
 
@@ -124,3 +124,45 @@ def test_monetary_fields_are_currency_columns() -> None:
 
     assert {"market_cap", "ev", "revenue", "price"} <= MONETARY_FIELDS
     assert not ({"pe", "roe", "rsi_14"} & MONETARY_FIELDS)  # ratios are unit-free
+
+
+def test_percent_and_multiple_fields_are_disjoint_from_monetary() -> None:
+    from heimdall.screener.snapshot import MONETARY_FIELDS, MULTIPLE_FIELDS, PERCENT_FIELDS
+
+    assert not (PERCENT_FIELDS & MONETARY_FIELDS)
+    assert not (MULTIPLE_FIELDS & MONETARY_FIELDS)
+    assert not (PERCENT_FIELDS & MULTIPLE_FIELDS)
+    assert {"roe", "net_margin", "revenue_growth_yoy"} <= PERCENT_FIELDS
+    assert {"pe", "debt_to_equity"} <= MULTIPLE_FIELDS
+
+
+def test_funnel_reports_alone_and_cumulative_counts() -> None:
+    # pe<15 alone passes A(10), D(12); roe>0.22 alone passes C(.30), D(.25);
+    # AND-ing the two in order narrows the cumulative count to just D.
+    screen = Screen(
+        name="x",
+        predicates=[
+            Predicate(field="pe", op="<", value=15),
+            Predicate(field="roe", op=">", value=0.22),
+        ],
+    )
+    steps = funnel(screen, _snap())
+    assert [s.alone for s in steps] == [2, 2]
+    assert [s.remaining for s in steps] == [2, 1]
+
+
+def test_funnel_skips_disabled_predicates() -> None:
+    screen = Screen(
+        name="x",
+        predicates=[
+            Predicate(field="pe", op="<", value=15),
+            Predicate(field="roe", op=">", value=0.22, enabled=False),
+        ],
+    )
+    steps = funnel(screen, _snap())
+    assert len(steps) == 1  # the disabled predicate contributes no funnel step
+    assert steps[0].remaining == 2  # unconstrained by the disabled roe condition
+
+
+def test_funnel_empty_for_no_enabled_predicates() -> None:
+    assert funnel(Screen(name="x", predicates=[]), _snap()) == []
