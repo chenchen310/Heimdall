@@ -997,6 +997,11 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+personas = [
+    { name = "anthropic" },
+]
+
+[package.dev-dependencies]
 analytics = [
     { name = "alphalens-reloaded" },
     { name = "pyportfolioopt" },
@@ -1013,15 +1018,6 @@ data = [
     { name = "requests-cache" },
     { name = "yfinance" },
 ]
-personas = [
-    { name = "anthropic" },
-]
-ui = [
-    { name = "plotly" },
-    { name = "streamlit" },
-]
-
-[package.dev-dependencies]
 dev = [
     { name = "mypy" },
     { name = "pandas-stubs" },
@@ -1030,34 +1026,42 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
 ]
+ui = [
+    { name = "plotly" },
+    { name = "streamlit" },
+]
 
 [package.metadata]
 requires-dist = [
-    { name = "alphalens-reloaded", marker = "extra == 'analytics'", specifier = ">=0.4.3" },
     { name = "anthropic", marker = "extra == 'personas'", specifier = ">=0.34" },
-    { name = "bt", marker = "extra == 'backtest'", specifier = ">=1.1" },
     { name = "duckdb", specifier = ">=1.0" },
-    { name = "fredapi", marker = "extra == 'data'", specifier = ">=0.5.2" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "pandas", specifier = ">=2.2" },
-    { name = "pandas-ta", marker = "extra == 'backtest'", specifier = ">=0.3.14b0" },
     { name = "platformdirs", specifier = ">=4.2" },
-    { name = "plotly", marker = "extra == 'ui'", specifier = ">=5.22" },
     { name = "pyarrow", specifier = ">=16" },
     { name = "pydantic", specifier = ">=2.6" },
-    { name = "pyportfolioopt", marker = "extra == 'analytics'", specifier = ">=1.5.5" },
     { name = "python-dotenv", specifier = ">=1.0" },
-    { name = "quantstats", marker = "extra == 'analytics'", specifier = ">=0.0.62" },
     { name = "requests", specifier = ">=2.31" },
-    { name = "requests-cache", marker = "extra == 'data'", specifier = ">=1.2" },
-    { name = "riskfolio-lib", marker = "extra == 'analytics'", specifier = ">=6.0" },
-    { name = "streamlit", marker = "extra == 'ui'", specifier = ">=1.35" },
-    { name = "vectorbt", marker = "extra == 'backtest'", specifier = ">=0.26" },
-    { name = "yfinance", marker = "extra == 'data'", specifier = ">=0.2.40" },
 ]
-provides-extras = ["data", "backtest", "analytics", "ui", "personas"]
+provides-extras = ["personas"]
 
 [package.metadata.requires-dev]
+analytics = [
+    { name = "alphalens-reloaded", specifier = ">=0.4.3" },
+    { name = "pyportfolioopt", specifier = ">=1.5.5" },
+    { name = "quantstats", specifier = ">=0.0.62" },
+    { name = "riskfolio-lib", specifier = ">=6.0" },
+]
+backtest = [
+    { name = "bt", specifier = ">=1.1" },
+    { name = "pandas-ta", specifier = ">=0.3.14b0" },
+    { name = "vectorbt", specifier = ">=0.26" },
+]
+data = [
+    { name = "fredapi", specifier = ">=0.5.2" },
+    { name = "requests-cache", specifier = ">=1.2" },
+    { name = "yfinance", specifier = ">=0.2.40" },
+]
 dev = [
     { name = "mypy", specifier = ">=1.10" },
     { name = "pandas-stubs", specifier = ">=2.2" },
@@ -1065,6 +1069,10 @@ dev = [
     { name = "pytest", specifier = ">=8.2" },
     { name = "pytest-cov", specifier = ">=5.0" },
     { name = "ruff", specifier = ">=0.5" },
+]
+ui = [
+    { name = "plotly", specifier = ">=5.22" },
+    { name = "streamlit", specifier = ">=1.35" },
 ]
 
 [[package]]

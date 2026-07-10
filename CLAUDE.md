@@ -33,11 +33,14 @@ Managed with **`uv`**. The repo pins **Python 3.12** (`.python-version`); the ma
 `python3` is conda 3.8 and must not be used here — `uv` provisions an isolated 3.12.
 
 ```bash
-# Environment (installs core + all feature extras + dev group into .venv)
+# Environment — data/backtest/analytics/ui/dev are default dependency groups (see
+# [tool.uv] in pyproject.toml), so a bare sync already installs everything app.py
+# needs to boot. --all-extras additionally pulls in `personas` (optional AI reports).
 uv sync --all-extras
 
-# Install a single feature area instead (extras: data, backtest, analytics, ui, personas)
-uv sync --extra data --extra ui
+# Install a single feature area instead (dependency groups: data, backtest, analytics,
+# ui, dev; `personas` is the one true optional extra)
+uv sync --no-default-groups --group data --group ui
 
 # Phase 0 vertical-slice backtest (writes a quantstats tear sheet to reports/)
 uv run python -m heimdall.backtest.demo

@@ -39,18 +39,19 @@ No API keys are needed to start — yfinance (US + TW prices), SEC EDGAR (US fun
 
 ## Deploying (Streamlit Community Cloud)
 
-Community Cloud does not run `uv sync` — it installs from `requirements.txt`, which does **not**
-carry `pyproject.toml`'s optional extras. Because `ui/app.py` eagerly imports every page (backtest,
-factors, ETF, macro, rotation…), the deployed app needs the union of the `data` + `backtest` +
-`analytics` + `ui` (+ `personas`, if you'll set `ANTHROPIC_API_KEY`) extras just to boot, not only
-`ui`. `requirements.txt` is a pinned export of that set — regenerate it whenever `pyproject.toml`
-dependencies change:
+Community Cloud natively detects `uv.lock` (it takes priority over `requirements.txt` and
+`pyproject.toml` if more than one is present) and installs with a **bare `uv sync`** — there is no
+way to make it pass `--extra`/`--all-extras`/`--group`. Because `ui/app.py` eagerly imports every
+page (backtest, factors, ETF, macro, rotation…) at startup, the app needs `data` + `backtest` +
+`analytics` + `ui` just to boot, not only `ui`. That's why those four live in `pyproject.toml` as
+PEP 735 **dependency groups**, set as `[tool.uv] default-groups` — a bare `uv sync` (local or on
+Cloud) installs them automatically, no flags required. `personas` is the one real optional extra
+(lazy-imported, gated on `ANTHROPIC_API_KEY`); Cloud will **not** install it, so the in-app AI report
+button stays inert there unless you add `"personas"` to `default-groups` too.
 
-```bash
-uv export --frozen --no-dev --no-hashes \
-  --extra data --extra backtest --extra analytics --extra ui --extra personas \
-  -o requirements.txt
-```
+No `requirements.txt` needed — don't add one back; it would just be ignored (`uv.lock` wins) or,
+worse, drift out of sync and mislead the next person. If `pyproject.toml`'s dependencies change, run
+`uv lock` and commit the updated `uv.lock`; that's the only file Cloud reads.
 
 Set the app's main file to `src/heimdall/ui/app.py` and add any secrets (`FINMIND_TOKEN`,
 `FMP_API_KEY`, `ANTHROPIC_API_KEY`, `FRED_API_KEY`) via the Cloud app's Secrets, not `.env` (which
