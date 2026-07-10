@@ -364,7 +364,13 @@ Steps:
 > 13.8**) must stop and get a **recorded user go/no-go before pre-registering**. A REJECTED
 > verdict, honestly logged, completes a card.
 
-### 13.1 US re-evaluation under the decomposed metric  `[ ]`
+### 13.1 US re-evaluation under the decomposed metric  `[x]`
+
+> **Outcome (2026-07-11, RESEARCH_LOG 011): `{fcf_yield}` is the sole survivor** — dev selection
+> alpha +2.99% (NW-t +3.92), val +7.89% (NW-t +2.98); its skill was real all along, masked by the
+> old biased G3. The other 7 (incl. the entry-010 TW low-vol×trend combos, which are *negative* on
+> US) closed at development. 0 OOS touched. `evaluate()` + tests landed; `{fcf_yield}` → card 13.2,
+> which must first get the user's void-vs-attempt ruling (see the log's governance flag).
 
 **Goal:** the 001–003 US families died under the *old, structurally biased* G3; nobody has ever
 measured their selection alpha. Re-score them (plus the entry-010 combos) on Dev/Validation only.

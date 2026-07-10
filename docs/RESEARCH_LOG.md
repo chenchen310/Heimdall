@@ -380,3 +380,61 @@ checks pass:
   eliminate survivorship bias. (3) This says nothing about revenue momentum (entry 009), which is
   certified on the reduced 140-name panel and unaffected; re-certifying it on this harder universe
   is a worthwhile future step but needs FinMind (monthly revenue) across ~700 names (quota-bound).
+
+## 011 — US re-evaluation under the decomposed metric (2026-07-11, model: Opus 4.8)
+
+- Card: ROADMAP 13.1. Goal: the US families 001–003 were closed under the **old, structurally
+  biased G3** (mean individual-pick beat rate, shown in entry 008 to sit < 50% by cap-weight-
+  benchmark concentration); nobody ever measured their **selection alpha** (the 12.5 G3 = EW
+  top-20 book 6m `fwd_6m_rel` − EW eligible-universe 6m, NW-t vs 0). Re-score the closed families
+  **plus the entry-010 low-vol×trend combos** on Dev/Validation only, under the new metric.
+- Tool: `heimdall.research.evaluate` (new this card) — a windowed lens that **imports** the certify
+  gate helpers (`information_coefficient`, `certify._monthly_spread`, `certify._book_minus_universe`
+  + `gates.nw_tstat`, `cohort_turnover`) so the in-sample read is the identical math the vault
+  referee uses; it **refuses any window ≥ `OOS_START`** (a hard assert + test). No vault row touched.
+- Panel: `panel_us` (built 2026-07-07; 3,436-name VTI universe; 199 months 2010-01→2026-07;
+  `current_universe (optimistic)`). All eight candidate feature columns present.
+- **Consistency check (not a result, a correctness proof):** the new tool's DEV rank-IC reproduces
+  the prior sessions' independently-computed numbers to 3 dp — `ret_12_1` +0.013 (t 0.92) = entry
+  001; quality-equal +0.008 (t 0.88) = entry 002; `fcf_yield` +0.022 (t 2.87) = entry 003. Rank IC
+  is weighting-immune (008), so it *should* match; it does.
+
+- **Development (2010-01→2019-12, 120 months; no row ≥ 2023 read — evaluate() asserts it).** All
+  eight pre-stated candidates (no additions mid-session); "beat" = the new portfolio-cohort beat
+  rate vs SPY, "alpha (t)" = the G3 selection alpha and its NW-t:
+
+  | candidate | IC (t) [G1] | spread/mo [G2] | selection alpha (NW-t) [G3] | beat | turn | advances |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | `{ret_12_1}` momentum | +0.013 (0.92) | +0.37% | +1.12% (+0.54) | 53.3% | 38% | no |
+  | `{roic,fcf_margin,operating_margin}` eq | +0.008 (0.88) | +0.24% | +1.15% (+1.26) | 62.5% | 12% | no |
+  | **`{fcf_yield}`** | **+0.022 (+2.87)** | +0.53% | **+2.99% (+3.92)** | 78.3% | 10% | **YES** |
+  | `{ret_6m}` | −0.009 (−0.61) | −0.12% | +1.16% (+0.60) | 50.8% | 48% | no |
+  | `{pct_above_sma_200}` | −0.009 (−0.58) | −0.19% | +1.20% (+0.63) | 50.8% | 50% | no |
+  | `{vol_63d:−1}` low-vol | +0.011 (0.54) | −0.08% | −1.26% (−0.93) | 49.2% | 39% | no |
+  | `{vol_63d:−1, ret_6m:1}` | +0.006 (0.31) | −0.01% | −0.78% (−0.92) | 48.3% | 63% | no |
+  | `{vol_63d:−1, pct_above_sma_200:1}` | +0.005 (0.23) | −0.02% | **−1.81% (−2.57)** | 36.7% | 62% | no |
+
+  Advance bar (entry-010 precedent): dev IC-t ≥ 2 **and** dev alpha-t ≥ 2. Only `{fcf_yield}` clears
+  both. **The entry-010 TW low-vol×trend winners do not transfer to US** — both combos have
+  *negative* US selection alpha (one significantly so), and low-vol alone is negative too. So the
+  US market's only free selection-skill signal on this board is valuation (`fcf_yield`), not trend.
+
+- **Validation (2020-01→2022-12, 36 months — the single look, `{fcf_yield}` only):** IC **+0.058
+  (t 2.71)**, spread +0.81%/mo, **selection alpha +7.89% (NW-t +2.98)**, portfolio beat 72.2%
+  (95% CI 46%–99%, 36 cohorts), turnover 11%. Selection skill is significant in **both** in-sample
+  windows under the new metric.
+
+- **Looks disclosed:** 8 development evaluations + 1 validation = 9 in-sample reads; 0 OOS.
+- **Verdict:** 7 candidates **closed at development** (no selection skill under the honest metric).
+  **`{fcf_yield}` advances to card 13.2** (conditional one-shot OOS). This is the anticipated
+  outcome: the family's prior vault rejection (entry 003) was scored on the biased old G3, so its
+  *selection alpha* out-of-sample is genuinely new information, not a respin of a re-weighting.
+- **OOS attempts spent: 0 of 3.** Registry status change: none (nothing pre-registered here).
+- **⚠️ Governance flag carried to 13.2 (for the user, not decided here).** The 13.2 candidate
+  `{fcf_yield}` is the *same recipe* as the already-rejected `us-fcf-yield v1`
+  (sha256 `ade91883…`), which spent `us-value-quality` attempt 1/3. The 12.5 gate change (§4 rule 4)
+  voids/re-runs *certifications*; entry 003 was a **rejection**, not a certification, so it is unclear
+  whether re-running the identical spec under the new G3 is a free 12.5 void-and-rerun or a fresh
+  attempt 2/3. 13.2 must get the user's ruling **before** touching the vault (the card says so).
+  Also open for 13.2: whether to submit `{fcf_yield}` as `us-fcf-yield v2` (new spec version, clean
+  registry lineage) rather than colliding with the immutable v1 report.
