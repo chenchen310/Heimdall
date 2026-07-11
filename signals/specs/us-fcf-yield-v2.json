@@ -1,0 +1,11 @@
+{
+  "name": "us-fcf-yield",
+  "family": "us-value-quality",
+  "market": "US",
+  "version": 2,
+  "features": {
+    "fcf_yield": 1.0
+  },
+  "top_n": 20,
+  "description": "Pure free-cash-flow yield (CFO − capex over market cap). Identical recipe to v1; re-run under the ROADMAP 12.5 decomposed metric as a §4-rule-4 void-and-rerun (v1 was vault-rejected under the old, structurally-biased individual-pick G3 that 12.5 disowned — user sign-off 2026-07-11, RESEARCH_LOG 012). Selection-skill evidence under the corrected G3 (RESEARCH_LOG 011): development 2010-19 alpha vs the equal-weight universe +2.99% (NW-t +3.92), rank IC +0.022 (t 2.87); validation 2020-22 alpha +7.89% (NW-t +2.98), rank IC +0.058 (t 2.71). One feature, one parameter, ~10% monthly turnover. Universe: VTI current constituents (current_universe optimistic). Honest prior: 2023-25 was a mega-cap regime unkind to a diversified value book, so a fair OOS test is not a promised pass."
+}

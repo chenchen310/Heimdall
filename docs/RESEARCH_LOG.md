@@ -438,3 +438,37 @@ checks pass:
   attempt 2/3. 13.2 must get the user's ruling **before** touching the vault (the card says so).
   Also open for 13.2: whether to submit `{fcf_yield}` as `us-fcf-yield v2` (new spec version, clean
   registry lineage) rather than colliding with the immutable v1 report.
+
+## 012 — us-value-quality / us-fcf-yield v2 (2026-07-11, model: Opus 4.8)
+
+- Card: ROADMAP 13.2. Hypothesis: pure free-cash-flow yield (`fcf_yield`) ranks 6-month
+  SPY-relative winners in the eligible US universe (top-20, monthly) **with selection skill above
+  equal-weighting** — the 12.5 decomposed G3: mean per-cohort selection alpha (EW top-20 book 6m
+  `fwd_6m_rel` − EW eligible-universe 6m) **> 0 with NW-t (lag 5) ≥ 2.0** on the 2023+ vault. If not,
+  REJECTED.
+- Spec: `signals/specs/us-fcf-yield-v2.json`
+  sha256: `74268903697af89e6715c94147e6ca9e4da047ab6b3e144288e753ca213a4add`
+- **This is a §4-rule-4 void-and-rerun, not a new attempt (user sign-off, verbatim).** The v2 recipe
+  is identical to `us-fcf-yield v1`, which spent `us-value-quality` attempt 1/3 and was vault-REJECTED
+  (entry 003) — but that rejection was scored on the **old individual-pick G3** that ROADMAP 12.5
+  disowned as structurally biased. Asked to rule how to proceed (13.2 step 2), the user chose:
+  *"當 void-and-rerun，送 v2（推薦）"* — treat it as the gate-change re-run (family budget stays
+  1/3, not a fresh attempt 2/3) and submit as a new version `v2` so v1's immutable report is
+  untouched. Run via `certify --void-and-rerun` (the sanctioned no-new-attempt path; a prior attempt
+  must exist to re-run, and every other guard — immutable report, committed pre-registration,
+  transition-through-code — is intact).
+- Substrate: `panel_us` (built 2026-07-07; 3,436-name VTI universe; `current_universe (optimistic)`).
+  Benchmark `SPY.US`. OOS 2023-01 → last month with complete 6m labels.
+- Dev (2010-19, entry 011): selection alpha +2.99% (NW-t +3.92), rank IC +0.022 (t 2.87).
+- Validation (2020-22, entry 011): selection alpha +7.89% (NW-t +2.98), rank IC +0.058 (t 2.71),
+  displayed portfolio-vs-SPY beat 72.2%.
+- OOS attempt: **re-run of attempt 1 of 3** (family `us-value-quality`; the counter stays at 1).
+- OOS verdict: **pending** (this entry is the committed pre-registration; the certify CLI refuses to
+  run without the matching sha256 above).
+- Registry status change: draft → registered (on certify).
+- Honest prior recorded before the vault is re-touched: the 2023-25 US regime (mega-cap AI dominance,
+  like the TSMC-led 0050) most likely **pressures a diversified value book** — the same structure that
+  first sank v1's old-metric beat rate. The corrected metric gives fcf-yield a **fair** test of its
+  *selection* skill (which is real and significant in both in-sample windows); it does **not** promise
+  a pass. Whatever the number, it is logged and the family closes on this re-run unless genuinely new
+  data (not a re-weighting) appears.

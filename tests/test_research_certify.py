@@ -317,6 +317,46 @@ def test_record_flow_refusals_cost_no_attempt(tmp_path: Path) -> None:
     assert not report_path(spec, tmp_path).exists()
 
 
+def test_void_and_rerun_reuses_the_attempt_without_spending(tmp_path: Path) -> None:
+    # §4 rule-4: re-running a voided family attempt under a changed gate must NOT cost a new one.
+    bench = _bench_series()
+    v2 = _spec(name="rerun", family="rerun-fam", version=2)
+    log = tmp_path / "LOG.md"
+    _write_log(log, "012", v2.canonical_hash())
+    registry.add(v2, "signals/specs/rerun_v2.json", root=tmp_path)
+    registry.spend_attempt("rerun-fam", root=tmp_path)  # the prior (now voided) attempt
+    assert registry.family_attempts("rerun-fam", root=tmp_path) == 1
+
+    report = certify_and_record(
+        v2, _good_panel(bench), bench, log_entry="012", log_path=log, root=tmp_path, spend=False
+    )
+    assert report.verdict == "CERTIFIED"
+    assert report_path(v2, tmp_path).exists()  # evidence written either way
+    assert registry.family_attempts("rerun-fam", root=tmp_path) == 1  # counter untouched
+    assert registry.get("rerun", 2, root=tmp_path)["oos_attempts_family"] == 1  # re-ran attempt 1
+
+
+def test_void_and_rerun_refuses_without_a_prior_attempt(tmp_path: Path) -> None:
+    # A first OOS attempt must spend — void-and-rerun has nothing to re-run and is refused.
+    bench = _bench_series()
+    spec = _spec(name="fresh", family="fresh-fam")
+    log = tmp_path / "LOG.md"
+    _write_log(log, "001", spec.canonical_hash())
+    registry.add(spec, "p.json", root=tmp_path)
+    with pytest.raises(ValueError, match="prior attempt"):
+        certify_and_record(
+            spec,
+            _good_panel(bench),
+            bench,
+            log_entry="001",
+            log_path=log,
+            root=tmp_path,
+            spend=False,
+        )
+    assert registry.family_attempts("fresh-fam", root=tmp_path) == 0
+    assert not report_path(spec, tmp_path).exists()  # the vault was never evaluated
+
+
 def test_record_flow_refuses_once_budget_is_spent(tmp_path: Path) -> None:
     bench = _bench_series()
     spec = _spec(name="late-idea", family="spent-family")

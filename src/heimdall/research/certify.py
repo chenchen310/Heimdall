@@ -390,6 +390,7 @@ def certify_and_record(
     log_entry: str,
     log_path: Path,
     root: Path | None = None,
+    spend: bool = True,
 ) -> CertReport:
     """The guarded flow: refuse cheaply, spend the attempt, evaluate, record.
 
@@ -397,6 +398,13 @@ def certify_and_record(
     nothing; once they pass, the family's OOS attempt is spent **before** the
     vault is evaluated, and the outcome (certified/rejected) is written to the
     registry with its immutable report either way.
+
+    ``spend=False`` is the playbook §4-rule-4 **void-and-rerun**: when a gate
+    change (e.g. 12.5 replacing G3) voids an existing family attempt, re-running
+    that same idea under the corrected gate is a *re-run*, not a new attempt, so
+    it must not consume a fresh one. It still requires a committed
+    pre-registration and a prior attempt to re-run — and, per the rule, a user
+    sign-off recorded in ``docs/RESEARCH_LOG.md``. Every other guard is intact.
     """
     rpath = report_path(spec, root)
     if rpath.exists():
@@ -413,7 +421,16 @@ def certify_and_record(
         raise ValueError(
             f"{spec.name} v{spec.version} is {status!r}; only draft/registered specs can run"
         )
-    attempt = registry.spend_attempt(spec.family, root=root)  # peeking is spending
+    if spend:
+        attempt = registry.spend_attempt(spec.family, root=root)  # peeking is spending
+    else:
+        prior = registry.family_attempts(spec.family, root=root)
+        if prior < 1:
+            raise ValueError(
+                f"void-and-rerun needs a prior attempt to re-run, but family {spec.family!r} "
+                "has none — a first OOS attempt spends (spend=True, playbook §4 rule 4)"
+            )
+        attempt = prior  # re-run the existing attempt; the family counter is untouched
 
     report = certify(spec, panel, benchmark_adj)
 
@@ -437,6 +454,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("spec", help="path to the spec JSON under signals/specs/")
     p.add_argument("--log-entry", required=True, help="pre-registered RESEARCH_LOG entry id")
     p.add_argument("--log", default=None, help="override the RESEARCH_LOG path (testing)")
+    p.add_argument(
+        "--void-and-rerun",
+        action="store_true",
+        help="§4 rule-4: re-run an existing family attempt under a changed gate WITHOUT spending a "
+        "new one (requires a prior attempt + a user sign-off logged in RESEARCH_LOG)",
+    )
     args = p.parse_args(argv)
 
     spec = load_spec(Path(args.spec))
@@ -456,8 +479,15 @@ def main(argv: list[str] | None = None) -> int:
     benchmark_adj = bench.set_index("date")["adj_close"]
 
     report = certify_and_record(
-        spec, panel, benchmark_adj, log_entry=args.log_entry, log_path=log_path
+        spec,
+        panel,
+        benchmark_adj,
+        log_entry=args.log_entry,
+        log_path=log_path,
+        spend=not args.void_and_rerun,
     )
+    if args.void_and_rerun:
+        print("(void-and-rerun: re-ran an existing family attempt; no new attempt spent)")
     print(f"{spec.name} v{spec.version} — {report.verdict}")
     print(f"OOS window {report.window_start} → {report.window_end} ({report.n_months} months)")
     for g in report.gates:

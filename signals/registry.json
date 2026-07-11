@@ -21,6 +21,17 @@
       "oos_attempts_family": 1,
       "cert_report": "/Users/hanruchen/Claude/Projects/stock-observer/signals/certifications/tw-revenue-momentum_v1.json",
       "updated_at": "2026-07-08T17:17:59.068189+00:00"
+    },
+    {
+      "name": "us-fcf-yield",
+      "family": "us-value-quality",
+      "version": 2,
+      "spec_path": "signals/specs/us-fcf-yield-v2.json",
+      "spec_hash": "74268903697af89e6715c94147e6ca9e4da047ab6b3e144288e753ca213a4add",
+      "status": "draft",
+      "oos_attempts_family": null,
+      "cert_report": null,
+      "updated_at": "2026-07-11T04:03:57.653450+00:00"
     }
   ],
   "families": {
