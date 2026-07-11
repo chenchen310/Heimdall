@@ -574,7 +574,22 @@ open-data endpoint.
 > computation). Every page in Phases 14–15 carries the 11.5 fixed caption in both languages:
 > *descriptive data, not a certified signal; Today's Picks ignores this page.*
 
-### 14.1 Sector classification on the snapshot  `[ ]`
+### 14.1 Sector classification on the snapshot  `[x]`
+
+> **Outcome (2026-07-11):** TW reuses `_parse_tw_info`'s already-fetched `industry_category`
+> (refactored into a shared `_parse_tw_rows` core, zero behavior change to `_parse_tw_info`) via
+> new `tw_sector_map()`, cached beside `tw_all.json`. US: option (a) confirmed dead (nothing
+> cached carries sector); option (b) implemented — EDGAR `submissions` JSON's numeric `sic`,
+> bucketed into one of the 10 standard **SIC Divisions** (not raw `sicDescription`, which is
+> 1000+ distinct strings — too granular to aggregate a sector page over) via new
+> `us_sector_map()`, incrementally cached, ~10 req/s. `build_row`/`build_snapshot`/
+> `build_snapshot_iter` gained an opt-in `sector_map` param mirroring `monthly_revenue`'s exact
+> precedent (present → every row gets `sector`, "Unknown" if missing from the map; omitted →
+> column entirely absent, so old callers/tests are untouched). Wired into `build.py`'s CLI. zh
+> glosses added for all 10 Division names + "Unknown" + "Sector" (TW's industry strings are
+> already zh). `DATA_SOURCES.md` documents the choice. Tests: TW/US/Unknown known-answers +
+> SIC-division boundary-contiguity + the sector_map threading suite; existing snapshot tests
+> untouched. Quality gates green.
 
 **Goal:** one `sector` string per snapshot row, both markets.
 **Files:** `src/heimdall/screener/universe.py`, `src/heimdall/screener/build.py` (carry the
@@ -593,7 +608,21 @@ Steps:
 DoD: mapping known-answer tests (one TW, one US, one Unknown); existing snapshot tests untouched.
 **Don't:** per-symbol yfinance `.info` loops (rate-fragile, unofficial).
 
-### 14.2 Sector-focus page  `[ ]`
+### 14.2 Sector-focus page  `[x]`
+
+> **Outcome (2026-07-11):** new `analytics/sector_focus.py` (pure — `trailing_return`,
+> `sector_table`, `member_table`, known-answer tested) keeps `ui/sector_page.py` thin, matching
+> the `rotation_page.py`/`analytics.rotation` precedent. One price fetch per member covers the
+> largest (21-bar) window so the 日/週/月 toggle needs no re-fetch, cached via `st.cache_data`.
+> Sector table sorted by return-vs-benchmark descending ("who leads"); per-sector drill-down
+> expanders show members ranked by return with RS vs the sector mean. TW-only 法人分產業 block
+> checks for 15.2's (not-yet-built) cache and shows a graceful pending hint instead of crashing —
+> the exact expected path is now documented as a contract on 15.2's own card. Old snapshots
+> without a `sector` column (pre-14.1) get an actionable hint rather than crashing — confirmed
+> live against the real (pre-14.1) snapshot in-browser, alongside the TW empty-market path; no
+> console/server errors. AppTest smokes cover both empty states + the full flow (table, TW hint,
+> per-sector expanders) with faked prices (no network). Fixed non-certified caption, both
+> languages. Quality gates green; full suite 262 passed.
 
 **Goal:** the daily/weekly/monthly answer to "which industries lead, and who inside them".
 **Files:** new `src/heimdall/ui/sector_page.py`, `app.py` (nav group "Analyst lenses"),
@@ -670,7 +699,12 @@ Steps:
    `start_date == end_date` and **no** `data_id` → whole market in ~1 request/day/dataset. If the
    free tier refuses bulk, fall back to a cached-universe loop and label the coverage on-page.
 2. Cache per (dataset, date) parquet, delta-only — a month of history ≈ 60–90 requests, well
-   inside quota.
+   inside quota. **Contract owed to 14.2 (already shipped and blocked on this):**
+   `ui/sector_page.py`'s `_flows_cache_path(as_of, root)` already expects a by-sector
+   institutional-flow parquet at `data/research/flows/institutional_{YYYY-MM-DD}.parquet`
+   (minimum shape: a `sector` column) and renders it as-is once present — either write to
+   exactly that path/name as part of this card's per-(dataset, date) cache, or update
+   `sector_page.py`'s contract function in the same PR if a different layout turns out better.
 3. Page, with 日/週/月 = 1/5/21-session aggregation: market net buy by investor type
    (外資/投信/自營); by-sector rollup (needs 14.1 — hide the block gracefully if `sector` is
    absent); top-N net buy/sell names by NT$ value (net shares × close); **投信 streak ranking**
@@ -679,7 +713,9 @@ Steps:
 4. Fixed caption; zh strings.
 
 DoD: aggregation known-answer tests on synthetic frames; bulk-path golden test from saved JSON;
-AppTest smoke incl. the no-cache empty state; gates green.
+AppTest smoke incl. the no-cache empty state; gates green. Also re-run 14.2's
+`test_sector_page_full_flow_and_missing_flows_hint` (or its successor) once real data exists to
+confirm the flows block now renders real rows instead of the pending hint.
 **Don't:** per-ETF holdings scrapers (user decision 2026-07-11); nothing presented as a
 recommendation ranking.
 

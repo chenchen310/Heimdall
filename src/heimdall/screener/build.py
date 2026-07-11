@@ -26,13 +26,14 @@ from dotenv import load_dotenv
 
 from heimdall.data import router
 from heimdall.data.cache import CachedProvider
+from heimdall.data.symbols import parse_symbol
 from heimdall.screener.snapshot import (
     UNIVERSES,
     build_snapshot_iter,
     load_snapshot,
     snapshot_path,
 )
-from heimdall.screener.universe import tw_symbols, vti_symbols
+from heimdall.screener.universe import tw_sector_map, tw_symbols, us_sector_map, vti_symbols
 
 _PREVIEW_COLS = ["symbol", "price", "pe", "ps", "net_margin", "roe", "revenue_growth_yoy", "rsi_14"]
 
@@ -80,6 +81,17 @@ def main(argv: list[str] | None = None) -> int:
 
     monthly_revenue = FinMindProvider().monthly_revenue
 
+    # Sector (roadmap 14.1): fetched once, up front, for the whole universe — never
+    # per row. TW is one bulk FinMind call; US is incremental (cached) per-symbol
+    # EDGAR lookups, so only symbols new to this build cost a request.
+    markets = {s: parse_symbol(s).market for s in symbols}
+    sector_map: dict[str, str] = {}
+    if any(m in ("TW", "TWO") for m in markets.values()):
+        sector_map.update(tw_sector_map())
+    us_syms = [s for s, m in markets.items() if m == "US"]
+    if us_syms:
+        sector_map.update(us_sector_map(us_syms))
+
     # The resumable crawl + checkpointing lives in the core iterator; here we just
     # print the plan, checkpoint lines, and a final summary as it streams progress.
     progress = build_snapshot_iter(
@@ -90,6 +102,7 @@ def main(argv: list[str] | None = None) -> int:
         resume=not args.rebuild,
         checkpoint_every=args.checkpoint_every,
         monthly_revenue=monthly_revenue,
+        sector_map=sector_map,
     )
     last = next(progress)  # initial plan (done == 0)
     print(

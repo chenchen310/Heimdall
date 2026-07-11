@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -726,6 +727,81 @@ def test_guide_page_renders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     assert [h.value for h in at.header] == ["📖 User guide"]
     # one collapsible guide per page (12) + the conventions expander
     assert len(at.expander) >= 12
+
+
+def _write_sector_snapshot(data_dir: Path) -> None:
+    """TW + US rows carrying a 14.1 ``sector`` column, for the sector-focus page."""
+    snap = pd.DataFrame(
+        {
+            "symbol": ["2330.TW", "2317.TW", "A.US", "B.US"],
+            "as_of": pd.Timestamp("2024-01-01"),
+            "sector": ["半導體業", "其他電子業", "Manufacturing", "Services"],
+            "pct_above_sma_200": [0.10, -0.05, 0.05, 0.02],
+        }
+    )
+    snap.to_parquet(data_dir / "snapshot.parquet")
+
+
+def _fake_ohlcv(symbol: str, start: object, end: object) -> pd.DataFrame:
+    dates = pd.bdate_range(end=pd.Timestamp("2024-06-28"), periods=30)
+    base = 100.0 + (hash(symbol) % 5)  # a small per-symbol offset, still deterministic
+    close = pd.Series(base + np.linspace(0, 3, len(dates)))
+    return pd.DataFrame({"date": dates, "adj_close": close})
+
+
+def test_sector_page_predates_sector_classification_hint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # An older snapshot with no `sector` column (pre-14.1) must not crash — it shows
+    # an actionable hint instead of a KeyError.
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_snapshot(tmp_path)  # the plain fixture: no `sector` column
+    _point_registry_at(tmp_path, monkeypatch)
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Sector Focus")
+    assert not at.exception
+    assert [h.value for h in at.header] == ["🏭 Sector focus"]
+    assert any("predates sector classification" in i.value for i in at.info)
+    assert not at.button or "Run sector scan" not in " ".join(b.label for b in at.button)
+
+
+def test_sector_page_full_flow_and_missing_flows_hint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_sector_snapshot(tmp_path)
+    _point_registry_at(tmp_path, monkeypatch)
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    monkeypatch.setattr("heimdall.ui.sector_page.get_ohlcv", _fake_ohlcv)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Sector Focus")
+    assert not at.exception
+    # The fixed non-certified caption must always be on screen.
+    assert any("not a certified signal" in c.value for c in at.caption)
+
+    at.radio[0].set_value("Taiwan").run(timeout=60)  # region radio: TW unlocks the flows block
+    assert not at.exception
+    [b for b in at.button if "Run sector scan" in b.label][0].click().run(timeout=60)
+    assert not at.exception
+
+    # Sector table rendered (both TW sectors from the fixture), no network hit (get_ohlcv faked).
+    table = at.dataframe[0].value
+    assert set(table["Sector"]) == {"半導體業", "其他電子業"}
+
+    # 15.2's cache doesn't exist yet — the missing-flows hint renders, not a crash.
+    assert any("roadmap 15.2" in i.value for i in at.info)
+
+    # Drill-down expanders exist, one per sector.
+    assert len(at.expander) == 2
+
+    from heimdall.ui.i18n import _ZH
+
+    assert "🏭 產業焦點" in _ZH.values()
 
 
 def test_glossary_page_renders_and_searches(

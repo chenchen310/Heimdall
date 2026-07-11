@@ -17,6 +17,7 @@ from heimdall.analytics.portfolio_opt import (
 )
 from heimdall.analytics.risk import RiskReport, risk_report
 from heimdall.analytics.rotation import SECTOR_ETFS, RotationReport, sector_rotation
+from heimdall.analytics.sector_focus import member_table, sector_table, trailing_return
 from heimdall.analytics.technical import TechnicalReport, technical_report
 
 __all__ = [
@@ -37,4 +38,7 @@ __all__ = [
     "EarningsReport",
     "earnings_report",
     "cumulative_flows",
+    "trailing_return",
+    "sector_table",
+    "member_table",
 ]

@@ -30,6 +30,14 @@ Decision reference for which vendor feeds what, and when to pay. All vendors are
 factor data, and Vanguard ETF modules. The ~$88/mo FMP Premium + Polygon Starter combo covers
 essentially every persona for US.
 
+**Sector classification (roadmap 14.1):** no existing cached artifact carries a US sector field
+(probed 2026-07-11), so `screener/universe.py`'s `us_sector_map()` fetches EDGAR's free
+`submissions` JSON (`sic`/`sicDescription`) per symbol, incrementally cached. The raw
+`sicDescription` is far too granular (1000+ distinct strings) to aggregate a sector page over, so
+the numeric SIC code is bucketed into one of the 10 standard **SIC Divisions** (public federal
+classification) instead — a stable, deterministic ~dozen-group taxonomy. Taiwan reuses FinMind
+`TaiwanStockInfo`'s `industry_category` (already fetched for `tw_symbols()`, previously discarded).
+
 ## Taiwan (Phase 6) ✅ implemented
 
 `FinMindProvider` (`data/providers/finmind.py`) serves the `.TW`/`.TWO` markets; the market router

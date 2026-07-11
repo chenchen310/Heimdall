@@ -144,6 +144,7 @@ def build_row(
     as_of: date,
     *,
     monthly_revenue: Callable[[str, date, date], pd.DataFrame] | None = None,
+    sector_map: dict[str, str] | None = None,
 ) -> dict[str, object] | None:
     """One snapshot row, or ``None`` if the symbol has no price data.
 
@@ -161,6 +162,13 @@ def build_row(
     ``NotSupported``/``ProviderError``, caught here and treated as "no monthly
     revenue" (the row still gets the ``rev_mom_*`` columns, as NaN), so the
     resulting table has one consistent schema regardless of market mix.
+
+    ``sector_map`` (roadmap 14.1) is a plain ``{symbol: sector}`` lookup — the
+    network fetch happens once, up front, for the whole universe (see
+    ``screener.universe``), not per row. When given, every row gets a
+    ``sector`` string, "Unknown" for a symbol missing from the map (never a
+    dropped row); when omitted entirely, the column is omitted entirely — the
+    same opt-in-or-absent convention as ``monthly_revenue``'s ``rev_mom_*``.
     """
     price_start = as_of - timedelta(days=500)  # enough history for SMA-200
     ohlcv = prices.get_ohlcv(symbol, price_start, as_of)
@@ -176,7 +184,10 @@ def build_row(
             monthly = monthly_revenue(symbol, as_of - _MONTHLY_REVENUE_LOOKBACK, as_of)
         except (ProviderError, NotSupported):
             monthly = pd.DataFrame()
-    return snapshot_row(symbol, ohlcv, fund, as_of, monthly=monthly)
+    row = snapshot_row(symbol, ohlcv, fund, as_of, monthly=monthly)
+    if sector_map is not None:
+        row["sector"] = sector_map.get(symbol, "Unknown")
+    return row
 
 
 def build_snapshot(
@@ -186,13 +197,23 @@ def build_snapshot(
     as_of: date | None = None,
     *,
     monthly_revenue: Callable[[str, date, date], pd.DataFrame] | None = None,
+    sector_map: dict[str, str] | None = None,
 ) -> pd.DataFrame:
     """Build the snapshot table for ``symbols`` as known on ``as_of`` (default today)."""
     as_of = as_of or date.today()
     rows = [
         row
         for symbol in symbols
-        if (row := build_row(symbol, prices, fundamentals, as_of, monthly_revenue=monthly_revenue))
+        if (
+            row := build_row(
+                symbol,
+                prices,
+                fundamentals,
+                as_of,
+                monthly_revenue=monthly_revenue,
+                sector_map=sector_map,
+            )
+        )
         is not None
     ]
     return pd.DataFrame(rows)
@@ -220,6 +241,7 @@ def build_snapshot_iter(
     checkpoint_every: int = 50,
     root: Path | None = None,
     monthly_revenue: Callable[[str, date, date], pd.DataFrame] | None = None,
+    sector_map: dict[str, str] | None = None,
 ) -> Iterator[BuildProgress]:
     """Resumable, checkpointed build that yields progress after each symbol.
 
@@ -252,7 +274,14 @@ def build_snapshot_iter(
 
     for i, symbol in enumerate(todo, start=1):
         try:
-            row = build_row(symbol, prices, fundamentals, as_of, monthly_revenue=monthly_revenue)
+            row = build_row(
+                symbol,
+                prices,
+                fundamentals,
+                as_of,
+                monthly_revenue=monthly_revenue,
+                sector_map=sector_map,
+            )
         except Exception as exc:  # network/provider hiccup — skip, don't abort the crawl
             prog.failures[type(exc).__name__] = prog.failures.get(type(exc).__name__, 0) + 1
             row = None

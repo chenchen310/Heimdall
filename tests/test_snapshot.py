@@ -457,3 +457,49 @@ def test_build_snapshot_iter_mixed_market_gets_one_consistent_schema(tmp_path: P
     assert "rev_mom_yoy" in snap.columns  # present for BOTH rows of the one table
     assert snap.loc["2330.TW", "rev_mom_yoy"] == pytest.approx(0.50)
     assert pd.isna(snap.loc["X.US", "rev_mom_yoy"])
+
+
+# --- roadmap 14.1: sector_map threading (the monthly_revenue opt-in precedent) ----
+
+
+def test_build_row_with_sector_map_labels_known_symbol() -> None:
+    row = build_row(
+        "X.US",
+        _Prices(_ohlcv()),
+        _NoFundamentals(),
+        date(2024, 4, 1),
+        sector_map={"X.US": "Manufacturing"},
+    )
+    assert row is not None
+    assert row["sector"] == "Manufacturing"
+
+
+def test_build_row_sector_map_unknown_for_missing_symbol() -> None:
+    # The map was given (opt-in) but doesn't cover this symbol — "Unknown", not omitted.
+    row = build_row("X.US", _Prices(_ohlcv()), _NoFundamentals(), date(2024, 4, 1), sector_map={})
+    assert row is not None
+    assert row["sector"] == "Unknown"
+
+
+def test_build_row_without_sector_map_omits_column_entirely() -> None:
+    # No sector_map argument at all: unchanged pre-14.1 behavior (existing callers).
+    row = build_row("X.US", _Prices(_ohlcv()), _NoFundamentals(), date(2024, 4, 1))
+    assert row is not None
+    assert "sector" not in row
+
+
+def test_build_snapshot_iter_mixed_symbols_sector_consistent_schema(tmp_path: Path) -> None:
+    prices = _Prices(_ohlcv())
+    for _ in build_snapshot_iter(
+        ["2330.TW", "X.US"],
+        prices,
+        _NoFundamentals(),
+        date(2024, 4, 1),
+        root=tmp_path,
+        sector_map={"2330.TW": "半導體業"},  # X.US deliberately absent from the map
+    ):
+        pass
+    snap = load_snapshot(tmp_path).set_index("symbol")
+    assert "sector" in snap.columns  # present for BOTH rows of the one table
+    assert snap.loc["2330.TW", "sector"] == "半導體業"
+    assert snap.loc["X.US", "sector"] == "Unknown"  # missing from the map, never dropped

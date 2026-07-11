@@ -37,6 +37,7 @@ _ZH: dict[str, str] = {
     "Rotation": "產業輪動",
     "ETF Portfolio": "ETF 投組",
     "TW Chips": "台股籌碼",
+    "Sector Focus": "產業焦點",
     "Rebuild the snapshot any time:\n\n`uv run python -m heimdall.screener.build`": (
         "隨時可重建快照：\n\n`uv run python -m heimdall.screener.build`"
     ),
@@ -382,6 +383,52 @@ _ZH: dict[str, str] = {
     "Foreign holding % and margin balance": "外資持股比與融資餘額",
     "Foreign holding %": "外資持股比 %",
     "Margin balance": "融資餘額",
+    # --- sector classification (roadmap 14.1) — the ~dozen US SIC Divisions; TW's
+    # FinMind industry_category is already zh and needs no gloss ---
+    "Sector": "產業別",
+    "Unknown": "未知",
+    "Agriculture, Forestry & Fishing": "農林漁業",
+    "Mining": "礦業",
+    "Construction": "營建業",
+    "Manufacturing": "製造業",
+    "Transportation, Communications & Utilities": "運輸、通訊與公用事業",
+    "Wholesale Trade": "批發業",
+    "Retail Trade": "零售業",
+    "Finance, Insurance & Real Estate": "金融、保險與不動產",
+    "Services": "服務業",
+    "Public Administration": "公共行政",
+    # --- sector-focus page (sector_page) ---
+    "🏭 Sector focus": "🏭 產業焦點",
+    "Descriptive data, not a certified signal; Today's Picks ignores this page.": (
+        "描述性資料，非認證訊號；今日候選不會參考此頁。"
+    ),
+    "This snapshot predates sector classification — rebuild it to see sectors.": (
+        "這份快照建立於加入產業分類之前 — 請重新建立快照以顯示產業別。"
+    ),
+    "Window": "區間",
+    "Daily": "日",
+    "Weekly": "週",
+    # "Monthly" already translated ("每月") for the factors-page rebalance selector — reused here.
+    "Run sector scan": "執行產業掃描",
+    "Fetches recent prices for every member (cached after the first run).": (
+        "抓取每檔成分股的近期股價（首次執行後會快取）。"
+    ),
+    "Computing sector returns…": "計算產業報酬中…",
+    "No sector data to show.": "沒有可顯示的產業資料。",
+    "Members": "檔數",
+    "Priced": "有報酬",
+    "Return %": "報酬 %",
+    "vs benchmark %": "相對大盤 %",
+    "Breadth %": "廣度 %",
+    "members": "成分股",
+    "Symbol": "代號",
+    "RS vs sector %": "相對產業強弱 %",
+    "Institutional flow by sector": "法人分產業買賣超",
+    "Institutional flow by sector isn't built yet — see the upcoming Market flows page "
+    "(roadmap 15.2), which will populate this.": (
+        "分產業法人買賣超尚未建置 — 請見即將推出的「市場資金流向」頁（roadmap 15.2），"
+        "該頁完成後會提供此資料。"
+    ),
     # --- misc labels referenced inline ---
     "Field": "欄位",
     "Op": "運算子",
