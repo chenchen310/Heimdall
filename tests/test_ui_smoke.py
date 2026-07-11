@@ -7,6 +7,7 @@ if the optional ``ui`` extra (streamlit) isn't installed.
 from __future__ import annotations
 
 import json
+from datetime import date, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -802,6 +803,138 @@ def test_sector_page_full_flow_and_missing_flows_hint(
     from heimdall.ui.i18n import _ZH
 
     assert "🏭 產業焦點" in _ZH.values()
+
+
+def _write_flows_cache(data_dir: Path, d: date, rows: list[dict[str, object]]) -> None:
+    from heimdall.research.flows_cache import DAILY_COLUMNS, flows_cache_path
+
+    df = pd.DataFrame(rows, columns=DAILY_COLUMNS)
+    path = flows_cache_path(d, data_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(path)
+
+
+def test_sector_page_flows_block_renders_real_rollup_once_cache_exists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """15.2's DoD: re-verify 14.2's TW flows block once real data exists — it must
+    show a genuine by-sector rollup, not the pending hint, and not a raw per-symbol
+    dump (the block was upgraded from a passthrough to analytics.flows.sector_rollup
+    as part of 15.2)."""
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_sector_snapshot(tmp_path)  # 2330.TW=半導體業, 2317.TW=其他電子業
+    _point_registry_at(tmp_path, monkeypatch)
+    _write_flows_cache(
+        tmp_path,
+        date.today(),
+        [
+            {
+                "symbol": "2330.TW",
+                "sector": "半導體業",
+                "date": pd.Timestamp(date.today()),
+                "foreign_net_shares": 1000.0,
+                "trust_net_shares": 0.0,
+                "dealer_net_shares": 0.0,
+                "foreign_hold_ratio": 73.0,
+                "close": 10.0,
+            },
+            {
+                "symbol": "2317.TW",
+                "sector": "其他電子業",
+                "date": pd.Timestamp(date.today()),
+                "foreign_net_shares": -500.0,
+                "trust_net_shares": 0.0,
+                "dealer_net_shares": 0.0,
+                "foreign_hold_ratio": 40.0,
+                "close": 20.0,
+            },
+        ],
+    )
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    monkeypatch.setattr("heimdall.ui.sector_page.get_ohlcv", _fake_ohlcv)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Sector Focus")
+    at.radio[0].set_value("Taiwan").run(timeout=60)
+    [b for b in at.button if "Run sector scan" in b.label][0].click().run(timeout=60)
+    assert not at.exception
+
+    assert not any("roadmap 15.2" in i.value for i in at.info)  # the hint is gone
+    flows_table = next(df.value for df in at.dataframe if "Foreign NT$" in df.value.columns)
+    row = flows_table.set_index("Sector")
+    assert row.loc["半導體業", "Foreign NT$"] == pytest.approx(1000.0 * 10.0)
+    assert row.loc["其他電子業", "Foreign NT$"] == pytest.approx(-500.0 * 20.0)
+
+
+def test_flows_page_no_cache_empty_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _point_registry_at(tmp_path, monkeypatch)
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "TW Market Flows")
+    assert not at.exception
+    assert [h.value for h in at.header] == ["💰 TW market flows"]
+    assert any("not a certified signal" in c.value for c in at.caption)
+    assert any("No flow data cached yet" in i.value for i in at.info)
+    assert any("Build today's flows" in b.label for b in at.button)  # the fetch is opt-in
+
+
+def test_flows_page_renders_all_blocks_from_a_precomputed_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _point_registry_at(tmp_path, monkeypatch)
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+
+    def _rows(
+        d: date, foreign_ratio_2330: float, foreign_ratio_2882: float
+    ) -> list[dict[str, object]]:
+        return [
+            {
+                "symbol": "2330.TW",
+                "sector": "半導體業",
+                "date": pd.Timestamp(d),
+                "foreign_net_shares": 1000.0,
+                "trust_net_shares": 500.0,
+                "dealer_net_shares": -100.0,
+                "foreign_hold_ratio": foreign_ratio_2330,
+                "close": 600.0,
+            },
+            {
+                "symbol": "2882.TW",
+                "sector": "金融保險業",
+                "date": pd.Timestamp(d),
+                "foreign_net_shares": -200.0,
+                "trust_net_shares": 50.0,
+                "dealer_net_shares": 10.0,
+                "foreign_hold_ratio": foreign_ratio_2882,
+                "close": 50.0,
+            },
+        ]
+
+    # Two days so holding_ratio_delta (needs >=2 observations) has something to show.
+    _write_flows_cache(tmp_path, yesterday, _rows(yesterday, 72.0, 39.0))
+    _write_flows_cache(tmp_path, today, _rows(today, 73.0, 40.0))
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "TW Market Flows")
+    at.radio[0].set_value("Weekly").run(timeout=60)  # pull in both cached days
+    assert not at.exception
+    assert not any("No flow data cached yet" in i.value for i in at.info)  # cache found, no hint
+    # market-wide totals (3 metrics: foreign/trust/dealer).
+    assert len(at.metric) == 3
+    # every downstream table rendered without exception.
+    assert len(at.dataframe) >= 4  # sector rollup, top names, trust streak, holding delta
+
+    from heimdall.ui.i18n import _ZH
+
+    assert "💰 台股資金流向" in _ZH.values()
 
 
 def test_glossary_page_renders_and_searches(

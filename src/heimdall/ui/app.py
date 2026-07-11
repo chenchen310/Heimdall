@@ -18,6 +18,7 @@ from heimdall.ui import (  # noqa: E402  (after set_page_config)
     chips_page,
     etf_page,
     factors_page,
+    flows_page,
     glossary_page,
     help_page,
     i18n,
@@ -43,6 +44,7 @@ PAGES = {
     "ETF Portfolio": etf_page.render,
     "TW Chips": chips_page.render,
     "Sector Focus": sector_page.render,
+    "TW Market Flows": flows_page.render,
 }
 
 # Pages grouped by purpose — one labelled section each in the sidebar. Chart,
@@ -53,7 +55,15 @@ NAV: dict[str, list[str]] = {
     "Data": ["Build data"],
     "Stock picking": ["Today's Picks", "Stock Workbench", "Screener"],
     "Backtest": ["Backtest"],
-    "Analyst lenses": ["Rotation", "Factors", "ETF Portfolio", "Macro", "TW Chips", "Sector Focus"],
+    "Analyst lenses": [
+        "Rotation",
+        "Factors",
+        "ETF Portfolio",
+        "Macro",
+        "TW Chips",
+        "Sector Focus",
+        "TW Market Flows",
+    ],
 }
 
 st.sidebar.title("🛡️ Heimdall")

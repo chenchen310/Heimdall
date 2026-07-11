@@ -8,6 +8,13 @@ from __future__ import annotations
 
 from heimdall.analytics.chips import cumulative_flows
 from heimdall.analytics.earnings import EarningsReport, earnings_report
+from heimdall.analytics.flows import (
+    holding_ratio_delta,
+    market_totals,
+    sector_rollup,
+    top_net_buy_sell,
+    trust_streak,
+)
 from heimdall.analytics.fundamental import FundamentalReport, fundamental_report
 from heimdall.analytics.macro import MacroReport, macro_dashboard
 from heimdall.analytics.portfolio_opt import (
@@ -41,4 +48,9 @@ __all__ = [
     "trailing_return",
     "sector_table",
     "member_table",
+    "market_totals",
+    "sector_rollup",
+    "top_net_buy_sell",
+    "trust_streak",
+    "holding_ratio_delta",
 ]

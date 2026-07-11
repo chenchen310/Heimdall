@@ -98,15 +98,20 @@ _PRICE_RENAME: dict[str, str] = {
 # --- daily chips / flows (roadmap 11.3) -------------------------------------
 # ``TaiwanStockInstitutionalInvestorsBuySell`` ``name`` codes. 外資 (foreign) =
 # the investor line + the foreign-dealer-self line (TWSE aggregates both); 投信 =
-# the trust line. Dealer (自營商 self/hedging) lines are excluded on purpose —
-# they are hedging noise, not a directional signal (see the card's priors).
+# the trust line; 自營商 (dealer) = the self + hedging lines combined. Dealer
+# flows are carried as their own column but excluded from every *panel feature*
+# on purpose — they are hedging noise, not a directional signal (see the 11.3
+# card's priors) — roadmap 15.2's market-wide descriptive view is the one
+# consumer that wants them (a complete "who traded today", not a predictor).
 _INST_FOREIGN = frozenset({"Foreign_Investor", "Foreign_Dealer_Self"})
 _INST_TRUST = "Investment_Trust"
+_INST_DEALER = frozenset({"Dealer_self", "Dealer_Hedging"})
 _CHIPS_COLUMNS = [
     "symbol",
     "date",
     "foreign_net_shares",
     "trust_net_shares",
+    "dealer_net_shares",
     "foreign_hold_ratio",
     "margin_balance",
     "margin_short_balance",
@@ -175,18 +180,23 @@ class FinMindProvider(DataProvider):
         """Merged daily TW chip/flow panel — the signature籌碼 streams (roadmap 11.3).
 
         Outer-joins three FinMind datasets on trading day into one frame:
-        institutional net-buy shares (外資 + 投信), foreign holding ratio, and
-        margin buy/short balances (融資/融券). Columns ``[symbol, date,
-        foreign_net_shares, trust_net_shares, foreign_hold_ratio, margin_balance,
-        margin_short_balance, currency, provider, fetched_at]``; feature
-        construction (and the crucial **+1 trading-day** point-in-time shift) is
-        left to the caller (``research.dataset``).
+        institutional net-buy shares (外資 + 投信 + 自營商), foreign holding
+        ratio, and margin buy/short balances (融資/融券). Columns ``[symbol,
+        date, foreign_net_shares, trust_net_shares, dealer_net_shares,
+        foreign_hold_ratio, margin_balance, margin_short_balance, currency,
+        provider, fetched_at]``; feature construction (and the crucial **+1
+        trading-day** point-in-time shift) is left to the caller
+        (``research.dataset`` reads foreign/trust/margin only — dealer flows
+        are hedging noise for signal purposes; ``research.flows_cache``,
+        roadmap 15.2, is the one consumer of ``dealer_net_shares``).
 
         These values are published after trading day *d* closes (T+1 for the
         holding ratio), so a rebalance at *t* must read only through *t−1* — the
         panel enforces that shift. Fetched per symbol: FinMind's per-**date** bulk
-        query (omit ``data_id``) requires a paid tier (probed 2026-07-08, the free
-        ``register`` level is refused), so whole-market builds loop symbols.
+        query (omit ``data_id``) requires a paid tier (probed 2026-07-08,
+        reconfirmed live 2026-07-11 — the free ``register`` level gets a 400
+        "please update your user level" refusal; see
+        :meth:`bulk_institutional_by_date`), so whole-market builds loop symbols.
         """
         sym = self._require_market(symbol)
         inst = _normalize_institutional(
@@ -210,6 +220,29 @@ class FinMindProvider(DataProvider):
         raw = self._get("TaiwanDailyShortSaleBalances", sym.ticker, start, end)
         return _normalize_lending(raw, sym)
 
+    def bulk_institutional_by_date(self, d: date) -> pd.DataFrame | None:
+        """Attempt FinMind's per-**date** bulk query (omit ``data_id``) for
+        ``TaiwanStockInstitutionalInvestorsBuySell`` — the whole market in one
+        request (roadmap 15.2). Returns ``None`` if this token's tier refuses
+        it (a 400/error response — probed 2026-07-08, reconfirmed live
+        2026-07-11: the free ``register`` level is refused, no free-tier
+        example exists to golden-test the success path against real data) or
+        if the market was closed that day (empty response) — either way the
+        caller falls back to a per-symbol loop. Never raises for a refusal; a
+        genuine network error still propagates. If a future paid tier unlocks
+        bulk access, this starts returning real data with no caller-side
+        change needed. Unnormalized — ``[stock_id, date, foreign_net_shares,
+        trust_net_shares, dealer_net_shares]`` via
+        :func:`_normalize_institutional_market_wide`.
+        """
+        try:
+            raw = self._get("TaiwanStockInstitutionalInvestorsBuySell", None, d, d)
+        except ProviderError:
+            return None
+        if not raw:
+            return None
+        return _normalize_institutional_market_wide(raw)
+
     # -- internals -----------------------------------------------------------
     def _require_market(self, symbol: str) -> Symbol:
         sym = parse_symbol(symbol)
@@ -223,16 +256,22 @@ class FinMindProvider(DataProvider):
             time.sleep(wait)
         self._last_call = time.monotonic()
 
-    def _get(self, dataset: str, data_id: str, start: date, end: date) -> list[dict[str, Any]]:
+    def _get(
+        self, dataset: str, data_id: str | None, start: date, end: date
+    ) -> list[dict[str, Any]]:
+        """``data_id=None`` omits the parameter entirely — FinMind's per-date bulk
+        query shape (roadmap 15.2), as opposed to every other caller's per-symbol
+        shape."""
         import requests
 
         self._throttle()
         params: dict[str, str] = {
             "dataset": dataset,
-            "data_id": data_id,
             "start_date": start.isoformat(),
             "end_date": end.isoformat(),
         }
+        if data_id is not None:
+            params["data_id"] = data_id
         if self._token:
             params["token"] = self._token
         resp = requests.get(_BASE, params=params, timeout=30)
@@ -406,11 +445,14 @@ def _normalize_month_revenue(raw: list[dict[str, Any]], sym: Symbol) -> pd.DataF
 def _normalize_institutional(raw: list[dict[str, Any]]) -> pd.DataFrame:
     """``TaiwanStockInstitutionalInvestorsBuySell`` rows → daily net-buy **shares**.
 
-    Sums ``buy − sell`` per day for the foreign lines (外資 + 外資自營商) and for the
-    trust line (投信) separately; dealer lines are dropped. Returns
-    ``[date, foreign_net_shares, trust_net_shares]``.
+    Sums ``buy − sell`` per day for the foreign lines (外資 + 外資自營商), the
+    trust line (投信), and the dealer lines (自營商自行買賣 + 避險) separately.
+    Dealer flows are carried through (roadmap 15.2's market-wide descriptive
+    view reads them) but stay excluded from every panel *feature* — callers in
+    ``research/`` simply don't read ``dealer_net_shares``. Returns
+    ``[date, foreign_net_shares, trust_net_shares, dealer_net_shares]``.
     """
-    cols = ["date", "foreign_net_shares", "trust_net_shares"]
+    cols = ["date", "foreign_net_shares", "trust_net_shares", "dealer_net_shares"]
     if not raw:
         return pd.DataFrame(columns=cols)
     df = pd.DataFrame(raw)
@@ -418,8 +460,37 @@ def _normalize_institutional(raw: list[dict[str, Any]]) -> pd.DataFrame:
     df["net"] = df["buy"].astype(float) - df["sell"].astype(float)
     foreign = df[df["name"].isin(_INST_FOREIGN)].groupby("date")["net"].sum()
     trust = df[df["name"] == _INST_TRUST].groupby("date")["net"].sum()
-    out = pd.DataFrame({"foreign_net_shares": foreign, "trust_net_shares": trust})
+    dealer = df[df["name"].isin(_INST_DEALER)].groupby("date")["net"].sum()
+    out = pd.DataFrame(
+        {"foreign_net_shares": foreign, "trust_net_shares": trust, "dealer_net_shares": dealer}
+    )
     return out.reset_index().sort_values("date").reset_index(drop=True)[cols]
+
+
+def _normalize_institutional_market_wide(raw: list[dict[str, Any]]) -> pd.DataFrame:
+    """Bulk per-date ``TaiwanStockInstitutionalInvestorsBuySell`` rows (every
+    symbol, one date) → per-(stock_id, date) net shares for all three investor
+    types (roadmap 15.2). The multi-symbol sibling of :func:`_normalize_institutional`
+    — grouped by ``stock_id`` **and** ``date`` instead of just ``date``, since a
+    bulk response covers the whole market in one call. Returns
+    ``[stock_id, date, foreign_net_shares, trust_net_shares, dealer_net_shares]``.
+    """
+    cols = ["stock_id", "date", "foreign_net_shares", "trust_net_shares", "dealer_net_shares"]
+    if not raw:
+        return pd.DataFrame(columns=cols)
+    df = pd.DataFrame(raw)
+    df["date"] = pd.to_datetime(df["date"])
+    df["net"] = df["buy"].astype(float) - df["sell"].astype(float)
+    pivot = df.pivot_table(
+        index=["stock_id", "date"], columns="name", values="net", aggfunc="sum", fill_value=0.0
+    )
+    out = pd.DataFrame(index=pivot.index)
+    out["foreign_net_shares"] = pivot.reindex(columns=list(_INST_FOREIGN), fill_value=0.0).sum(
+        axis=1
+    )
+    out["trust_net_shares"] = pivot[_INST_TRUST] if _INST_TRUST in pivot.columns else 0.0
+    out["dealer_net_shares"] = pivot.reindex(columns=list(_INST_DEALER), fill_value=0.0).sum(axis=1)
+    return out.reset_index().sort_values(["stock_id", "date"]).reset_index(drop=True)[cols]
 
 
 def _normalize_shareholding(raw: list[dict[str, Any]]) -> pd.DataFrame:
@@ -502,6 +573,7 @@ def _merge_chips(
     for col in (
         "foreign_net_shares",
         "trust_net_shares",
+        "dealer_net_shares",
         "foreign_hold_ratio",
         "margin_balance",
         "margin_short_balance",

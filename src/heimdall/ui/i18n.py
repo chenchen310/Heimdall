@@ -38,6 +38,7 @@ _ZH: dict[str, str] = {
     "ETF Portfolio": "ETF 投組",
     "TW Chips": "台股籌碼",
     "Sector Focus": "產業焦點",
+    "TW Market Flows": "台股資金流向",
     "Rebuild the snapshot any time:\n\n`uv run python -m heimdall.screener.build`": (
         "隨時可重建快照：\n\n`uv run python -m heimdall.screener.build`"
     ),
@@ -424,11 +425,42 @@ _ZH: dict[str, str] = {
     "Symbol": "代號",
     "RS vs sector %": "相對產業強弱 %",
     "Institutional flow by sector": "法人分產業買賣超",
-    "Institutional flow by sector isn't built yet — see the upcoming Market flows page "
-    "(roadmap 15.2), which will populate this.": (
-        "分產業法人買賣超尚未建置 — 請見即將推出的「市場資金流向」頁（roadmap 15.2），"
-        "該頁完成後會提供此資料。"
+    "Institutional flow by sector isn't built yet — build it from the Market flows "
+    "page (roadmap 15.2) to see this.": (
+        "分產業法人買賣超尚未建置 — 請至「市場資金流向」頁（roadmap 15.2）建立後即可顯示。"
     ),
+    # --- TW market flows page (flows_page, roadmap 15.2) ---
+    "💰 TW market flows": "💰 台股資金流向",
+    "No flow data cached yet.": "尚未建立資金流向快取。",
+    "Build today's flows": "建立今日資金流向",
+    "Fetching today's market-wide flows…": "抓取今日全市場資金流向中…",
+    "Fetches every TW snapshot symbol's chip data for today (cached after that).": (
+        "抓取快照中每檔台股今日的籌碼資料（之後會快取）。"
+    ),
+    "Coverage: {covered} of {universe} TW snapshot symbols.": (
+        "涵蓋範圍：{covered} / {universe} 檔快照台股。"
+    ),
+    "Coverage: {covered} symbols.": "涵蓋範圍：{covered} 檔。",
+    "No TW rows in the snapshot — build one first.": "快照中沒有台股資料 — 請先建立快照。",
+    "Market-wide net-buy by investor type": "全市場依法人別淨買賣",
+    "Foreign": "外資",
+    "Trust": "投信",
+    "Dealer": "自營商",
+    "Net-buy by sector": "分產業淨買賣",
+    "Foreign NT$": "外資淨額(NT$)",
+    "Trust NT$": "投信淨額(NT$)",
+    "Dealer NT$": "自營商淨額(NT$)",
+    "Top net buy / sell names": "買賣超排行",
+    "Investor type": "法人別",
+    "Side": "買賣方向",
+    "Trust net-buy streak": "投信買賣超連續天數",
+    "Consecutive net-buy/-sell days, longest streak first.": (
+        "連續淨買超／賣超天數，天數最長者排前。"
+    ),
+    "Streak (days)": "連續天數",
+    "Direction": "方向",
+    "Foreign holding % change": "外資持股比變化",
+    "Δ (pp)": "Δ（百分點）",
     # --- misc labels referenced inline ---
     "Field": "欄位",
     "Op": "運算子",

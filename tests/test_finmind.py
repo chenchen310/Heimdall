@@ -8,6 +8,8 @@ every Taiwan valuation.
 
 from __future__ import annotations
 
+from datetime import date
+
 import pandas as pd
 import pytest
 
@@ -17,6 +19,7 @@ from heimdall.data.providers.finmind import (
     _merge_chips,
     _normalize_fundamentals,
     _normalize_institutional,
+    _normalize_institutional_market_wide,
     _normalize_lending,
     _normalize_margin,
     _normalize_month_revenue,
@@ -309,19 +312,128 @@ _LENDING_ROWS = [
 ]
 
 
-def test_institutional_sums_foreign_and_trust_excludes_dealers() -> None:
+def test_institutional_sums_foreign_trust_and_dealer_separately() -> None:
     df = _normalize_institutional(_INST_ROWS)
-    assert list(df.columns) == ["date", "foreign_net_shares", "trust_net_shares"]
+    assert list(df.columns) == [
+        "date",
+        "foreign_net_shares",
+        "trust_net_shares",
+        "dealer_net_shares",
+    ]
     assert df["date"].is_monotonic_increasing
     d2 = df[df["date"] == pd.Timestamp("2024-01-02")].iloc[0]
-    # foreign = Foreign_Investor net + Foreign_Dealer_Self net; dealers excluded.
+    # foreign = Foreign_Investor net + Foreign_Dealer_Self net.
     assert d2["foreign_net_shares"] == (19034488 - 11202763) + 0
     assert d2["trust_net_shares"] == 869000 - 109685
+    # dealer = Dealer_self net + Dealer_Hedging net — carried, but a SEPARATE column
+    # (roadmap 15.2), never mixed into foreign/trust (still excluded from those).
+    assert d2["dealer_net_shares"] == (80000 - 641052) + (25585 - 472504)
     d3 = df[df["date"] == pd.Timestamp("2024-01-03")].iloc[0]
     assert d3["foreign_net_shares"] == (10000000 - 8000000) + (
         500000 - 100000
     )  # dealer-self summed in
     assert d3["trust_net_shares"] == 300000 - 500000  # negatives preserved
+    assert d3["dealer_net_shares"] == (1 - 2) + (3 - 4)
+
+
+# --- roadmap 15.2: bulk per-date institutional buy/sell (market-wide) --------
+
+
+# A real bulk (no data_id) TaiwanStockInstitutionalInvestorsBuySell response shape:
+# multiple stock_ids for ONE date. 2330 has all three investor types; 2317
+# deliberately has NO Investment_Trust row, exercising the "column exists globally
+# (from 2330) but this stock_id's combo fills 0.0" pivot edge case.
+def _bulk_row(stock_id: str, name: str, buy: int, sell: int) -> dict[str, object]:
+    return {"date": "2024-01-02", "stock_id": stock_id, "name": name, "buy": buy, "sell": sell}
+
+
+_BULK_INST_ROWS = [
+    _bulk_row("2330", "Foreign_Investor", 19034488, 11202763),
+    _bulk_row("2330", "Investment_Trust", 869000, 109685),
+    _bulk_row("2330", "Dealer_self", 80000, 641052),
+    _bulk_row("2317", "Foreign_Investor", 5000000, 4000000),
+    _bulk_row("2317", "Dealer_Hedging", 1000, 500),
+]
+
+
+def test_institutional_market_wide_golden() -> None:
+    df = _normalize_institutional_market_wide(_BULK_INST_ROWS)
+    assert list(df.columns) == [
+        "stock_id",
+        "date",
+        "foreign_net_shares",
+        "trust_net_shares",
+        "dealer_net_shares",
+    ]
+    assert set(df["stock_id"]) == {"2330", "2317"}
+    r2330 = df[df["stock_id"] == "2330"].iloc[0]
+    assert r2330["foreign_net_shares"] == 19034488 - 11202763
+    assert r2330["trust_net_shares"] == 869000 - 109685
+    assert r2330["dealer_net_shares"] == 80000 - 641052
+    r2317 = df[df["stock_id"] == "2317"].iloc[0]
+    assert r2317["foreign_net_shares"] == 5000000 - 4000000
+    assert r2317["trust_net_shares"] == 0.0  # no Investment_Trust row for 2317 — filled, not NaN
+    assert r2317["dealer_net_shares"] == 1000 - 500
+
+
+def test_institutional_market_wide_empty() -> None:
+    out = _normalize_institutional_market_wide([])
+    assert out.empty
+    assert list(out.columns) == [
+        "stock_id",
+        "date",
+        "foreign_net_shares",
+        "trust_net_shares",
+        "dealer_net_shares",
+    ]
+
+
+def test_bulk_institutional_by_date_returns_none_on_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The real free-tier response: HTTP 400, "please update your user level".
+    class _Refused:
+        status_code = 400
+
+        def json(self) -> dict[str, object]:
+            return {"status": 400, "msg": "Your level is register..."}
+
+    monkeypatch.setattr("requests.get", lambda *a, **k: _Refused())
+    assert FinMindProvider(token=None).bulk_institutional_by_date(date(2024, 1, 2)) is None
+
+
+def test_bulk_institutional_by_date_returns_none_on_empty_market(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A closed-market day (weekend/holiday): 200 status, empty data — also a clean None.
+    class _Empty:
+        status_code = 200
+
+        def json(self) -> dict[str, object]:
+            return {"status": 200, "data": []}
+
+    monkeypatch.setattr("requests.get", lambda *a, **k: _Empty())
+    assert FinMindProvider(token=None).bulk_institutional_by_date(date(2024, 1, 6)) is None
+
+
+def test_get_omits_data_id_when_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    class _Ok:
+        status_code = 200
+
+        def json(self) -> dict[str, object]:
+            return {"status": 200, "data": []}
+
+    def _fake_get(url: str, params: dict[str, object], timeout: int) -> object:
+        captured.update(params)
+        return _Ok()
+
+    monkeypatch.setattr("requests.get", _fake_get)
+    FinMindProvider(token=None)._get(
+        "TaiwanStockInstitutionalInvestorsBuySell", None, date(2024, 1, 2), date(2024, 1, 2)
+    )
+    assert "data_id" not in captured  # bulk shape: omitted entirely, not sent as "None"
 
 
 def test_shareholding_and_margin_pick_the_right_columns() -> None:

@@ -7,15 +7,14 @@ ignores this page (the fixed caption below, both languages).
 from __future__ import annotations
 
 from datetime import date, timedelta
-from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
-from heimdall.analytics import member_table, sector_table
+from heimdall.analytics import member_table, sector_rollup, sector_table
 from heimdall.analytics.sector_focus import trailing_return
-from heimdall.data.store import data_root
 from heimdall.research.benchmark import BENCHMARK
+from heimdall.research.flows_cache import flows_cache_path
 from heimdall.screener.snapshot import split_by_region
 from heimdall.ui._data import get_ohlcv, snapshot
 from heimdall.ui._markets import market_radio
@@ -24,8 +23,8 @@ from heimdall.ui.i18n import t
 
 _DISCLAIMER = "Descriptive data, not a certified signal; Today's Picks ignores this page."
 _FLOWS_PENDING_NOTE = (
-    "Institutional flow by sector isn't built yet — see the upcoming Market flows page "
-    "(roadmap 15.2), which will populate this."
+    "Institutional flow by sector isn't built yet — build it from the Market flows "
+    "page (roadmap 15.2) to see this."
 )
 _WINDOWS: dict[str, int] = {"Daily": 1, "Weekly": 5, "Monthly": 21}
 _LOOKBACK_DAYS = 45  # covers 21 trading bars + a weekend/holiday buffer
@@ -124,21 +123,27 @@ def _member_returns(symbols: tuple[str, ...], as_of: date) -> dict[str, dict[int
     return out
 
 
-def _flows_cache_path(as_of: date, root: Path | None = None) -> Path:
-    """roadmap 15.2's daily by-sector institutional net-buy cache — **not built
-    yet**. Contract for that card: a per-date parquet at
-    ``data/research/flows/institutional_{YYYY-MM-DD}.parquet`` this page can
-    load and render as-is (at minimum a ``sector`` column)."""
-    name = f"institutional_{as_of.isoformat()}.parquet"
-    return (root or data_root()) / "research" / "flows" / name
-
-
 def _tw_flows_block(region: str, as_of: date) -> None:
     if region != "Taiwan":
         return
     st.subheader(t("Institutional flow by sector"))
-    path = _flows_cache_path(as_of)
+    path = flows_cache_path(as_of)  # roadmap 15.2's daily cache — built via that page/CLI
     if not path.exists():
         st.info(t(_FLOWS_PENDING_NOTE))
         return
-    st.dataframe(pd.read_parquet(path), width="stretch", hide_index=True)
+    rollup = sector_rollup(pd.read_parquet(path))
+    if rollup.empty:
+        st.info(t(_FLOWS_PENDING_NOTE))
+        return
+    st.dataframe(
+        rollup.rename(
+            columns={
+                "sector": t("Sector"),
+                "foreign_ntd": t("Foreign NT$"),
+                "trust_ntd": t("Trust NT$"),
+                "dealer_ntd": t("Dealer NT$"),
+            }
+        ),
+        width="stretch",
+        hide_index=True,
+    )

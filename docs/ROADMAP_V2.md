@@ -687,7 +687,31 @@ checkboxes in the same PR.
 > store; 15.1 shows an on-page pointer to it. AppTest smoke asserts the render is network-free until
 > "Load chip data" is clicked.
 
-### 15.2 Market-wide money-flow page  `[ ]`
+### 15.2 Market-wide money-flow page  `[x]`
+
+> **Outcome (2026-07-11):** live-reconfirmed the bulk-per-date refusal (400 "please update your
+> user level", same as 11.3's 2026-07-08 probe) before building anything. Three-layer split:
+> `data/providers/finmind.py` gained `bulk_institutional_by_date()` (tries bulk, returns `None`
+> on refusal — forward-compatible with a future paid tier, golden-tested via
+> `_normalize_institutional_market_wide` on saved-JSON-shaped fixtures) and `_get`'s `data_id`
+> became optional (bulk omits it); `_normalize_institutional` now also carries
+> `dealer_net_shares` (自營商, same already-fetched call — zero extra quota; excluded from every
+> panel *feature* as before, only this descriptive view reads it). New `research/flows_cache.py`
+> orchestrates: bulk first, else loop the **current TW snapshot's** symbols (the sanctioned
+> "cached-universe loop" — not the full ~2,130-name market, which stays 13.7's job) via the
+> existing `daily_chips`; a `ProviderError` (quota exhaustion) stops the loop early rather than
+> burning through the rest, other per-symbol errors are skipped. Writes exactly the path 14.2
+> already contracted for. New `analytics/flows.py` (pure): market totals, by-sector rollup,
+> top-N buy/sell, 投信 streak ("主動資金代理", the card's fixed label), foreign holding-ratio Δ.
+> New `ui/flows_page.py` (日/週/月 toggle, an in-app "Build today's flows" button alongside the
+> CLI). **Closed the 14.2 loop**: `sector_page.py`'s TW block upgraded from a raw passthrough to
+> a real `sector_rollup()` aggregation, with a new test proving real cache data now renders
+> genuine rows instead of the pending hint. Tests: bulk golden + refusal/empty-market/data_id-
+> omission, `_from_loop`'s quota-stop-vs-skip distinction, cache reuse/refresh, `load_window`'s
+> calendar-gap tolerance, all `analytics/flows` functions, and AppTest smokes for both the
+> no-cache empty state and a full multi-day render. Browser live-check was blocked by a
+> persistent tool-side "policy check" hang (not a code issue — same infra hiccup hit earlier in
+> the session); relied on the AppTest suite instead. Quality gates green; full suite 328 passed.
 
 **Goal:** where TW money went — day/week/month, market-wide.
 **Files:** `src/heimdall/data/providers/finmind.py` (bulk per-date methods + golden tests), a
