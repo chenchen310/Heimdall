@@ -97,7 +97,7 @@ computations into standards. Status as of 2026-07-03 (Phases 0–6 delivered, se
 | `docs/NORTH_STAR.md` | This file — goal, definitions, gaps. Update only when the goal itself changes. |
 | `docs/RESEARCH_PLAYBOOK.md` | The process: signal lifecycle, splits, gates (numbers + code), checklists, anti-patterns. |
 | `docs/RESEARCH_LOG.md` | Append-only experiment registry. Every OOS touch is logged **before** it happens. |
-| `docs/ROADMAP_V2.md` | Executable task cards (one PR each), Phases 7–16. |
+| `docs/ROADMAP_V2.md` | Executable task cards (one PR each), Phases 7–17. |
 | `.claude/rules/signal-certification.md` | The short hard law binding every session. |
 | `signals/registry.json` | (Phase 8.1) machine-readable signal statuses; Today's Picks reads only `certified`. |
 | `signals/certifications/` | (Phase 8.2) immutable certification reports, committed to git as evidence. |

@@ -768,18 +768,398 @@ change requiring certification).
 - **Multi-signal combiner** — unlocks at ≥ 2 certified signals; an equal-weight blend is its own
   spec + family through the full pipeline.
 
+## Phase 17 — Orthogonal alpha axes & mechanism upgrades (expert review 2026-07-11)
+
+> Program decided with the user 2026-07-11 (expert-review session). Motivation: the fastest honest
+> route to a higher displayed win rate is **more mutually-orthogonal certified families** (which
+> also unlocks the 16.B combiner), plus mechanism upgrades that make any book cheaper to hold and
+> any measurement more trustworthy. Cards appear in the user's priority order; the wave plan at
+> the bottom of this file resolves dependencies and overrides top-to-bottom. All Phase-13 rules
+> bind unchanged: one card per PR; research cards follow playbook §7; **every vault touch (17.2,
+> 17.8, 17.13) stops for a recorded user go/no-go before pre-registering**; a REJECTED verdict,
+> honestly logged, completes a research card.
+>
+> **Family boundaries (binding for the 3-attempt budgets), with pre-registered direction priors:**
+> `tw-short-pressure` = {sbl_short_delta_21d −, sbl_short_delta_63d −, margin_short_delta_21d −};
+> `us-fundamental-accel` = {rev_accel_q +, gross_margin_delta_q +};
+> `us-earnings-quality` = {accruals −};
+> `us-value-neutral` = sector-neutralized value specs — lineage: the `us-value-quality` *idea*
+> under a different **construction** (within-sector ranking), ruled a NEW family with a fresh
+> budget because neutralization is not a re-weighting; this ruling is recorded here with the
+> user's roadmap sign-off and must be restated verbatim in any pre-registration entry;
+> `us-short-interest` = {short_ratio −, short_ratio_delta_63d −};
+> `tw-crowding` = {max_ret_21d −, day_trade_ratio_21d −}.
+> A composite crossing any boundary is a new `…-composite-…` family (13.6 rule). `margin_delta_21d`
+> stays in `tw-flows` (entry 006) and is deliberately **outside** these boundaries.
+
+### 17.1 TW sell-side chip data + features (借券/融券 — the missing half of 11.3)  `[ ]`
+
+**Goal:** 11.3 wired the buy side (foreign/trust net buys); the informed **sell side** —
+securities-lending short balances (借券賣出, used mostly by foreign institutions) and margin short
+sales (融券) — was never fetched. Free-tier availability verified 2026-07-11 against the FinMind
+docs (`TaiwanDailyShortSaleBalances`, `TaiwanStockSecuritiesLending` both listed free).
+**Files:** `src/heimdall/data/providers/finmind.py`, `tests/test_finmind.py` (goldens),
+`src/heimdall/research/dataset.py`, `tests/test_research_dataset.py`.
+
+Steps:
+1. Extend `_normalize_margin` to **also carry the margin short-sale balance** (融券餘額) from the
+   already-fetched `TaiwanStockMarginPurchaseShortSale` — zero extra quota. Probe the raw field
+   name live (candidates like `ShortSaleTodayBalance`); pin it with a golden test. Only **add** a
+   column to `daily_chips` output — never rename/change existing golden-pinned columns.
+2. New provider method `daily_lending(symbol, start, end)` fetching `TaiwanDailyShortSaleBalances`
+   (free), normalized to `[date, sbl_short_balance]`. Probe the raw column names live and pin by
+   golden test. If the dataset proves paid/empty in practice, probe `TaiwanStockSecuritiesLending`
+   as fallback and **stop and ask** before proceeding.
+3. `build_dataset_iter` gains an optional injected callable `daily_lending=` (the
+   `monthly_revenue`/`daily_chips` precedent) and a `_lending_features()` builder (TW rows, **+1
+   trading-day PIT shift exactly like `_flow_features` — test the shift**):
+   - `sbl_short_delta_21d`, `sbl_short_delta_63d` — Δ(sbl_short_balance over the window) × close ÷
+     21d median dollar volume (the `_net_buy` scaling pattern). Direction **−**.
+   - `margin_short_delta_21d` — %-change of the margin short balance over 21 bars, computed in
+     `_flow_features` from step 1's column. Direction **−** (weaker prior: retail shorting is
+     partly squeeze fuel — record the ambiguity in the 17.2 log entry).
+4. Feature-table doc lines; PIT leak + known-answer tests on hand-built frames (no network).
+
+DoD: goldens + PIT-shift + known-answer tests; quality gates green. If 13.7 is already merged, add
+`lending` to its `--datasets` choices in this PR; otherwise leave a one-line TODO on 13.7's card.
+**Don't:** touch the certified `panel_tw` (panel features are frozen at first write — new columns
+enter research only via the 13.8 full-universe root); don't research the family here (that's 17.2).
+
+### 17.2 `tw-short-pressure` family — research card (user-gated)  `[ ]`
+
+**Goal:** playbook §7 end-to-end for the sell side — the first TW family with a negative-
+information prior, orthogonal by construction to revenue momentum (fundamental, certified) and to
+006's buy-side flows (shown to be mostly EW premium).
+**Files:** RESEARCH_LOG entry; spec JSON under `signals/specs/` only if a candidate advances.
+
+Steps:
+1. Preconditions: 17.1 merged; 13.7 crawled chips+lending for the full universe; 13.8 built the
+   full-universe TW panel (`data/research/full/`) **including the 17.1 columns**. Research runs on
+   that root, never the certified 140-name `panel_tw`.
+2. Pre-stated candidates (no additions mid-session): `{sbl_short_delta_21d: −1}`,
+   `{sbl_short_delta_63d: −1}`, `{margin_short_delta_21d: −1}`,
+   `{sbl_short_delta_63d: −1, margin_short_delta_21d: −1}` equal-weight. ≤ 2 parameters each.
+3. `evaluate` on DEV; advance to the **single** VAL look only candidates with dev IC-t ≥ 2 **and**
+   dev selection-alpha NW-t ≥ 2 (the 13.1 bars). The lending stream may start later than prices —
+   report the actual feature-coverage window; if dev has < 36 covered months, say so and treat VAL
+   as the decisive in-sample read (the entry-005 precedent).
+4. One RESEARCH_LOG entry (dev/val tables + look counts). Any VAL survivor: **stop and ask the
+   user** before pre-registering (13.2 protocol).
+
+DoD: log entry committed; zero OOS reads outside a user-authorized, pre-registered certify run.
+**Don't:** mix this budget with `tw-flows`/`tw-revenue-momentum`; don't flip a pre-stated direction
+after seeing dev numbers (that would be a new, unlisted candidate — stop).
+
+### 17.3 EDGAR quarterly rows must be discrete 3-month durations (the YTD trap)  `[ ]`
+
+**Goal:** `_normalize_companyfacts` labels every non-FY fact `period="quarter"`, but 10-Q duration
+facts (revenue, EPS, CFO…) include **year-to-date** values under the same tag and end date (a Q2
+10-Q files both Apr–Jun and Jan–Jun revenue as `fp="Q2"` with the same `filed_at`); the dedup on
+(metric, period, fiscal_end, filed_at) then keeps an arbitrary one. Every quarterly feature —
+13.4's `sue` and 17.4 — is garbage until "quarter" means *one discrete quarter*. **This card
+blocks 13.4 and 17.4.**
+**Files:** `src/heimdall/data/providers/edgar.py`, `tests/test_edgar.py` (golden extension).
+
+Steps:
+1. In `_normalize_companyfacts`, read each fact's `start` (duration facts carry it; instant
+   balance-sheet facts don't and pass through unchanged). Keep a `quarter` row only when
+   `end − start` is 60–120 days; keep an `annual` duration row only when it is 330–430 days
+   (guards the mirror trap of a Q4-discrete fact tagged FY). This is normalization — exactly the
+   provider's job (the FinMind cumulative-cash-flow precedent) — so **no schema change**.
+2. Extend the golden fixture with a real Q2-style pair (3-month + 6-month fact, same end/filed)
+   asserting only the 3-month row survives, plus the FY-duration assertion.
+3. Note for consumers, in the provider docstring: 10-Q cash-flow facts are often YTD-only, so
+   discrete-quarter `cfo` will be sparse — no planned feature uses it; income-statement items
+   (revenue, EPS, gross profit) do carry discrete quarters.
+
+DoD: goldens green; existing annual-based tests untouched; gates green.
+**Don't:** derive missing Q4-discrete values here (feature-builder decision, 17.4 step 4); don't
+change `FUNDAMENTALS_COLUMNS`.
+
+### 17.4 US fundamental-acceleration features (the certified idea, ported)  `[ ]`
+
+**Goal:** the program's only certified signal is TW monthly-revenue **acceleration** (entry 009).
+Port the economics to the US on free data: quarterly revenue acceleration + gross-margin trend
+from EDGAR 10-Qs — coarser cadence, same idea (fundamentals improving faster than before).
+**Files:** `src/heimdall/research/dataset.py`, `tests/test_research_dataset.py`.
+
+Steps (US rows; **needs 17.3**; the quarterly-rows fetch is 13.4's machinery — if 13.4 hasn't
+landed yet, add the `get_fundamentals(sym, "all", "quarter")` stream here in the same style):
+1. Builder-internal `rev_yoy_q` series: for each quarterly `revenue` row usable at month-end *t*
+   (`filed_at ≤ t`), `rev_q / rev_{q−4} − 1`, where the q−4 row is the one whose `fiscal_end` is
+   ~365 days earlier (tolerate ±45d for fiscal-year shifts); NaN when no match.
+2. Feature `rev_accel_q` = latest `rev_yoy_q` − mean of the prior **4** `rev_yoy_q` values; NaN if
+   fewer than 9 usable quarterly revenue observations. Direction **+**.
+3. Feature `gross_margin_delta_q` = (gross_profit ÷ revenue, latest quarter) − (same, q−4), in
+   percentage points, both legs discrete-quarter rows with `filed_at ≤ t`. NaN when `GrossProfit`
+   is absent — **report dev-window coverage in the 17.8 log entry**; never synthesize from
+   revenue − COGS (13.5 precedent). Direction **+**.
+4. Q4 gaps: when a fiscal Q4 discrete revenue row is missing but FY and Q1–Q3 of the same fiscal
+   year all exist, derive Q4 = FY − (Q1+Q2+Q3) with `filed_at` = the FY row's (PIT: knowable only
+   once the 10-K is filed). Unit-test the arithmetic and the derived `filed_at`. Derivation lives
+   in the feature builder — providers stay as-reported.
+5. Feature-table doc lines; the mandatory **PIT leak test** (a quarter filed after month-end *t*
+   must not move row *t*) + known-answer tests for the q−4 alignment and the accel window.
+
+DoD: tests as above; gates green. Panel extension happens in 17.7, not here.
+**Don't:** key anything off `fiscal_end`; don't mix annual rows into these features; don't touch
+providers beyond what 17.3 landed.
+
+### 17.5 Sector-neutral scoring option (needs 14.1)  `[ ]`
+
+**Goal:** the recorded US failure mode (entries 011/012) is that a raw value book is a structural
+short on whatever mega-cap theme leads the index. Within-sector ranking removes the sector bet and
+keeps the within-sector selection — the standard practitioner fix, as one clean mechanism.
+**Files:** `src/heimdall/research/spec.py`, `src/heimdall/research/dataset.py`,
+`src/heimdall/research/today.py`, `tests/test_research_spec.py`, `tests/test_research_dataset.py`.
+
+Steps:
+1. `SignalSpec` gains `neutralize: str = ""` (validator: `""` or `"sector"`). **Hash stability is
+   load-bearing:** in `canonical_hash()`, pop the field from the payload when it equals the
+   default, so every existing spec hash is unchanged. Add a registry-wide regression test: for
+   every entry in `signals/registry.json`, `load_spec(spec_path).canonical_hash() == spec_hash`
+   (this pins the certified `tw-revenue-momentum` hash without hardcoding it twice).
+2. `score()`: when `neutralize == "sector"`, compute each feature's winsorized z within
+   (eligible pool × `sector` group); groups with < 5 members score NaN (excluded, never a
+   degenerate z-score). Missing `sector` column ⇒ `KeyError` (same posture as a missing feature).
+   Known-answer test: two sectors with opposite feature levels — raw scoring ranks one sector
+   wholesale; neutralized scoring picks each sector's internal leaders.
+3. Panel wiring: `build_dataset_iter` merges 14.1's persisted symbol→sector map onto every row
+   (static column; `"Unknown"` when missing). **Accepted approximation — state it in the builder
+   docstring and in every log entry that uses `neutralize`:** the *current* sector map is applied
+   to history; sector is a grouping label, not a return-bearing feature, and reclassifications
+   are rare — but it is not point-in-time.
+4. `today.py`: require `sector` in the snapshot columns only when the spec neutralizes.
+5. Equivalence test: with `neutralize=""` the new `score()` reproduces the old scores bit-for-bit.
+
+DoD: hash-regression + neutralized known-answer + Unknown/small-group + equivalence tests; gates
+green.
+**Don't:** neutralize by default; don't invent a sector taxonomy (14.1 owns it); don't research
+here (17.8 owns `us-value-neutral`).
+
+### 17.6 US earnings-quality feature (accruals)  `[ ]`
+
+**Goal:** the Sloan (1996) accruals anomaly — earnings not backed by cash flow revert. The one
+documented free US axis untouched by Phases 10/13 (13.5 covers issuance/asset-growth/
+profitability; this is earnings *quality*).
+**Files:** `src/heimdall/research/dataset.py`, `tests/test_research_dataset.py`.
+
+Steps (annual EDGAR rows, `filed_at`-keyed, all three metrics already normalized):
+1. `accruals` = (net_income − cfo) ÷ assets, all from the latest annual row set with
+   `filed_at ≤ t`; the three metrics must share one `fiscal_end` (mismatched years ⇒ NaN).
+   Direction **−**.
+2. Feature-table doc line; PIT leak test; known-answer test incl. the mismatched-year NaN.
+
+DoD: tests green; gates green. Panel extension happens in 17.7.
+**Don't:** decompose working-capital line items — the NI−CFO form is the parameter-free version;
+finer decompositions need tags with thin coverage.
+
+### 17.7 `panel_us` v2 — one rebuild carrying every new US column  `[ ]`
+
+**Goal:** panel feature values are frozen at first write (the dataset.py resume invariant), so new
+columns require a **rebuild**, not a resume. Do it once for all US features (13.3 insider if
+merged, 13.4 sue/earn_gap, 13.5 issuance set, 17.4 acceleration, 17.6 accruals, 17.11
+short-interest, 17.5/14.1 sector, 17.12's `max_ret_21d`), with a mechanical reproduction gate.
+**Files:** none new (7.3 CLI; add a `--rebuild` flag if it lacks one — archive the old parquet as
+`panel_us.v1.parquet` rather than deleting, per data-discipline); a RESEARCH_LOG "panel_us v2"
+note; tick the deferred extend-panel steps of 13.4/13.5 in the same PR with a "consolidated into
+17.7" note.
+
+Steps:
+1. Preconditions: 17.3, 17.4, 17.6 merged; 13.4/13.5 merged; 14.1+17.5 merged if sector rides
+   this rebuild (preferred — one rebuild, not two). 13.3 rides it if already merged; otherwise a
+   later second rebuild must re-run this card's reproduction gate (cite this card).
+2. Governance check, printed and logged: **no US signal is `certified` in the registry** (rejected
+   reports are immutable JSON, unaffected) — rebuilding `panel_us` in place is sanctioned only
+   under that condition; otherwise stop and ask.
+3. Rebuild 2010-01→present. EDGAR + prices are local caches — hours of compute, zero quota; run
+   detached (the 13.7 operational mould).
+4. **Reproduction gate (mandatory):** `evaluate` `{fcf_yield}` dev+val on the new panel must
+   reproduce entry 011 to ~2 dp (dev IC +0.022 t +2.87, alpha +2.99% t +3.92; val IC +0.058
+   t +2.71, alpha +7.89% t +2.98). Material drift ⇒ stop, diagnose (17.3's duration filter must
+   not have touched annual rows), report before any research proceeds.
+5. Log note: columns added; dev-window coverage per new feature (% of eligible rows non-NaN); the
+   reproduction table.
+
+DoD: rebuilt panel + meta; reproduction table committed in the log note; gates green.
+**Don't:** touch `panel_tw` or `data/research/full/`; don't start 17.8 in the same PR.
+
+### 17.8 US new-family research: acceleration · earnings-quality · neutral-value (user-gated)  `[ ]`
+
+**Goal:** playbook §7 over the 17.x US features on the 17.7 panel — plus the sector-neutral
+re-read of the one US signal with proven OOS ranking information.
+**Files:** RESEARCH_LOG entries (one per family); spec JSONs only for advancers.
+
+Steps:
+1. Pre-stated candidates (nothing added mid-session):
+   - `us-fundamental-accel`: `{rev_accel_q}`, `{gross_margin_delta_q}`, equal composite.
+   - `us-earnings-quality`: `{accruals: −1}`.
+   - `us-value-neutral`: `{fcf_yield}` with `neutralize="sector"` — restate the phase-intro
+     family ruling and the sector-map approximation caveat in the log entry.
+   - (13.6's families run under their own card, not here.)
+2. DEV for all; the **single** VAL look only for dev IC-t ≥ 2 **and** dev alpha-t ≥ 2; full
+   look-count disclosure per family.
+3. Honest prior for any value-flavored candidate must name the 2023–25 mega-cap regime explicitly.
+   Any VAL survivor: **stop and ask the user** (13.2 protocol) before pre-registering.
+
+DoD: one committed log entry per family; zero unauthorized OOS reads. Honest closures complete
+the card.
+**Don't:** cross family budgets; don't re-run raw `{fcf_yield}` (the `us-value-quality` remaining
+attempts are reserved for genuinely new data — and neutral-value is a different family by the
+recorded ruling).
+
+### 17.9 MOPS monthly-revenue announcement-date validation (limitation-5 debt)  `[ ]`
+
+**Goal:** NORTH_STAR accepted limitation 5 promised per-filing validation "if a TW family reaches
+pre-registration" — `tw-revenue-momentum` is **certified**, so the debt is due. Validate the
+`month_end + 10d` statutory `filed_at` empirically; the certified signal's PIT base either gains
+evidence or an honest correction.
+**Files:** `docs/NORTH_STAR.md` (limitation 5 update), a RESEARCH_LOG note; provider wiring only
+if a real historical dataset exists.
+
+Steps:
+1. Probe in order, recording findings verbatim: (a) FinMind datalist for any revenue
+   announcement-date field; (b) MOPS (mops.twse.com.tw) monthly-revenue pages for a queryable
+   per-company announcement date; (c) TWSE OpenAPI equivalents.
+2. If a historical per-filing source exists: sample ≥ 30 (symbol, month) pairs across market-cap
+   sizes; report the actual-date distribution vs the statutory 10th + the late-filer share.
+3. If none exists: live-observation fallback — during days 1–12 of the next calendar month,
+   record daily when each of ~30 tracked names' latest revenue first appears (one FinMind/MOPS
+   check per day; trivial quota); report first-appearance vs the 10th.
+4. Update limitation 5 with the measured bound. **If late filings exceed 2% of the sample, stop
+   and ask the user** — a conservative `filed_at` bump would be a §4-rule-4-grade change
+   (re-certification of the TW signal).
+
+DoD: docs updated with numbers + method; log note committed.
+**Don't:** scrape MOPS beyond polite page requests; never adjust `filed_at` silently.
+
+### 17.10 Rank-buffer membership (turnover hysteresis)  `[ ]`
+
+**Goal:** enter at rank ≤ top_n, hold until rank > exit_rank — the standard churn reducer. At
+G4's 20 bps/side, cutting one-way turnover ~30–50% adds material net CAGR to any future signal
+and widens G6 headroom. A per-spec mechanism (certified through the normal pipeline), not a gate
+change.
+**Files:** `src/heimdall/research/spec.py`, `certify.py`, `evaluate.py`, `monitor.py`,
+`today.py`, test mirrors.
+
+Steps:
+1. `SignalSpec.exit_rank: int | None = None` (validator: `> top_n` when set). Canonical-hash rule
+   exactly as 17.5 step 1 (pop when default; the registry-wide hash-regression test covers it).
+2. Pure helper in spec.py —
+   `buffered_members(ranked: list[str], prev: set[str], top_n: int, exit_rank: int) -> set[str]`:
+   keep = prev members whose current rank ≤ exit_rank; fill to top_n with the best-ranked
+   non-kept names. Known-answer tests incl. the fewer-than-top_n cross-section edge.
+3. Thread stateful membership through the monthly loops of `certify()` and `evaluate()` (both
+   currently `ranked.head(spec.top_n)`): with `exit_rank` set, month 1 = plain top-N, later
+   months = `buffered_members`. `_book_minus_universe` gains an optional
+   `members: set[str] | None` (book = member rows) so G3/G4/G6 all price the *held* book;
+   `monitor.cohort_alpha` replays the same stateful sequence from the OOS start (deterministic).
+4. `today.py`: previous membership = the signal's latest 16.1 ledger freeze; absent ⇒ plain top-N
+   with an on-page note. (16.1 is therefore a precondition for **certifying** a buffered spec;
+   dev/val research needs no ledger.)
+5. Tests: buffered turnover < unbuffered on a synthetic churny panel; `exit_rank=None` reproduces
+   current results bit-for-bit; a certify known-answer where the buffer flips G6.
+
+DoD: all mirrors green; hash regression green; gates green.
+**Don't:** count `exit_rank` toward G5's parameter cap (structural, like `top_n`) — but **state
+that interpretation in any log entry using it**; don't retrofit the certified TW spec (a buffered
+variant is a new version through the full pipeline, family budget and all).
+
+### 17.11 US short-interest provider + features (FINRA, free)  `[ ]`
+
+**Goal:** the best-documented free negative axis for US stocks: high short interest / days-to-
+cover predicts underperformance. FINRA publishes consolidated bi-monthly equity short interest
+(text archives ≈ 2014→; query API at `api.finra.org`).
+**Files:** new `src/heimdall/data/providers/finra.py`, `tests/test_finra.py` (golden from a saved
+payload), `src/heimdall/research/dataset.py` features + tests, `docs/DATA_SOURCES.md` one-liner.
+
+Steps:
+1. **Probe first, record in the PR:** coverage of exchange-listed names (not only OTC), history
+   depth, and the publication calendar (settlement on the 15th/EOM; dissemination ~7–9 business
+   days later — FINRA publishes the exact schedule). Listed coverage or per-cycle publication
+   dates unavailable free ⇒ stop and ask.
+2. Provider method `short_interest(symbol, start, end)` → canonical
+   `[symbol, settlement_date, available_at, short_shares, provider, fetched_at]`;
+   `available_at` from the official calendar, **never** the settlement date. Rate limiter;
+   delta-only per cycle; keep raw payloads per data-discipline.
+3. Panel features (US rows; a row at month-end *t* reads cycles with `available_at ≤ t` — **PIT
+   leak test on a cycle published after t**): `short_ratio` = short_shares ÷ 21d median share
+   volume (days-to-cover on our own volume); `short_ratio_delta_63d`. Direction **−** both.
+4. Note for the eventual log entry: features start ~2014 ⇒ dev effectively 2014–2019 (~72
+   months); rows before coverage score NaN and drop out automatically.
+
+DoD: goldens + PIT + known-answer tests; gates green. Research = `us-short-interest` via 17.13.
+**Don't:** land after 17.7 without re-running 17.7's reproduction gate on the follow-up rebuild
+(cite it); don't label this "institutional flow" anywhere (12.4's reality note stands).
+
+### 17.12 TW crowding features (lottery/speculation avoidance)  `[ ]`
+
+**Goal:** the retail-crowding axis on TW: avoid names whose recent trading is speculative froth —
+day-trading share and lottery-like payoffs (the MAX effect), both documented negative predictors.
+**Files:** `src/heimdall/factors/metrics.py` (one price-only field),
+`src/heimdall/research/dataset.py`, `tests/` mirrors.
+
+Steps:
+1. `max_ret_21d` in `_technicals` — max single-day `adj_close` pct-change over the last 21 bars
+   (NaN under 21 bars). Direction **−** (Bali–Cakici–Whitelaw lottery effect). Zero network; the
+   column reaches panels via the next rebuild (17.7 for US, 13.8 for TW — sequence this card
+   before both).
+2. Day-trading ratio: probe FinMind's datalist for a day-trading dataset (not on the chip docs
+   page — check other sections); fallback TWSE OpenAPI daily day-trading statistics. Wire
+   whichever serves the whole market free: `day_trade_ratio_21d` = mean(day-traded shares ÷ total
+   shares traded) over 21 sessions, **+1 trading-day PIT shift**. Direction **−**. Neither source
+   workable free ⇒ ship `max_ret_21d` alone and record the probe outcome on this card.
+3. Feature-table doc lines; PIT + known-answer tests.
+
+DoD: tests green; gates green. Research = `tw-crowding` via 17.13 on the 13.8 root.
+**Don't:** invent a second cache format; no scraping beyond official/open endpoints.
+
+### 17.13 Research: `us-short-interest` · `tw-crowding` (user-gated)  `[ ]`
+
+Same protocol as 17.8 (DEV → single VAL look at the 13.1 bars; one log entry per family; full
+look-count disclosure; **stop and ask the user** before any pre-registration; honest closure
+completes the card). Pre-stated candidates:
+- `us-short-interest` (needs 17.11 + its panel rebuild): `{short_ratio: −1}`,
+  `{short_ratio_delta_63d: −1}`, equal composite.
+- `tw-crowding` (needs 17.12 + the 13.8 root): `{max_ret_21d: −1}`, `{day_trade_ratio_21d: −1}`
+  (if shipped), equal composite of the two.
+**Don't:** blend across families; no candidates beyond this list without a new card.
+
+### 17.B Backlog — promote to a full card with the user before executing
+
+- **TW insider (董監申報轉讓)** — the Form-4 analog via MOPS; wait for 17.9's findings on MOPS
+  access patterns. Family `tw-insider`.
+- **Piotroski F-Score composite column** — 9 binary checks as one panel feature (1 parameter);
+  candidate use of `us-value-quality`'s 2 remaining attempts (genuinely new data columns) or an
+  input to a `us-composite-…` family — needs a user ruling on which budget it bills.
+- **Survivorship-lite US panel** — a committed historical S&P 500/1500 membership CSV (public
+  datasets exist) as an alternative universe root; would sharpen the `current_universe
+  (optimistic)` stamp into a measured bound. TW analog: TWSE delisting lists.
+- **TW quarterly gross-margin trend** — FinMind quarterly statements, the 17.4 analog (mind the
+  standalone-quarterly income-statement cadence already handled in the provider).
+
 ---
 
 **Sequencing:** 7.1 → 7.2 → 7.3 → 8.1 → 8.2 → 8.3 → 9.1 → 9.2 → 10.x → 11.x → 12.x.
 The first "north-star moment" is completing 9.2 + one certified 10.x signal. ✅ Reached
 2026-07-09 via the TW route (`tw-revenue-momentum v1`).
 
-**Phases 13–16 sequencing (2026-07-11)** — waves override top-to-bottom; within a wave, any
-order:
+**Phases 13–17 sequencing (updated 2026-07-11, Phase-17 integration — supersedes the same-day
+13–16 plan)** — waves override top-to-bottom; within a wave, any order. The organizing rule:
+**feature cards land before the one big panel build of their market** (13.8 for TW,
+17.7 for US), so each panel is built once with every column.
 
-- **Wave 1 (independent):** 13.1 · 15.1 (=11.5) · 13.7 (start early — it runs across quota
-  windows in the background).
-- **Wave 2:** 13.8 (needs 13.7) · 15.2 · 14.1 → 14.2.
-- **Wave 3:** 13.9 → 15.3 · 13.3 (=12.4) → 13.4 → 13.5 → 13.6 · 14.3 · 16.1 → 16.2 → 16.3.
-- 13.2 runs whenever 13.1 produces a survivor. 12.3 stays unscheduled until the user asks. Every
-  vault touch (13.2, 13.6, 13.8) stops for a recorded user go/no-go first.
+- **Wave 1 (independent; 13.1 ✅ / 13.2 ✅ already done):** 15.1 (=11.5) · 13.7 (start early —
+  background across quota windows; gains `lending` once 17.1 lands) · 17.3 · 17.1 · 17.9.
+- **Wave 2 (features + pages):** 14.1 → 14.2 · 15.2 · 13.3 (=12.4) · 13.4 → 17.4 · 13.5 ·
+  17.6 · 17.5 (needs 14.1) · 17.12 · 17.11.
+- **Wave 3 (one build per market):** 13.8 (needs 13.7; **must include the 17.1/17.12 TW
+  columns — land those first**) · 17.7 (one `panel_us` rebuild carrying 13.3/13.4/13.5/17.4/
+  17.6/17.11/17.12 + sector; a card that slips past it forces a second rebuild that re-runs
+  17.7's reproduction gate).
+- **Wave 4 (research; every vault touch user-gated):** 13.6 · 17.8 · 17.2 · 17.13 · 13.9 → 15.3.
+- **Wave 5 (trust & mechanisms):** 16.1 → 16.2 → 16.3 · 17.10 (needs 16.1) · 14.3.
+- 12.3 stays unscheduled until the user asks. Every vault touch (13.6, 13.8, 17.2, 17.8, 17.13)
+  stops for a recorded user go/no-go first. A REJECTED verdict, honestly logged, completes any
+  research card. When a **second** signal certifies, promote the 16.B multi-signal combiner to a
+  full card with the user.
