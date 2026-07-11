@@ -36,6 +36,7 @@ _ZH: dict[str, str] = {
     "Macro": "總經",
     "Rotation": "產業輪動",
     "ETF Portfolio": "ETF 投組",
+    "TW Chips": "台股籌碼",
     "Rebuild the snapshot any time:\n\n`uv run python -m heimdall.screener.build`": (
         "隨時可重建快照：\n\n`uv run python -m heimdall.screener.build`"
     ),
@@ -341,6 +342,46 @@ _ZH: dict[str, str] = {
     "History-optimized weights are noisy — a starting point, not gospel.": (
         "用歷史估出的權重很雜訊 — 當成起點而非定論。"
     ),
+    # --- TW chips page (chips_page) ---
+    "💰 TW Chips — who is buying": "💰 台股籌碼 — 誰在買",
+    "Descriptive chip data, not a certified signal; Today's Picks ignores this page.": (
+        "描述性籌碼資料，非認證訊號；今日候選不會參考此頁。"
+    ),
+    "Taiwan symbol (TICKER.TW / .TWO)": "台股代號（TICKER.TW / .TWO）",
+    "Not a canonical symbol — use e.g. 2330.TW.": "不是有效代號 — 請用如 2330.TW。",
+    "Taiwan only — this lens uses TW institutional/margin data.": (
+        "僅限台股 — 此視角使用台股法人／融資資料。"
+    ),
+    "Load chip data": "載入籌碼資料",
+    "Fetches 法人買賣超・外資持股・融資 for one Taiwan symbol (cached after first run).": (
+        "抓取單一台股的法人買賣超・外資持股・融資（首次載入後會快取）。"
+    ),
+    "Market-wide top-10 net-buy/sell lists live on the upcoming Market flows page (roadmap 15.2): "
+    "FinMind's per-date bulk query is paid-tier, so free-tier market-wide flows are built there "
+    "from a cached store. This page is per-symbol.": (
+        "全市場買賣超前十名清單將放在「市場資金流向」頁（roadmap 15.2）：FinMind 的單日整批查詢"
+        "屬付費層，免費層的全市場資金流向會在該頁以快取方式建立。本頁為個股視角。"
+    ),
+    "Fetching chip data…": "抓取籌碼資料中…",
+    "No chip data for {symbol}.": "{symbol} 沒有籌碼資料。",
+    "Latest foreign holding %": "最新外資持股比",
+    "n/a": "無",
+    "Foreign net-buy (20d)": "外資淨買超（20 日）",
+    "Sum of daily 外資 net-buy shares over the last 20 trading days.": (
+        "近 20 個交易日的外資每日淨買超股數合計。"
+    ),
+    "Trust net-buy (20d)": "投信淨買超（20 日）",
+    "Sum of daily 投信 net-buy shares over the last 20 trading days.": (
+        "近 20 個交易日的投信每日淨買超股數合計。"
+    ),
+    "Institutional net-buy vs price": "法人買賣超 vs 股價",
+    "外資 cumulative net-buy": "外資累積淨買超",
+    "投信 cumulative net-buy": "投信累積淨買超",
+    "Price": "股價",
+    "Cumulative net-buy (shares)": "累積淨買超（股數）",
+    "Foreign holding % and margin balance": "外資持股比與融資餘額",
+    "Foreign holding %": "外資持股比 %",
+    "Margin balance": "融資餘額",
     # --- misc labels referenced inline ---
     "Field": "欄位",
     "Op": "運算子",

@@ -6,6 +6,7 @@ optionally, the decoupled ``personas`` AI-report layer. No LLM calls here.
 
 from __future__ import annotations
 
+from heimdall.analytics.chips import cumulative_flows
 from heimdall.analytics.earnings import EarningsReport, earnings_report
 from heimdall.analytics.fundamental import FundamentalReport, fundamental_report
 from heimdall.analytics.macro import MacroReport, macro_dashboard
@@ -35,4 +36,5 @@ __all__ = [
     "prices_wide",
     "EarningsReport",
     "earnings_report",
+    "cumulative_flows",
 ]

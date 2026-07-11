@@ -746,3 +746,32 @@ def test_glossary_page_renders_and_searches(
     body = " ".join(m.value for m in at.markdown)
     assert "`sharpe`" in body
     assert "`pe`" not in body  # narrowed away by the search
+
+
+def test_chips_page_renders_without_fetching(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The TW chips lens renders its inputs + the fixed non-certified disclaimer, and does NOT
+    # touch the network until "Load chip data" is clicked (the button gates every fetch).
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_snapshot(tmp_path)
+    _point_registry_at(tmp_path, monkeypatch)  # keep the default landing page network-free
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "TW Chips")
+    assert not at.exception
+    assert [h.value for h in at.header] == ["💰 TW Chips — who is buying"]
+
+    # The rule for every descriptive lens: the "not a certified signal" caption is on screen.
+    captions = " ".join(c.value for c in at.caption)
+    assert "not a certified signal" in captions
+    # Pre-fetch (no Load click) → the market-wide-flows pointer shows and nothing was fetched.
+    infos = " ".join(i.value for i in at.info)
+    assert "Market flows page" in infos
+    assert not at.dataframe  # no ranking table — this is descriptive, not a recommendation
+
+    from heimdall.ui.i18n import _ZH
+
+    assert "台股籌碼" in _ZH.values()  # zh strings present

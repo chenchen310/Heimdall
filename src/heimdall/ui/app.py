@@ -15,6 +15,7 @@ st.set_page_config(page_title="Heimdall", page_icon="🛡️", layout="wide")
 from heimdall.ui import (  # noqa: E402  (after set_page_config)
     backtest_page,
     build_page,
+    chips_page,
     etf_page,
     factors_page,
     glossary_page,
@@ -39,6 +40,7 @@ PAGES = {
     "Macro": macro_page.render,
     "Rotation": rotation_page.render,
     "ETF Portfolio": etf_page.render,
+    "TW Chips": chips_page.render,
 }
 
 # Pages grouped by purpose — one labelled section each in the sidebar. Chart,
@@ -49,7 +51,7 @@ NAV: dict[str, list[str]] = {
     "Data": ["Build data"],
     "Stock picking": ["Today's Picks", "Stock Workbench", "Screener"],
     "Backtest": ["Backtest"],
-    "Analyst lenses": ["Rotation", "Factors", "ETF Portfolio", "Macro"],
+    "Analyst lenses": ["Rotation", "Factors", "ETF Portfolio", "Macro", "TW Chips"],
 }
 
 st.sidebar.title("🛡️ Heimdall")

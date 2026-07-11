@@ -267,7 +267,7 @@ revenue/flows on a reduced 140-name top-liquidity panel (dev 2017-19 shrank to 1
 robust). Budget intact; a full-universe TW build (paced FinMind stream cache or paid tier) is the
 open follow-on. Aggregate finding strengthens the 12.3 program-definition case.
 
-### 11.5 TW Chips (籌碼) dashboard — descriptive lens, NOT a signal  `[ ]`
+### 11.5 TW Chips (籌碼) dashboard — descriptive lens, NOT a signal  `[x]`
 **Goal:** the daily "who is buying" view, kept firmly outside certification. **Files:**
 `src/heimdall/ui/chips_page.py` (nav group "Analyst lenses"), `i18n.py`, AppTest smoke.
 Per symbol: cumulative 外資/投信 net-buy vs price, foreign holding %, margin balance; market-wide
@@ -641,11 +641,21 @@ DoD: template golden test; UI degrades gracefully without the extra; caption pre
 > per-ETF PCF holdings; do not add such scrapers. Everything here is descriptive; the 11.5
 > caption rule binds every view.
 
-### 15.1 Per-stock chips dashboard — execute card 11.5  `[ ]`
+### 15.1 Per-stock chips dashboard — execute card 11.5  `[x]`
 
 **Card 11.5 verbatim** (per-symbol 外資/投信 cumulative net buy vs price, foreign holding %,
 margin balance; market top-10 lists). Wave 1: its data layer (11.3) is already wired. Mark both
 checkboxes in the same PR.
+
+> **Outcome (2026-07-11): the per-symbol lens shipped; market-wide top-10 deferred to 15.2.**
+> `ui/chips_page.py` (nav "Analyst lenses" → "TW Chips") renders, for one TW symbol, cumulative
+> 外資/投信 net-buy vs price + foreign holding % + margin balance, with the fixed non-certified
+> caption both languages. Aggregation is `analytics.cumulative_flows` (pure, known-answer tested);
+> the page is thin. **The market-wide top-10 clause of 11.5 was NOT built here:** 11.3 established
+> FinMind's per-date bulk query is paid-tier, so a free-tier market-wide list would loop ~2,000
+> names/day (quota-prohibitive). That aggregation belongs to 15.2, which builds the cached per-date
+> store; 15.1 shows an on-page pointer to it. AppTest smoke asserts the render is network-free until
+> "Load chip data" is clicked.
 
 ### 15.2 Market-wide money-flow page  `[ ]`
 

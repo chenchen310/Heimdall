@@ -57,6 +57,12 @@ def get_monthly_revenue(symbol: str, start: date, end: date) -> pd.DataFrame:
     return finmind_provider().monthly_revenue(symbol, start, end)
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_daily_chips(symbol: str, start: date, end: date) -> pd.DataFrame:
+    """Taiwan daily 籌碼 panel (法人買賣超・外資持股・融資) — one TW symbol per call."""
+    return finmind_provider().daily_chips(symbol, start, end)
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def snapshot() -> pd.DataFrame:
     return load_snapshot()
