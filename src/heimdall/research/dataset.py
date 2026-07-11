@@ -112,6 +112,7 @@ _FLOW_KEYS = [
     "trust_net_buy_21d",
     "foreign_hold_delta_63d",
     "margin_delta_21d",
+    "margin_short_delta_21d",
 ]
 
 
@@ -131,8 +132,13 @@ def _flow_features(
     - ``trust_net_buy_21d`` — the same for投信 (trust) flow;
     - ``foreign_hold_delta_63d`` — percentage-point change in the foreign holding
       ratio over 63 trading days;
-    - ``margin_delta_21d`` — %-change in the margin balance over 21 trading days
-      (prior direction **negative**: rising retail leverage is crowding).
+    - ``margin_delta_21d`` — %-change in the margin **buy** balance (融資) over 21
+      trading days (prior direction **negative**: rising retail leverage is
+      crowding);
+    - ``margin_short_delta_21d`` — %-change in the margin **short** balance (融券)
+      over 21 trading days (roadmap 17.1); prior direction **negative**, but
+      weaker/ambiguous than the buy side — retail short covering is partly
+      squeeze fuel (record this ambiguity in the 17.2 log entry).
 
     Each feature reads the last N *available* observations within the ``< as_of``
     window (daily gaps are rare data noise, unlike a missing revenue month — the
@@ -169,6 +175,62 @@ def _flow_features(
     margin = m["margin_balance"].dropna().to_numpy(float)
     if len(margin) >= 22 and margin[-22] > 0:
         out["margin_delta_21d"] = float(margin[-1] / margin[-22] - 1.0)
+
+    margin_short = m["margin_short_balance"].dropna().to_numpy(float)
+    if len(margin_short) >= 22 and margin_short[-22] > 0:
+        out["margin_short_delta_21d"] = float(margin_short[-1] / margin_short[-22] - 1.0)
+    return out
+
+
+_LENDING_KEYS = ["sbl_short_delta_21d", "sbl_short_delta_63d"]
+
+
+def _lending_features(
+    lending: pd.DataFrame, price: pd.DataFrame, as_of: pd.Timestamp
+) -> dict[str, float]:
+    """TW securities-lending short-balance features — 借券賣出 (roadmap 17.1), the
+    informed sell-side counterpart to ``_flow_features``'s buy-side flows. Same
+    **+1 trading-day** point-in-time shift (test the shift): a rebalance at
+    ``as_of`` may read only ``lending`` rows dated strictly before it.
+
+    ``lending`` is ``FinMindProvider.daily_lending`` output.
+
+    - ``sbl_short_delta_21d`` / ``_63d`` — Δ(``sbl_short_balance``) over the
+      window (last minus first of the ``n + 1``-observation span) × the window's
+      last close ÷ the window's median daily dollar volume — the ``_net_buy``
+      scaling pattern, applied to a level-delta instead of a windowed sum (the
+      ``foreign_hold_delta_63d`` precedent). A signed "days of turnover" of the
+      *change* in securities-lending short interest. Direction **−** (rising
+      informed short pressure).
+
+    A feature is NaN when fewer than ``n + 1`` observations exist or its
+    liquidity denominator is ≤ 0.
+    """
+    out = {k: float("nan") for k in _LENDING_KEYS}
+    if lending.empty:
+        return out
+    usable = lending[lending["date"] < as_of]  # +1 trading-day guard, same as _flow_features
+    if usable.empty:
+        return out
+    m = usable.merge(price[["date", "close", "volume"]], on="date", how="inner").sort_values("date")
+    if m.empty:
+        return out
+
+    def _delta(n: int) -> float:
+        sub = m.dropna(subset=["sbl_short_balance", "close", "volume"])
+        if len(sub) < n + 1:  # n+1 points span an n-trading-day change
+            return float("nan")
+        window = sub.tail(n + 1)
+        delta_shares = float(
+            window["sbl_short_balance"].iloc[-1] - window["sbl_short_balance"].iloc[0]
+        )
+        recent = window.tail(n)  # the _net_buy-style n-day window for the volume denominator
+        med = float(np.median((recent["close"] * recent["volume"]).to_numpy(float)))
+        close_now = float(window["close"].iloc[-1])
+        return (delta_shares * close_now) / med if med > 0 else float("nan")
+
+    out["sbl_short_delta_21d"] = _delta(21)
+    out["sbl_short_delta_63d"] = _delta(63)
     return out
 
 
@@ -197,6 +259,7 @@ def build_dataset_iter(
     checkpoint_every: int = 6,
     monthly_revenue: Callable[[str, date, date], pd.DataFrame] | None = None,
     daily_chips: Callable[[str, date, date], pd.DataFrame] | None = None,
+    daily_lending: Callable[[str, date, date], pd.DataFrame] | None = None,
 ) -> Iterator[DatasetProgress]:
     """Build (or extend) the panel month by month, yielding progress per month.
 
@@ -248,6 +311,17 @@ def build_dataset_iter(
             except (ProviderError, NotSupported):
                 chips_hist[sym] = pd.DataFrame()
 
+    # Optional fifth stream (TW): daily securities-lending short balance for the
+    # 17.1 sell-side features. Same 250-day warm-up as the chips stream (same
+    # daily cadence, same 63-trading-day max window).
+    lending_hist: dict[str, pd.DataFrame] = {}
+    if daily_lending is not None:
+        for sym in price_hist:
+            try:
+                lending_hist[sym] = daily_lending(sym, start - timedelta(days=250), end)
+            except (ProviderError, NotSupported):
+                lending_hist[sym] = pd.DataFrame()
+
     # Existing panel + meta: resume skips computed months AND previously-dropped ones.
     existing = pd.DataFrame()
     old_meta: dict[str, object] = {}
@@ -294,6 +368,8 @@ def build_dataset_iter(
             row.update(_labels(adj_by_sym[sym], bench_adj, t, next_of[t]))
             if daily_chips is not None:
                 row.update(_flow_features(chips_hist.get(sym, pd.DataFrame()), ohlcv, t))
+            if daily_lending is not None:
+                row.update(_lending_features(lending_hist.get(sym, pd.DataFrame()), ohlcv, t))
             ok, why = _eligibility(
                 market,
                 len(hist),

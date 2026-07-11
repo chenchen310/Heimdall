@@ -373,6 +373,7 @@ def _chips_frame(
     trust: list[float],
     hold: list[float],
     margin: list[float],
+    margin_short: list[float] | None = None,
 ) -> pd.DataFrame:
     return pd.DataFrame(
         {
@@ -382,6 +383,22 @@ def _chips_frame(
             "trust_net_shares": trust,
             "foreign_hold_ratio": hold,
             "margin_balance": margin,
+            "margin_short_balance": margin_short
+            if margin_short is not None
+            else [float("nan")] * len(dates),
+            "currency": "TWD",
+            "provider": "finmind",
+            "fetched_at": pd.Timestamp("2024-05-01"),
+        }
+    )
+
+
+def _lending_frame(dates: pd.DatetimeIndex, sbl: list[float]) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "symbol": "AAA.TW",
+            "date": dates,
+            "sbl_short_balance": sbl,
             "currency": "TWD",
             "provider": "finmind",
             "fetched_at": pd.Timestamp("2024-05-01"),
@@ -409,6 +426,7 @@ def test_flow_features_known_answer_and_shift() -> None:
         trust=[tk] * (n - 1) + [9e12],
         hold=[20.0 + 0.01 * i for i in range(n - 1)] + [9999.0],
         margin=[10_000.0 * 1.001**i for i in range(n - 1)] + [9e12],
+        margin_short=[5_000.0 * 1.002**i for i in range(n - 1)] + [9e12],
     )
     out = _flow_features(chips, _flat_price(dates, c, v), dates[-1])
     # Σ(net shares × close) over the window ÷ its median dollar volume = n_window × k / v.
@@ -418,6 +436,8 @@ def test_flow_features_known_answer_and_shift() -> None:
     # ratio ramps 0.01pp/day → 63-day pp change = 0.63; margin +0.1%/day → 1.001**21 − 1.
     assert out["foreign_hold_delta_63d"] == pytest.approx(0.63)
     assert out["margin_delta_21d"] == pytest.approx(1.001**21 - 1)
+    # margin_short_delta_21d (roadmap 17.1): +0.2%/day → 1.002**21 − 1.
+    assert out["margin_short_delta_21d"] == pytest.approx(1.002**21 - 1)
 
 
 def test_flow_features_guards() -> None:
@@ -452,6 +472,53 @@ def test_flow_features_guards() -> None:
     chips = _chips_frame(dates, [1.0] * 30, [1.0] * 30, [20.0] * 30, [100.0] * 30)
     zero_vol = _flow_features(chips, _flat_price(dates, volume=0.0), dates[-1])
     assert pd.isna(zero_vol["foreign_net_buy_21d"])
+
+
+def test_lending_features_known_answer_and_shift() -> None:
+    """roadmap 17.1: sell-side (借券賣出) short-balance delta features."""
+    from heimdall.research.dataset import _lending_features
+
+    n = 80
+    dates = pd.bdate_range("2024-01-01", periods=n)
+    base, step, v = 1_000_000.0, 5_000.0, 1_000_000.0
+    # An ARITHMETIC ramp: the delta over any window of length w is exactly step*w,
+    # regardless of where the window sits — makes the hand answer exact. The final
+    # row is dated as_of itself: it must be EXCLUDED (the +1-day shift) — an absurd
+    # spike there proves a leak would be caught, not silently absorbed.
+    sbl = [base + step * i for i in range(n - 1)] + [9e12]
+    lending = _lending_frame(dates, sbl)
+    out = _lending_features(lending, _flat_price(dates), dates[-1])
+    # Δ(sbl) × close ÷ median(close×volume) — with flat price this simplifies to
+    # Δ(sbl) / volume (the close cancels, exactly like `_net_buy`'s flat-price case).
+    assert out["sbl_short_delta_21d"] == pytest.approx(21 * step / v)
+    assert out["sbl_short_delta_63d"] == pytest.approx(63 * step / v)
+
+
+def test_lending_features_guards() -> None:
+    from heimdall.research.dataset import _lending_features
+
+    at = pd.Timestamp("2024-06-01")
+    empty = _lending_features(
+        pd.DataFrame(), _flat_price(pd.bdate_range("2024-01-01", periods=1)), at
+    )
+    assert all(pd.isna(x) for x in empty.values())
+
+    # 21 usable days (the 22nd is the excluded as_of row): the 21-day feature needs
+    # n+1=22 usable observations to express a 21-trading-day delta → NaN.
+    dates = pd.bdate_range("2024-01-01", periods=22)
+    lending = _lending_frame(dates, [1_000_000.0 + 1_000.0 * i for i in range(22)])
+    short = _lending_features(lending, _flat_price(dates), dates[-1])
+    assert pd.isna(short["sbl_short_delta_21d"])
+
+    # 22 usable days (23rd excluded) is exactly enough → not NaN.
+    dates = pd.bdate_range("2024-01-01", periods=23)
+    lending = _lending_frame(dates, [1_000_000.0 + 1_000.0 * i for i in range(23)])
+    enough = _lending_features(lending, _flat_price(dates), dates[-1])
+    assert not pd.isna(enough["sbl_short_delta_21d"])
+
+    # Zero dollar volume → no division by zero, just NaN.
+    zero_vol = _lending_features(lending, _flat_price(dates, volume=0.0), dates[-1])
+    assert pd.isna(zero_vol["sbl_short_delta_21d"])
 
 
 def test_panel_carries_pit_flow_features_for_tw(tmp_path: Path) -> None:
@@ -489,6 +556,33 @@ def test_panel_carries_pit_flow_features_for_tw(tmp_path: Path) -> None:
     assert june["margin_delta_21d"] == pytest.approx(1.001**21 - 1)
 
 
+def test_panel_carries_pit_lending_features_for_tw(tmp_path: Path) -> None:
+    """roadmap 17.1: the injected ``daily_lending`` callable feeds the panel."""
+    frames = {
+        "0050.TW": _ohlcv_geo("0050.TW", 700, 0.0005),
+        "AAA.TW": _ohlcv_geo("AAA.TW", 700, 0.0),  # flat NT$100, NT$100M/day → eligible
+    }
+    cd = pd.bdate_range("2023-06-01", "2024-08-31")
+    base, step, v = 1_000_000.0, 5_000.0, 1_000_000.0
+    lending = _lending_frame(cd, [base + step * i for i in range(len(cd))])
+    _drive(
+        build_dataset_iter(
+            ["AAA.TW"],
+            _Prices(frames),
+            _Funds(),
+            "Taiwan",
+            date(2024, 6, 1),
+            date(2024, 7, 31),
+            root=tmp_path,
+            min_cross_section=0,
+            daily_lending=lambda sym, s, e: lending,
+        )
+    )
+    june = load_panel("Taiwan", tmp_path).set_index("date").loc[pd.Timestamp("2024-06-28")]
+    assert june["sbl_short_delta_21d"] == pytest.approx(21 * step / v)
+    assert june["sbl_short_delta_63d"] == pytest.approx(63 * step / v)
+
+
 def test_us_panel_has_no_flow_columns_without_the_stream(tmp_path: Path) -> None:
     _drive(
         build_dataset_iter(
@@ -504,6 +598,7 @@ def test_us_panel_has_no_flow_columns_without_the_stream(tmp_path: Path) -> None
     )
     cols = load_panel("US", tmp_path).columns
     assert "foreign_net_buy_21d" not in cols and "margin_delta_21d" not in cols
+    assert "sbl_short_delta_21d" not in cols  # roadmap 17.1: no stream ⇒ no lending columns
 
 
 def test_hygiene_constants_mirror_playbook() -> None:

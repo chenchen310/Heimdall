@@ -17,6 +17,7 @@ from heimdall.data.providers.finmind import (
     _merge_chips,
     _normalize_fundamentals,
     _normalize_institutional,
+    _normalize_lending,
     _normalize_margin,
     _normalize_month_revenue,
     _normalize_ohlcv,
@@ -288,8 +289,23 @@ _HOLD_ROWS = [
     },  # inst lacks this day
 ]
 _MARGIN_ROWS = [
-    {"date": "2024-01-02", "stock_id": "2330", "MarginPurchaseTodayBalance": 12844},
-    {"date": "2024-01-03", "stock_id": "2330", "MarginPurchaseTodayBalance": 13785},
+    {
+        "date": "2024-01-02",
+        "stock_id": "2330",
+        "MarginPurchaseTodayBalance": 12844,
+        "ShortSaleTodayBalance": 46,
+    },
+    {
+        "date": "2024-01-03",
+        "stock_id": "2330",
+        "MarginPurchaseTodayBalance": 13785,
+        "ShortSaleTodayBalance": 85,
+    },
+]
+# Real FinMind TaiwanDailyShortSaleBalances shape (roadmap 17.1; share-denominated).
+_LENDING_ROWS = [
+    {"date": "2024-01-02", "stock_id": "2330", "SBLShortSalesCurrentDayBalance": 11170514},
+    {"date": "2024-01-03", "stock_id": "2330", "SBLShortSalesCurrentDayBalance": 11159514},
 ]
 
 
@@ -313,8 +329,42 @@ def test_shareholding_and_margin_pick_the_right_columns() -> None:
     assert list(hold.columns) == ["date", "foreign_hold_ratio"]
     assert hold[hold["date"] == pd.Timestamp("2024-01-02")]["foreign_hold_ratio"].iloc[0] == 73.08
     margin = _normalize_margin(_MARGIN_ROWS)
-    assert list(margin.columns) == ["date", "margin_balance"]
-    assert margin[margin["date"] == pd.Timestamp("2024-01-03")]["margin_balance"].iloc[0] == 13785.0
+    assert list(margin.columns) == ["date", "margin_balance", "margin_short_balance"]
+    d3 = margin[margin["date"] == pd.Timestamp("2024-01-03")].iloc[0]
+    assert d3["margin_balance"] == 13785.0
+    assert d3["margin_short_balance"] == 85.0
+
+
+# --- roadmap 17.1: sell-side chip data (借券/融券) -----------------------------
+
+
+def test_lending_normalizes_share_denominated_balance() -> None:
+    df = _normalize_lending(_LENDING_ROWS, _TW)
+    assert list(df.columns) == [
+        "symbol",
+        "date",
+        "sbl_short_balance",
+        "currency",
+        "provider",
+        "fetched_at",
+    ]
+    assert df["symbol"].unique().tolist() == ["2330.TW"]
+    assert df["date"].is_monotonic_increasing
+    d3 = df[df["date"] == pd.Timestamp("2024-01-03")].iloc[0]
+    assert d3["sbl_short_balance"] == 11159514.0
+
+
+def test_lending_normalizer_empty() -> None:
+    out = _normalize_lending([], _TW)
+    assert out.empty
+    assert list(out.columns) == [
+        "symbol",
+        "date",
+        "sbl_short_balance",
+        "currency",
+        "provider",
+        "fetched_at",
+    ]
 
 
 def test_merge_chips_outer_joins_and_stamps() -> None:
@@ -331,12 +381,16 @@ def test_merge_chips_outer_joins_and_stamps() -> None:
     d4 = df[df["date"] == pd.Timestamp("2024-01-04")].iloc[0]
     assert d4["foreign_hold_ratio"] == 73.05
     assert pd.isna(d4["foreign_net_shares"]) and pd.isna(d4["margin_balance"])
+    assert pd.isna(d4["margin_short_balance"])
+    d3 = df[df["date"] == pd.Timestamp("2024-01-03")].iloc[0]
+    assert d3["margin_short_balance"] == 85.0  # carried through the merge (roadmap 17.1)
 
 
 def test_chip_normalizers_empty() -> None:
     assert _normalize_institutional([]).empty
     assert _normalize_shareholding([]).empty
     assert _normalize_margin([]).empty
+    assert _normalize_lending([], _TW).empty
     assert _merge_chips(
         _normalize_institutional([]), _normalize_shareholding([]), _normalize_margin([]), _TW
     ).empty

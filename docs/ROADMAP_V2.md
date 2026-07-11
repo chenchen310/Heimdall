@@ -501,10 +501,11 @@ Steps:
    provider path, the crawler is simply a paced pre-warmer calling the same
    `FinMindProvider.monthly_revenue` / `.daily_chips` / fundamentals methods.
 2. CLI `uv run python -m heimdall.data.finmind_crawl --market tw
-   [--datasets revenue,chips,fundamentals] [--budget-per-hour 550]`: iterate `tw_symbols()`; a
-   per-(symbol, dataset) progress-ledger JSON makes re-runs skip completed work; pace under the
-   hourly budget; on 402/403 sleep until the window resets (~26-min bans — log and wait, never
-   crash).
+   [--datasets revenue,chips,fundamentals,lending] [--budget-per-hour 550]`: iterate
+   `tw_symbols()`; a per-(symbol, dataset) progress-ledger JSON makes re-runs skip completed
+   work; pace under the hourly budget; on 402/403 sleep until the window resets (~26-min bans —
+   log and wait, never crash). **TODO (17.1 landed first):** include `FinMindProvider.daily_lending`
+   under the `lending` dataset choice, alongside `monthly_revenue`/`daily_chips`.
 3. Progress + ETA prints in the `screener.build` mould; safe to interrupt at any point.
 
 DoD: interrupt-then-rerun makes **zero** duplicate calls (ledger test with a fake provider);
@@ -802,7 +803,27 @@ change requiring certification).
 > A composite crossing any boundary is a new `…-composite-…` family (13.6 rule). `margin_delta_21d`
 > stays in `tw-flows` (entry 006) and is deliberately **outside** these boundaries.
 
-### 17.1 TW sell-side chip data + features (借券/融券 — the missing half of 11.3)  `[ ]`
+### 17.1 TW sell-side chip data + features (借券/融券 — the missing half of 11.3)  `[x]`
+
+> **Outcome (2026-07-11):** both datasets confirmed live with the registered token — no need for
+> the `TaiwanStockSecuritiesLending` fallback. **Unit trap found and documented:** margin
+> short-sale balance (`ShortSaleTodayBalance`, from the already-fetched
+> `TaiwanStockMarginPurchaseShortSale`) is **board-lot (張)** denominated, while SBL securities-
+> lending balance (`SBLShortSalesCurrentDayBalance`, from the new `TaiwanDailyShortSaleBalances`)
+> is **share**-denominated — confirmed by cross-checking both against `TaiwanStockPrice`'s daily
+> `Trading_Volume` for 2330 (46 vs ~25M shares only makes sense as lots; ~11M vs ~25M is
+> plausible as shares). `_normalize_margin` now also returns `margin_short_balance`;
+> new `daily_lending()` + `_normalize_lending()` return `sbl_short_balance`. `_flow_features`
+> gained `margin_short_delta_21d` (from step 1's already-fetched column, zero extra quota);
+> new `_lending_features()` computes `sbl_short_delta_21d`/`_63d` (Δ-over-window × close ÷ median
+> dollar volume — the `_net_buy` pattern applied to a level-delta, mirroring
+> `foreign_hold_delta_63d`'s window semantics). Wired into `build_dataset_iter` (new
+> `daily_lending=` callable) and `build_dataset.py`'s TW CLI branch. `panel_tw` (the certified
+> substrate) untouched — new columns only reach research via 13.8's full-universe root. TODO left
+> on 13.7 to add a `lending` dataset choice once that card lands. Tests: goldens (margin extended +
+> new lending normalizer), known-answer + PIT-shift for both feature builders, a full-panel PIT
+> test via the injected callable, and the "no stream ⇒ no columns" guard extended. Quality gates
+> green; full suite 200 passed.
 
 **Goal:** 11.3 wired the buy side (foreign/trust net buys); the informed **sell side** —
 securities-lending short balances (借券賣出, used mostly by foreign institutions) and margin short
@@ -860,7 +881,15 @@ DoD: log entry committed; zero OOS reads outside a user-authorized, pre-register
 **Don't:** mix this budget with `tw-flows`/`tw-revenue-momentum`; don't flip a pre-stated direction
 after seeing dev numbers (that would be a new, unlisted candidate — stop).
 
-### 17.3 EDGAR quarterly rows must be discrete 3-month durations (the YTD trap)  `[ ]`
+### 17.3 EDGAR quarterly rows must be discrete 3-month durations (the YTD trap)  `[x]`
+
+> **Outcome (2026-07-11):** `_normalize_companyfacts` now reads each fact's `start`; a new
+> `_is_discrete_duration(period, start, end)` keeps duration facts only when their span matches
+> the bucket (quarter 60–120d, annual 330–430d) and passes instant (no-`start`) facts through
+> unchanged. Golden fixture extended with a `GrossProfit` tag isolated from the existing
+> `Revenues` assertions: a Q2 3-month/6-month pair (only the 91d fact survives), a genuine
+> 364d FY fact (survives), and an FY-tagged 92d "mirror trap" fact (dropped entirely — neither
+> annual nor quarter). Existing tests untouched; full suite green (188 passed).
 
 **Goal:** `_normalize_companyfacts` labels every non-FY fact `period="quarter"`, but 10-Q duration
 facts (revenue, EPS, CFO…) include **year-to-date** values under the same tag and end date (a Q2
@@ -1018,7 +1047,16 @@ the card.
 attempts are reserved for genuinely new data — and neutral-value is a different family by the
 recorded ruling).
 
-### 17.9 MOPS monthly-revenue announcement-date validation (limitation-5 debt)  `[ ]`
+### 17.9 MOPS monthly-revenue announcement-date validation (limitation-5 debt)  `[~]` in progress
+
+> **Status (2026-07-11):** step 1 (probe) done — (a)/(b)/(c) all live-probed and disqualified,
+> verbatim findings in RESEARCH_LOG 013 and NORTH_STAR limitation 5. Step 3's mechanism is built
+> and unit-tested (`heimdall.research.mops_probe`), but **not yet run**: it needs a real 12-day
+> calendar window, the next being 2026-08-01 → 2026-08-12. Checkbox stays open — the DoD requires
+> measured numbers, which don't exist until that window closes. **Next action (Aug 2026): run
+> `uv run python -m heimdall.research.mops_probe --record` once daily on days 1–12, then
+> `--summarize 2026-07`; update this card + NORTH_STAR limitation 5 + a RESEARCH_LOG follow-up
+> with the result. The ≤2%-late-filer stop-and-ask guard is already wired into `--summarize`.**
 
 **Goal:** NORTH_STAR accepted limitation 5 promised per-filing validation "if a TW family reaches
 pre-registration" — `tw-revenue-momentum` is **certified**, so the debt is due. Validate the

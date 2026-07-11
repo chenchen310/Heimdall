@@ -109,10 +109,18 @@ _CHIPS_COLUMNS = [
     "trust_net_shares",
     "foreign_hold_ratio",
     "margin_balance",
+    "margin_short_balance",
     "currency",
     "provider",
     "fetched_at",
 ]
+
+# --- sell-side chip data (roadmap 17.1 — the missing half of 11.3) ----------
+# Securities-lending (借券賣出) short balance is share-denominated (verified 2026-07-11 by
+# cross-checking against TaiwanStockPrice's Trading_Volume for the same symbol/dates — same
+# order of magnitude), UNLIKE the board-lot-denominated (張) margin balances above. Keep the
+# two on separate columns; never combine them without converting lots→shares (×1000) first.
+_LENDING_COLUMNS = ["symbol", "date", "sbl_short_balance", "currency", "provider", "fetched_at"]
 
 
 class FinMindProvider(DataProvider):
@@ -168,10 +176,11 @@ class FinMindProvider(DataProvider):
 
         Outer-joins three FinMind datasets on trading day into one frame:
         institutional net-buy shares (外資 + 投信), foreign holding ratio, and
-        margin balance. Columns ``[symbol, date, foreign_net_shares,
-        trust_net_shares, foreign_hold_ratio, margin_balance, currency, provider,
-        fetched_at]``; feature construction (and the crucial **+1 trading-day**
-        point-in-time shift) is left to the caller (``research.dataset``).
+        margin buy/short balances (融資/融券). Columns ``[symbol, date,
+        foreign_net_shares, trust_net_shares, foreign_hold_ratio, margin_balance,
+        margin_short_balance, currency, provider, fetched_at]``; feature
+        construction (and the crucial **+1 trading-day** point-in-time shift) is
+        left to the caller (``research.dataset``).
 
         These values are published after trading day *d* closes (T+1 for the
         holding ratio), so a rebalance at *t* must read only through *t−1* — the
@@ -188,6 +197,18 @@ class FinMindProvider(DataProvider):
             self._get("TaiwanStockMarginPurchaseShortSale", sym.ticker, start, end)
         )
         return _merge_chips(inst, hold, margin, sym)
+
+    def daily_lending(self, symbol: str, start: date, end: date) -> pd.DataFrame:
+        """Daily securities-lending (借券賣出) short balance — the informed sell-side
+        counterpart to 11.3's buy-side flows, used mostly by foreign institutions
+        (roadmap 17.1). Free-tier availability verified 2026-07-11 (live probe,
+        registered token). Columns ``[symbol, date, sbl_short_balance, currency,
+        provider, fetched_at]``; same **+1 trading-day** PIT rule as
+        :meth:`daily_chips` — left to the caller.
+        """
+        sym = self._require_market(symbol)
+        raw = self._get("TaiwanDailyShortSaleBalances", sym.ticker, start, end)
+        return _normalize_lending(raw, sym)
 
     # -- internals -----------------------------------------------------------
     def _require_market(self, symbol: str) -> Symbol:
@@ -421,13 +442,16 @@ def _normalize_shareholding(raw: list[dict[str, Any]]) -> pd.DataFrame:
 
 
 def _normalize_margin(raw: list[dict[str, Any]]) -> pd.DataFrame:
-    """``TaiwanStockMarginPurchaseShortSale`` rows → daily margin balance.
+    """``TaiwanStockMarginPurchaseShortSale`` rows → daily margin buy + short balances.
 
-    ``MarginPurchaseTodayBalance`` is the outstanding margin-buy balance (lots);
-    the unit is irrelevant downstream since the feature is a %-change. Returns
-    ``[date, margin_balance]``.
+    ``MarginPurchaseTodayBalance`` (融資餘額, buy side) and ``ShortSaleTodayBalance``
+    (融券餘額, short side; roadmap 17.1) are both outstanding balances in **board
+    lots (張)** — verified 2026-07-11 by cross-checking against daily share volume
+    (46 vs ~25M shares traded is only plausible as lots). The unit is irrelevant
+    downstream since every feature reading them is a %-change. Returns
+    ``[date, margin_balance, margin_short_balance]``.
     """
-    cols = ["date", "margin_balance"]
+    cols = ["date", "margin_balance", "margin_short_balance"]
     if not raw:
         return pd.DataFrame(columns=cols)
     df = pd.DataFrame(raw)
@@ -435,9 +459,36 @@ def _normalize_margin(raw: list[dict[str, Any]]) -> pd.DataFrame:
         {
             "date": pd.to_datetime(df["date"]),
             "margin_balance": df["MarginPurchaseTodayBalance"].astype(float),
+            "margin_short_balance": df["ShortSaleTodayBalance"].astype(float),
         }
     )
     return out.sort_values("date").reset_index(drop=True)[cols]
+
+
+def _normalize_lending(raw: list[dict[str, Any]], sym: Symbol) -> pd.DataFrame:
+    """``TaiwanDailyShortSaleBalances`` rows → daily securities-lending short balance.
+
+    ``SBLShortSalesCurrentDayBalance`` (借券賣出當日餘額) is **share**-denominated —
+    confirmed 2026-07-11 against ``TaiwanStockPrice``'s ``Trading_Volume`` for the
+    same symbol/dates (same order of magnitude: ~11M balance vs ~25M daily shares
+    traded for 2330), unlike the lot-denominated margin balances in
+    :func:`_normalize_margin`. Returns
+    ``[symbol, date, sbl_short_balance, currency, provider, fetched_at]``.
+    """
+    if not raw:
+        return pd.DataFrame(columns=_LENDING_COLUMNS)
+    df = pd.DataFrame(raw)
+    out = pd.DataFrame(
+        {
+            "symbol": sym.canonical,
+            "date": pd.to_datetime(df["date"]),
+            "sbl_short_balance": df["SBLShortSalesCurrentDayBalance"].astype(float),
+            "currency": sym.currency,
+            "provider": "finmind",
+            "fetched_at": datetime.now(UTC).replace(tzinfo=None),
+        }
+    )
+    return out.sort_values("date").reset_index(drop=True)[_LENDING_COLUMNS]
 
 
 def _merge_chips(
@@ -448,7 +499,13 @@ def _merge_chips(
         return pd.DataFrame(columns=_CHIPS_COLUMNS)
     merged = inst.merge(hold, on="date", how="outer").merge(margin, on="date", how="outer")
     merged = merged.sort_values("date").reset_index(drop=True)
-    for col in ("foreign_net_shares", "trust_net_shares", "foreign_hold_ratio", "margin_balance"):
+    for col in (
+        "foreign_net_shares",
+        "trust_net_shares",
+        "foreign_hold_ratio",
+        "margin_balance",
+        "margin_short_balance",
+    ):
         if col not in merged.columns:
             merged[col] = float("nan")
     merged["symbol"] = sym.canonical

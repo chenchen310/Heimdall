@@ -494,3 +494,61 @@ prior held — the in-sample selection skill did **not** survive the 2023-25 meg
   and genuine *in-sample* selection skill, but that skill does not survive the 2023-25 regime OOS.
   Today's Picks stays US-empty (the certified TW `tw-revenue-momentum v1` is unaffected). This
   sharpens the 12.3 paid-data trigger (estimate revisions) — armed but, per the user, unscheduled.
+
+## 013 — MOPS monthly-revenue announcement-date probe (2026-07-11, model: Sonnet 5)
+
+Card ROADMAP 17.9. NORTH_STAR accepted limitation 5 promised per-filing validation of the TW
+`filed_at` heuristic (fiscal/revenue-period end + statutory lag) "if a TW family reaches
+pre-registration" — `tw-revenue-momentum v1` is certified, so the debt is due. Not an OOS-vault
+experiment (no signal spec, no family budget touched) — an infrastructure/data-discipline
+validation, logged per the card's own DoD ("log note committed").
+
+**Step 1 — probe in order, live, 2026-07-11 (verbatim findings):**
+
+- **(a) FinMind.** No dedicated announcement-date dataset (reconfirms 11.1, 2026-07-08). But a
+  field *inside* `TaiwanStockMonthRevenue` itself — `create_time` — was checked at the raw-row
+  level for the first time. Findings, decisive:
+  - Recent months (2026-04, 2026-05) show plausible per-symbol variation across 8 sampled names
+    (large-to-mid cap): April revenue `create_time` ranged 05-06→05-15, May ranged 06-06→06-12 —
+    *shaped* like real disclosure staggering.
+  - But 2026-02 and 2026-03 revenue show an **identical** `create_time = 2026-04-21` across all 8
+    symbols and both months — a batch-reprocessing timestamp, not a per-filing date (no company
+    plausibly disclosed Feb *and* March revenue simultaneously on April 21).
+  - 2019 revenue (12 symbols sampled, spanning cement/electronics/finance/steel/food) has
+    `create_time = ""` (empty) for every single row — the field isn't populated for deep history
+    at all.
+  - **Verdict: disqualified.** `create_time` is a "last touched" marker, corrupted by at least one
+    known reprocessing event, and absent entirely before some retention horizon. Not a usable
+    historical per-filing source for the 2020–2025 OOS window the certification was built on.
+- **(b) MOPS** (`mopsov.twse.com.tw/nas/t21/sii/t21sc03_{ROC_year}_{month}.html`, the compiled
+  monthly-revenue archive; fetched ROC 113/4 = 2024-04 as a sample, Big5-decoded). Table columns:
+  公司代號, 公司名稱, 當月營收, 上月營收, 去年當月營收, 增減%, 累計營收… — **no per-company date
+  or timestamp column of any kind.** This is a compiled summary, not a per-filing record.
+  (MOPS's separate 重大訊息/individual-announcement query system might carry real per-filing
+  timestamps, but it is a session/POST-driven search form — probing it further would exceed
+  "polite page requests" per the card's own guardrail; flagged as a possible future avenue,
+  **not attempted**, pending explicit user authorization for deeper MOPS integration.)
+- **(c) TWSE OpenAPI** (`openapi.twse.com.tw/v1/opendata/t187ap05_L`). Has a `出表日期`
+  (report-generation date) field — but the live probe (1,082 rows) showed exactly **one** distinct
+  `資料年月` (2026-05 only — the latest period, not a history) and exactly **one** distinct
+  `出表日期` (2026-06-17) across every company. A single current-snapshot report-generation date,
+  not historical, not per-company.
+
+**All three candidate sources are disqualified.** The card's step-3 fallback applies.
+
+**Step 3 — live-observation mechanism (built, not yet run).** New
+`src/heimdall/research/mops_probe.py`: `tracked_symbols()` samples ~30 names evenly across the
+sorted TW universe (index-spread as a free, hallucination-free proxy for cap-size spread — no
+market-cap fetch needed); `update_observations()` is a pure, idempotent first-appearance recorder
+(a re-run never rewrites an already-observed date); `summarize()` reports each first-seen date's
+offset from the §36 10th-of-next-month deadline, with the mandatory **"late filings > 2% ⇒ stop
+and ask" guard** wired into the CLI's `--summarize` output. 10 unit tests (idempotency, the
+December year-roll, atomic store round-trip), no network. **Not yet executable to completion**:
+the card's window is "days 1–12 of the next calendar month" — today is 2026-07-11, so the next
+valid window is **2026-08-01 → 2026-08-12** (observing July 2026 revenue disclosures). Whoever
+picks this up then runs `uv run python -m heimdall.research.mops_probe --record` once daily
+across that window, then `--summarize 2026-07` once it closes.
+
+**Card status: infrastructure + probe complete; empirical measurement pending the Aug 2026
+window** (docs/ROADMAP_V2.md 17.9 stays unchecked — DoD requires "numbers", which don't exist
+yet). `docs/NORTH_STAR.md` limitation 5 updated with these dated findings.

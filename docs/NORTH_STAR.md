@@ -86,9 +86,17 @@ computations into standards. Status as of 2026-07-03 (Phases 0–6 delivered, se
    fiscal-end + 90 days (exactly 3/31 for a December fiscal year), monthly revenue = the 10th of
    the following month. Deadlines are the *latest legal* availability — on-time filers are never
    seen early (no look-ahead); early filers only make features conservative; the sole look-ahead
-   exposure is late filers, which are rare and typically trading-sanctioned. Per-filing empirical
-   validation would require a MOPS (公開資訊觀測站) integration — revisit only if a TW family
-   reaches pre-registration.
+   exposure is late filers, which are rare and typically trading-sanctioned.
+   **Debt-collection status (roadmap 17.9, probed 2026-07-11 — `tw-revenue-momentum v1` is now
+   certified, so this validation was due):** three candidate historical per-filing sources were
+   probed live and all three ruled out — FinMind's `TaiwanStockMonthRevenue.create_time` (empty
+   before some retention horizon; contaminated by a batch-reprocessing timestamp for at least one
+   older period); MOPS's compiled monthly-revenue archive (no per-company date column at all);
+   TWSE OpenAPI's `t187ap05_L` (serves only the single latest period, one report-generation date
+   shared by every company). Full dated findings: `docs/RESEARCH_LOG.md` entry 013. The card's
+   live-observation fallback is built (`heimdall.research.mops_probe`, unit-tested) but not yet
+   run — it needs a real 12-day calendar window (days 1–12 of a month), the next being
+   **2026-08-01 → 2026-08-12**. This limitation is not yet closed; revisit after that window.
 
 ## File map of the institution
 

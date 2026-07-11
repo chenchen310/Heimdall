@@ -88,6 +88,13 @@ METRIC_SPECS: list[MetricSpec] = [
 _TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 _FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json"
 
+# Duration-fact sanity bounds, in days (roadmap 17.3 — the YTD trap). A 10-Q for fiscal Q2 files
+# BOTH the discrete 3-month fact and the year-to-date 6-month fact under the same tag/end/fp, and
+# the (metric, period, fiscal_end, filed_at) dedup then keeps an arbitrary one. Instant
+# (balance-sheet) facts carry no ``start`` in the XBRL JSON and are exempt from this check.
+_QUARTER_DURATION_DAYS = (60, 120)
+_ANNUAL_DURATION_DAYS = (330, 430)
+
 
 def _user_agent() -> str:
     # SEC fair-access policy requires a descriptive UA with contact info.
@@ -166,11 +173,36 @@ class SecEdgarProvider(DataProvider):
         return facts  # type: ignore[no-any-return]
 
 
+def _is_discrete_duration(period: str, start: str | None, end: str) -> bool:
+    """False iff a duration fact's span doesn't match its own ``period`` bucket.
+
+    Instant (balance-sheet) facts carry no ``start`` and always pass — there is
+    no span to check. A duration fact must fall within the expected day range
+    for its ``period``: this drops a year-to-date fact hiding under a
+    quarterly ``fp`` (the Q2/Q3 YTD-pair trap) and drops an FY-tagged fact
+    whose actual span is quarter-length (a mistagged discrete-quarter fact —
+    the mirror trap the annual bound guards against).
+    """
+    if start is None:
+        return True
+    days = (datetime.fromisoformat(end) - datetime.fromisoformat(start)).days
+    lo, hi = _ANNUAL_DURATION_DAYS if period == "annual" else _QUARTER_DURATION_DAYS
+    return lo <= days <= hi
+
+
 def _normalize_companyfacts(facts: dict[str, Any], sym: Symbol) -> pd.DataFrame:
     """Convert an EDGAR ``companyfacts`` JSON into canonical tidy-long rows.
 
     Pure (no network) — the unit of the golden test. Period is ``annual`` when
     the fiscal period is ``FY`` else ``quarter``; every row carries ``filed_at``.
+    Duration facts (income-statement/cash-flow flows) are kept only when their
+    ``end - start`` span is discrete for that period (see
+    :func:`_is_discrete_duration`) — a 10-Q's year-to-date facts are dropped,
+    not averaged or annualized. **Consequence for consumers:** cash-flow facts
+    are commonly YTD-only in 10-Qs, so discrete-quarter ``cfo``/``capex`` rows
+    are sparse (no planned feature reads them at quarterly grain); income-
+    statement items (``revenue``, ``eps_diluted``, ``gross_profit``, …) do
+    carry a genuine discrete quarter and are the intended quarterly features.
     """
     fetched_at = datetime.now(UTC).replace(tzinfo=None)
     usgaap: dict[str, Any] = facts.get("facts", {}).get("us-gaap", {})
@@ -185,12 +217,15 @@ def _normalize_companyfacts(facts: dict[str, Any], sym: Symbol) -> pd.DataFrame:
                 filed, end, val = fact.get("filed"), fact.get("end"), fact.get("val")
                 if filed is None or end is None or val is None:
                     continue
+                period = "annual" if fact.get("fp") == "FY" else "quarter"
+                if not _is_discrete_duration(period, fact.get("start"), end):
+                    continue
                 rows.append(
                     {
                         "symbol": sym.canonical,
                         "metric": metric,
                         "statement": statement,
-                        "period": "annual" if fact.get("fp") == "FY" else "quarter",
+                        "period": period,
                         "fiscal_end": end,
                         "filed_at": filed,
                         "value": float(val),
