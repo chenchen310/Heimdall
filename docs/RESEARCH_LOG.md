@@ -472,3 +472,25 @@ checks pass:
   *selection* skill (which is real and significant in both in-sample windows); it does **not** promise
   a pass. Whatever the number, it is logged and the family closes on this re-run unless genuinely new
   data (not a re-weighting) appears.
+
+**OOS RESULT (2026-07-11): REJECTED.** Immutable report
+`signals/certifications/us-fcf-yield_v2.json`. OOS 2023-01-31 → 2025-12-31, 36 cohorts. The honest
+prior held — the in-sample selection skill did **not** survive the 2023-25 mega-cap regime:
+- **G3 selection alpha −0.80% (NW-t −0.52)** — FAIL, the decisive gate. The dev +2.99% (t +3.92) /
+  val +7.89% (t +2.98) skill vs the equal-weight universe **reversed to slightly negative** OOS: a
+  diversified value book did not out-select the equal-weight universe while mega-caps led.
+- G1 IC **+0.0307 passes** the level but **G1_t 1.59 fails** (< 2). Worth recording: this OOS IC is
+  ~identical to entry 003's old-metric run (+0.031) — rank IC is weighting-immune, so the *ranking
+  information* is the same real-but-marginal signal both times; what the corrected G3 newly shows is
+  that this ranking does **not** translate into selection skill above equal-weighting in this regime.
+- G2 spread −0.24%/mo (positive 47.2%) FAIL; G4 11.3% CAGR / 0.61 Sharpe vs SPY 21.0% / 1.70 FAIL.
+- G5 stability PASS (IC +0.049 / +0.013 across halves, 1 parameter); G6 turnover 12.6% PASS.
+- Displayed portfolio-cohort beat rate **30.6% (95% CI 12.5%–48.6%)**.
+- Registry: draft → registered → **rejected**. **Void-and-rerun honored: family `us-value-quality`
+  attempts stays 1/3** (2 genuine attempts remain, for new data only — never a re-weighting). v1's
+  immutable report is untouched.
+- **Aggregate finding, now on the corrected metric:** with free data, no US family certifies. The
+  strongest free US signal (`fcf_yield`) has real cross-sectional ranking information (OOS IC +0.031)
+  and genuine *in-sample* selection skill, but that skill does not survive the 2023-25 regime OOS.
+  Today's Picks stays US-empty (the certified TW `tw-revenue-momentum v1` is unaffected). This
+  sharpens the 12.3 paid-data trigger (estimate revisions) — armed but, per the user, unscheduled.

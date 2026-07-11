@@ -398,7 +398,15 @@ rows); log entry committed; quality gates green.
 **Don't:** read any row ≥ 2023-01-01 (hard assert in the run); no weight tuning after the VAL
 look; no pre-registration here — that is 13.2's decision.
 
-### 13.2 US survivor: pre-register + one OOS attempt (conditional)  `[ ]`
+### 13.2 US survivor: pre-register + one OOS attempt (conditional)  `[x]`
+
+> **Outcome (2026-07-11, RESEARCH_LOG 012): `us-fcf-yield v2` vault-REJECTED.** User ruled the
+> re-run a §4-rule-4 void-and-rerun (family stays 1/3, submitted as v2); a `--void-and-rerun` path
+> was added to the certify flow (guard-preserving, tested). OOS G3 selection alpha −0.80% (NW-t
+> −0.52) — the in-sample skill (dev +2.99%/t3.92, val +7.89%/t2.98) did not survive the 2023-25
+> mega-cap regime, exactly the pre-registered prior. G1_ic +0.031 reproduces the old run (rank IC
+> is weighting-immune) but G1_t 1.59 < 2. Family `us-value-quality` has 2 genuine attempts left
+> (new data only). Today's Picks stays US-empty; the 12.3 paid-data trigger is sharpened (unscheduled).
 
 **Goal:** one disciplined vault shot for the best 13.1 survivor — only if one exists.
 **Files:** `signals/specs/<name>.json`, RESEARCH_LOG entry, `signals/certifications/…`.
