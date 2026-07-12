@@ -66,13 +66,19 @@ def main(argv: list[str] | None = None) -> int:
     monthly_revenue = None
     daily_chips = None
     daily_lending = None
+    tdcc_weeks = None
     if args.market == "tw":  # extra TW streams: 月營收 (11.2) + 法人籌碼 (11.3) + 借券/融券 (17.1)
         from heimdall.data.providers import FinMindProvider
+        from heimdall.data.providers import tdcc as tdcc_provider
 
         finmind = FinMindProvider()
         monthly_revenue = finmind.monthly_revenue
         daily_chips = finmind.daily_chips
         daily_lending = finmind.daily_lending
+        # 集保大戶 (roadmap 13.9): whatever's accumulated on disk so far — there is
+        # no per-symbol fetch here (build/refresh the weekly cache separately via
+        # `python -m heimdall.research.tdcc_cache`, once a week, over real time).
+        tdcc_weeks = tdcc_provider.load_cached_weeks()
 
     progress = build_dataset_iter(
         symbols,
@@ -86,6 +92,7 @@ def main(argv: list[str] | None = None) -> int:
         monthly_revenue=monthly_revenue,
         daily_chips=daily_chips,
         daily_lending=daily_lending,
+        tdcc_weeks=tdcc_weeks,
     )
     last = next(progress)  # the plan
     print(f"Universe: {len(symbols)} symbols | months to build: {last.total_months}")

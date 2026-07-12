@@ -2,13 +2,18 @@
 
 Per Taiwan symbol: cumulative 外資/投信 net-buy vs price, foreign holding %, and margin balance —
 the daily "who is accumulating" view, kept firmly outside certification (Today's Picks ignores this
-page). Computation lives in ``analytics.cumulative_flows``; this file only wires inputs → charts.
+page). Computation lives in ``analytics.cumulative_flows``/``analytics.big_holder``; this file only
+wires inputs → charts.
 
 Market-wide top-10 net-buy/sell lists (the other half of card 11.5) need FinMind's per-**date** bulk
 query, which is **paid-tier** (probed 2026-07-08; see ``FinMindProvider.daily_chips``). On the free
 tier that means looping the whole ~2,000-name market per day — quota-prohibitive for an interactive
 page — so market-wide flows are deferred to the Market flows page (roadmap 15.2), which builds a
 cached per-date store. This page stays per-symbol and quota-safe.
+
+The 大戶 (big-holder) overlay (roadmap 15.3) is TDCC's honest **weekly** cadence — sparse points,
+never interpolated to daily; empty until `python -m heimdall.research.tdcc_cache` has accumulated
+some real weeks (no historical backfill exists on that endpoint).
 """
 
 from __future__ import annotations
@@ -20,7 +25,8 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from heimdall.analytics import cumulative_flows
+from heimdall.analytics import cumulative_flows, symbol_history
+from heimdall.data.providers.tdcc import AVAILABILITY_LAG, load_cached_weeks
 from heimdall.data.symbols import SymbolError, parse_symbol
 from heimdall.ui._data import get_daily_chips, get_ohlcv
 from heimdall.ui.i18n import t
@@ -31,6 +37,11 @@ _MARKET_NOTE = (
     "FinMind's per-date bulk query is paid-tier, so free-tier market-wide flows are built there "
     "from a cached store. This page is per-symbol."
 )
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_tdcc_weeks() -> pd.DataFrame:
+    return load_cached_weeks()
 
 
 def render() -> None:
@@ -70,6 +81,7 @@ def render() -> None:
     _metrics(chips)
     _flows_vs_price(chips, price)
     _holding_and_margin(chips)
+    _big_holder_block(sym.canonical, price)
     st.info(t(_MARKET_NOTE))
 
 
@@ -162,4 +174,45 @@ def _holding_and_margin(chips: pd.DataFrame) -> None:
         col=1,
     )
     fig.update_layout(height=420, showlegend=False, margin={"l": 0, "r": 0, "t": 30, "b": 0})
+    st.plotly_chart(fig, width="stretch")
+
+
+def _big_holder_block(symbol: str, price: pd.DataFrame) -> None:
+    st.subheader(t("Big holder % (≥400 lots) vs price"))
+    st.caption(
+        t(
+            "TDCC publishes this weekly, with a conservative {lag}-day availability lag — "
+            "sparse weekly points, never interpolated to daily."
+        ).format(lag=AVAILABILITY_LAG.days)
+    )
+    history = symbol_history(_load_tdcc_weeks(), symbol)
+    if history.empty:
+        st.info(t("No TDCC big-holder data cached yet for this symbol."))
+        st.caption(t("Build it with: `uv run python -m heimdall.research.tdcc_cache`"))
+        return
+
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    fig.add_trace(
+        go.Scatter(
+            x=history["data_date"],
+            y=history["big_holder_pct"],
+            name=t("Big holder %"),
+            mode="lines+markers",
+            line={"color": "#c62828"},
+        ),
+        secondary_y=False,
+    )
+    if not price.empty:
+        fig.add_trace(
+            go.Scatter(
+                x=price["date"],
+                y=price["adj_close"],
+                name=t("Price"),
+                line={"color": "#9e9e9e", "width": 1},
+            ),
+            secondary_y=True,
+        )
+    fig.update_yaxes(title_text=t("Big holder %"), secondary_y=False)
+    fig.update_yaxes(title_text=t("Price"), secondary_y=True)
+    fig.update_layout(height=380, hovermode="x unified", margin={"l": 0, "r": 0, "t": 10, "b": 0})
     st.plotly_chart(fig, width="stretch")

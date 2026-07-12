@@ -521,6 +521,137 @@ def test_lending_features_guards() -> None:
     assert pd.isna(zero_vol["sbl_short_delta_21d"])
 
 
+def _tdcc_week(symbol: str, data_date: str, level_pcts: dict[int, float]) -> pd.DataFrame:
+    """One TDCC weekly file's rows for one symbol (roadmap 13.9's canonical
+    shape), ``available_at`` = data_date + the provider's real 14-day lag."""
+    from heimdall.data.providers.tdcc import AVAILABILITY_LAG
+
+    dd = pd.Timestamp(data_date)
+    return pd.DataFrame(
+        {
+            "symbol": symbol,
+            "data_date": dd,
+            "available_at": dd + AVAILABILITY_LAG,
+            "level": list(level_pcts),
+            "pct_of_custody": list(level_pcts.values()),
+        }
+    )
+
+
+def test_big_holder_features_known_answer_over_the_last_4_available_weeks() -> None:
+    from heimdall.research.dataset import _big_holder_features
+
+    # 5 weeks, all big-holder pct on level 15 for simplicity: 40, 42, 44, 46, 48.
+    weeks = pd.concat(
+        [
+            _tdcc_week("AAA.TW", "2024-01-05", {15: 40.0}),
+            _tdcc_week("AAA.TW", "2024-01-12", {15: 42.0}),
+            _tdcc_week("AAA.TW", "2024-01-19", {15: 44.0}),
+            _tdcc_week("AAA.TW", "2024-01-26", {15: 46.0}),
+            _tdcc_week("AAA.TW", "2024-02-02", {15: 48.0}),
+        ],
+        ignore_index=True,
+    )
+    as_of = pd.Timestamp("2024-02-02") + pd.Timedelta(days=15)  # every week is available by now
+    out = _big_holder_features(weeks, "AAA.TW", as_of)
+    # Last 4 of the 5 weeks: 42 -> 48, delta = 6.0 (the oldest week, 40, is dropped).
+    assert out["big_holder_ratio_delta_4w"] == pytest.approx(6.0)
+
+
+def test_big_holder_features_sums_all_four_big_holder_levels() -> None:
+    from heimdall.research.dataset import _big_holder_features
+
+    # Split across levels 12-15 (all "big holder") plus a non-big level (11, must
+    # be excluded from the sum).
+    weeks = pd.concat(
+        [
+            _tdcc_week("AAA.TW", "2024-01-05", {11: 5.0, 12: 1.0, 13: 1.0, 14: 1.0, 15: 30.0}),
+            _tdcc_week("AAA.TW", "2024-01-12", {11: 5.0, 12: 1.0, 13: 1.0, 14: 1.0, 15: 32.0}),
+            _tdcc_week("AAA.TW", "2024-01-19", {11: 5.0, 12: 1.0, 13: 1.0, 14: 1.0, 15: 34.0}),
+            _tdcc_week("AAA.TW", "2024-01-26", {11: 5.0, 12: 1.0, 13: 1.0, 14: 1.0, 15: 36.0}),
+        ],
+        ignore_index=True,
+    )
+    as_of = pd.Timestamp("2024-01-26") + pd.Timedelta(days=15)
+    out = _big_holder_features(weeks, "AAA.TW", as_of)
+    # Week 1 big-holder sum = 1+1+1+30 = 33 (level 11 excluded); week 4 = 1+1+1+36 = 39.
+    assert out["big_holder_ratio_delta_4w"] == pytest.approx(39.0 - 33.0)
+
+
+def test_big_holder_features_pit_leak_excludes_not_yet_available_weeks() -> None:
+    from heimdall.research.dataset import _big_holder_features
+
+    weeks = pd.concat(
+        [
+            _tdcc_week("AAA.TW", "2024-01-05", {15: 40.0}),
+            _tdcc_week("AAA.TW", "2024-01-12", {15: 42.0}),
+            _tdcc_week("AAA.TW", "2024-01-19", {15: 44.0}),
+            _tdcc_week("AAA.TW", "2024-01-26", {15: 46.0}),
+            # A 5th week with an absurd spike, published AFTER as_of — must be invisible.
+            _tdcc_week("AAA.TW", "2024-02-02", {15: 9999.0}),
+        ],
+        ignore_index=True,
+    )
+    # as_of sits between week 4's and week 5's availability — exactly 4 weeks knowable.
+    as_of = pd.Timestamp("2024-01-26") + pd.Timedelta(days=14, hours=1)
+    out = _big_holder_features(weeks, "AAA.TW", as_of)
+    assert out["big_holder_ratio_delta_4w"] == pytest.approx(46.0 - 40.0)  # not the 9999 spike
+
+
+def test_big_holder_features_guards() -> None:
+    from heimdall.research.dataset import _big_holder_features
+
+    at = pd.Timestamp("2024-06-01")
+    assert pd.isna(_big_holder_features(pd.DataFrame(), "AAA.TW", at)["big_holder_ratio_delta_4w"])
+
+    # A real cache with data for a DIFFERENT symbol only.
+    weeks = _tdcc_week("BBB.TW", "2024-01-05", {15: 40.0})
+    assert pd.isna(_big_holder_features(weeks, "AAA.TW", at)["big_holder_ratio_delta_4w"])
+
+    # Fewer than 4 available weeks for this symbol → NaN.
+    three = pd.concat(
+        [
+            _tdcc_week("AAA.TW", "2024-01-05", {15: 40.0}),
+            _tdcc_week("AAA.TW", "2024-01-12", {15: 42.0}),
+            _tdcc_week("AAA.TW", "2024-01-19", {15: 44.0}),
+        ],
+        ignore_index=True,
+    )
+    as_of = pd.Timestamp("2024-01-19") + pd.Timedelta(days=15)
+    assert pd.isna(_big_holder_features(three, "AAA.TW", as_of)["big_holder_ratio_delta_4w"])
+
+
+def test_panel_carries_pit_big_holder_features_for_tw(tmp_path: Path) -> None:
+    frames = {
+        "0050.TW": _ohlcv_geo("0050.TW", 700, 0.0005),
+        "AAA.TW": _ohlcv_geo("AAA.TW", 700, 0.0),  # flat NT$100, NT$100M/day → eligible
+    }
+    weeks = pd.concat(
+        [
+            _tdcc_week("AAA.TW", "2024-05-03", {15: 40.0}),
+            _tdcc_week("AAA.TW", "2024-05-10", {15: 42.0}),
+            _tdcc_week("AAA.TW", "2024-05-17", {15: 44.0}),
+            _tdcc_week("AAA.TW", "2024-05-24", {15: 46.0}),
+        ],
+        ignore_index=True,
+    )
+    _drive(
+        build_dataset_iter(
+            ["AAA.TW"],
+            _Prices(frames),
+            _Funds(),
+            "Taiwan",
+            date(2024, 6, 1),
+            date(2024, 7, 31),
+            root=tmp_path,
+            min_cross_section=0,
+            tdcc_weeks=weeks,
+        )
+    )
+    june = load_panel("Taiwan", tmp_path).set_index("date").loc[pd.Timestamp("2024-06-28")]
+    assert june["big_holder_ratio_delta_4w"] == pytest.approx(46.0 - 40.0)
+
+
 def test_panel_carries_pit_flow_features_for_tw(tmp_path: Path) -> None:
     frames = {
         "0050.TW": _ohlcv_geo("0050.TW", 700, 0.0005),
@@ -599,6 +730,7 @@ def test_us_panel_has_no_flow_columns_without_the_stream(tmp_path: Path) -> None
     cols = load_panel("US", tmp_path).columns
     assert "foreign_net_buy_21d" not in cols and "margin_delta_21d" not in cols
     assert "sbl_short_delta_21d" not in cols  # roadmap 17.1: no stream ⇒ no lending columns
+    assert "big_holder_ratio_delta_4w" not in cols  # roadmap 13.9: no tdcc_weeks ⇒ no column
 
 
 def test_hygiene_constants_mirror_playbook() -> None:

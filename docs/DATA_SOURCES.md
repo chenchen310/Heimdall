@@ -59,6 +59,15 @@ for both markets (it returns **adjusted** TW closes, which matters for honest ba
   relying on it.**
 - **TWSE/TPEX OpenAPI** — free, authoritative, but raw (Big5 encoding quirks).
 - **TEJ** — paid institutional standard; only if you ever need deep TW fundamentals.
+- **TDCC open data** (`data/providers/tdcc.py`, roadmap 13.9) — the weekly 集保戶股權分散表
+  (shareholding-dispersion table), free, key-less, UTF-8 CSV bulk download
+  (`opendata.tdcc.com.tw`, dataset `1-5`). FinMind's equivalent (`TaiwanStockHoldingSharesPer`) is
+  paid-tier; this is the free substitute. **No historical backfill** — the endpoint only ever
+  serves "the current week," so history must be accumulated by running
+  `python -m heimdall.research.tdcc_cache` once a week, over real calendar time. Point-in-time lag
+  is not officially documented and a live probe found a ≥9-day gap versus a secondary source's
+  "next-day" claim — `available_at` uses a conservative `data_date + 14 days` (user decision
+  2026-07-12; full writeup in `docs/RESEARCH_LOG.md` entry 014).
 
 ## Caveats baked into the design
 

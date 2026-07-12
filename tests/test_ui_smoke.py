@@ -750,6 +750,25 @@ def _fake_ohlcv(symbol: str, start: object, end: object) -> pd.DataFrame:
     return pd.DataFrame({"date": dates, "adj_close": close})
 
 
+def _fake_chips(symbol: str, start: object, end: object) -> pd.DataFrame:
+    dates = pd.bdate_range(end=pd.Timestamp("2024-06-28"), periods=30)
+    return pd.DataFrame(
+        {
+            "symbol": symbol,
+            "date": dates,
+            "foreign_net_shares": 1000.0,
+            "trust_net_shares": 500.0,
+            "dealer_net_shares": 100.0,
+            "foreign_hold_ratio": 40.0,
+            "margin_balance": 2000.0,
+            "margin_short_balance": 300.0,
+            "currency": "TWD",
+            "provider": "finmind",
+            "fetched_at": pd.Timestamp.now(),
+        }
+    )
+
+
 def test_sector_page_predates_sector_classification_hint(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -812,6 +831,126 @@ def _write_flows_cache(data_dir: Path, d: date, rows: list[dict[str, object]]) -
     path = flows_cache_path(d, data_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(path)
+
+
+def _write_tdcc_week(
+    data_dir: Path, symbol: str, data_date: str, level_pcts: dict[int, float]
+) -> None:
+    """One real TDCC weekly cache file (roadmap 13.9's canonical shape) for one
+    symbol, written directly at the real cache path (delta-merges with whatever
+    that week's file already holds, matching how real weekly builds accumulate
+    across the whole market one symbol's worth at a time in tests)."""
+    from heimdall.data.providers.tdcc import AVAILABILITY_LAG, CANONICAL_COLUMNS, cache_path
+
+    dd = pd.Timestamp(data_date)
+    new_rows = pd.DataFrame(
+        {
+            "symbol": symbol,
+            "data_date": dd,
+            "available_at": dd + AVAILABILITY_LAG,
+            "level": list(level_pcts),
+            "holders": 1,
+            "shares": 1.0,
+            "pct_of_custody": list(level_pcts.values()),
+            "currency": "TWD",
+            "provider": "tdcc",
+            "fetched_at": pd.Timestamp.now(),
+        },
+        columns=CANONICAL_COLUMNS,
+    )
+    path = cache_path(dd.date(), data_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        new_rows = pd.concat([pd.read_parquet(path), new_rows], ignore_index=True)
+    new_rows.to_parquet(path)
+
+
+def test_flows_page_big_holder_tab_no_cache_empty_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _point_registry_at(tmp_path, monkeypatch)
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "TW Market Flows")
+    [t for t in at.tabs if "Big Holders" in t.label][0]  # the tab exists
+    assert not at.exception
+    assert any("No TDCC big-holder data cached yet." in i.value for i in at.info)
+    assert any("tdcc_cache" in c.value for c in at.caption)  # the CLI hint
+
+
+def test_flows_page_big_holder_tab_renders_risers_and_fallers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _point_registry_at(tmp_path, monkeypatch)
+    dates = ["2024-01-05", "2024-01-12", "2024-01-19", "2024-01-26"]
+    risers_pcts = [40.0, 42.0, 44.0, 50.0]
+    fallers_pcts = [60.0, 55.0, 52.0, 40.0]
+    for d, rp, fp in zip(dates, risers_pcts, fallers_pcts, strict=True):
+        _write_tdcc_week(tmp_path, "1101.TW", d, {15: rp})
+        _write_tdcc_week(tmp_path, "2801.TW", d, {15: fp})
+    # High liquidity so the §3 floor doesn't filter these out.
+    snap = pd.DataFrame(
+        {
+            "symbol": ["1101.TW", "2801.TW"],
+            "as_of": pd.Timestamp("2024-01-01"),
+            "dollar_vol_21d": [1e9, 1e9],
+        }
+    )
+    snap.to_parquet(tmp_path / "snapshot.parquet")
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "TW Market Flows")
+    assert not at.exception
+    assert not any("No TDCC big-holder data cached yet." in i.value for i in at.info)
+    risers = at.dataframe[-2].value.set_index("Symbol")
+    fallers = at.dataframe[-1].value.set_index("Symbol")
+    assert risers.loc["1101.TW", "Δ (pp)"] == pytest.approx(10.0)  # 50 - 40
+    assert fallers.loc["2801.TW", "Δ (pp)"] == pytest.approx(-20.0)  # 40 - 60
+
+
+def test_chips_page_big_holder_overlay_no_data_hint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_snapshot(tmp_path)
+    _point_registry_at(tmp_path, monkeypatch)
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    monkeypatch.setattr("heimdall.ui.chips_page.get_daily_chips", _fake_chips)
+    monkeypatch.setattr("heimdall.ui.chips_page.get_ohlcv", _fake_ohlcv)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "TW Chips")
+    [b for b in at.button if "Load chip data" in b.label][0].click().run(timeout=60)
+    assert not at.exception
+    assert any("No TDCC big-holder data cached yet for this symbol." in i.value for i in at.info)
+
+
+def test_chips_page_big_holder_overlay_renders_with_data(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_snapshot(tmp_path)
+    _point_registry_at(tmp_path, monkeypatch)
+    _write_tdcc_week(tmp_path, "2330.TW", "2024-01-05", {15: 40.0})  # the page's default symbol
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    monkeypatch.setattr("heimdall.ui.chips_page.get_daily_chips", _fake_chips)
+    monkeypatch.setattr("heimdall.ui.chips_page.get_ohlcv", _fake_ohlcv)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "TW Chips")
+    [b for b in at.button if "Load chip data" in b.label][0].click().run(timeout=60)
+    assert not at.exception
+    assert not any(
+        "No TDCC big-holder data cached yet for this symbol." in i.value for i in at.info
+    )
 
 
 def test_sector_page_flows_block_renders_real_rollup_once_cache_exists(

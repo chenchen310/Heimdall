@@ -541,7 +541,25 @@ exactly; gates green.
 **Don't:** overwrite the certified panel before the decision; don't let a v2 failure silently
 discredit v1 — record the divergence honestly instead.
 
-### 13.9 TDCC big-holder provider + concentration feature  `[ ]`
+### 13.9 TDCC big-holder provider + concentration feature  `[x]`
+
+> **Outcome (2026-07-12):** live-derived the bracket table (no official code table was
+> fetchable) via direct arithmetic on the real full file — Σ(levels 1–16) == level 17 exactly
+> for every stock checked, proving level 17 is a summary row; levels 1–15 cross-checked against
+> a public label listing. **Level 16 correction mid-investigation:** an initial 6-stock spot
+> check wrongly suggested "always zero" — the full 4,001-security file showed 78 nonzero cases
+> (57 plain common stocks), each with exactly one holder and a small/round share count,
+> inconsistent with an ownership-size tier; documented honestly as unresolved and excluded from
+> `BIG_HOLDER_LEVELS` (its magnitudes never approach 400 lots regardless). **PIT lag was
+> genuinely ambiguous — stopped and asked per the card's own instruction**: a secondary source
+> claimed ~1-day lag, but a live probe found the bulk file still 9+ days stale with no delay
+> notice; user chose the conservative `data_date + 14 days`. `data/providers/tdcc.py` stays
+> layer-pure (`normalize()` takes an injected `market_by_id`, since TDCC's file carries no
+> market-type field); `research/tdcc_cache.py` does the cross-layer wiring. **No historical
+> backfill exists** on this endpoint — `big_holder_ratio_delta_4w` (in `research/dataset.py`,
+> PIT-leak tested) will read NaN until 4 real weeks accumulate via
+> `python -m heimdall.research.tdcc_cache`, run weekly. Full writeup: `docs/RESEARCH_LOG.md`
+> entry 014. Quality gates green; full suite 350 passed.
 
 **Goal:** the weekly 集保 (TDCC) shareholding-dispersion file as a canonical provider + a
 point-in-time concentration feature. Double-serves need 3 (card 15.3). FinMind's equivalent
@@ -743,7 +761,24 @@ confirm the flows block now renders real rows instead of the pending hint.
 **Don't:** per-ETF holdings scrapers (user decision 2026-07-11); nothing presented as a
 recommendation ranking.
 
-### 15.3 Big-holder (大戶) weekly view  `[ ]`
+### 15.3 Big-holder (大戶) weekly view  `[x]`
+
+> **Outcome (2026-07-12):** `analytics/big_holder.py` (pure, no I/O) provides
+> `big_holder_pct` (sums 13.9's `BIG_HOLDER_LEVELS` per symbol/week),
+> `weekly_delta_ranking` (last-minus-oldest of the latest 4 available weeks, PIT-safe on
+> `available_at`), `monthly_delta_ranking` (last-4-mean vs prior-4-mean, needs 8 weeks), and
+> `symbol_history` (ascending per-symbol series for the chart overlay). `flows_page.py`'s
+> `render()` now splits into `st.tabs(["Institutional Flows", "Big Holders (大戶)"])` — verified
+> empirically (existing AppTest assertions re-run unchanged) that Streamlit/AppTest renders every
+> tab body regardless of which tab is visually active, so no existing widget-index test broke.
+> The big-holder tab applies the §3 liquidity floor (`gates.MIN_DOLLAR_VOL_21D["Taiwan"]`) before
+> ranking, with an honest empty state if that leaves nothing. `chips_page.py` gained a
+> `_big_holder_block` dual-axis overlay (大戶 % vs price) beneath the existing chip charts, same
+> weekly-cadence caption citing 13.9's `AVAILABILITY_LAG`. Both surfaces state on-page that this
+> is a **weekly** series, never interpolated to daily. New tests:
+> `tests/test_analytics_big_holder.py` (11, known-answer Δ math + PIT-leak + empty guards) and 4
+> new AppTest smoke tests in `test_ui_smoke.py` (flows-page tab empty/populated states,
+> chips-page overlay empty/populated states). Full suite 363 passed; ruff/ruff-format/mypy clean.
 
 **Goal:** the "大戶動向" lens on its honest weekly cadence. Needs 13.9.
 **Files:** extend `flows_page.py` (weekly tab) + the per-symbol view in `chips_page.py`,

@@ -552,3 +552,42 @@ across that window, then `--summarize 2026-07` once it closes.
 **Card status: infrastructure + probe complete; empirical measurement pending the Aug 2026
 window** (docs/ROADMAP_V2.md 17.9 stays unchecked — DoD requires "numbers", which don't exist
 yet). `docs/NORTH_STAR.md` limitation 5 updated with these dated findings.
+
+## 014 — TDCC shareholding-dispersion: bracket table + PIT lag (2026-07-12, model: Sonnet 5)
+
+Card ROADMAP 13.9. Infrastructure/data-discipline investigation (no signal, no vault touch).
+
+**Bracket table.** TDCC's OpenAPI (`opendata.tdcc.com.tw`, dataset `1-5`) documents field
+*names* but not the level→range mapping, and no attached code table was fetchable. Resolved by
+direct arithmetic on the real live file (2026-07-03, all 4,001 securities, fetched live): for
+every stock checked, Σ(holder counts, levels 1–16) == level 17's count exactly (e.g. 1101.TW:
+516,224 both ways) — proving level 17 is a summary row. Cross-checked against a public listing
+of the 15 ordered display labels (wantgoo.com) for levels 1–15 (1–999 shares … "1,000張以上").
+**Level 16 finding, corrected mid-investigation:** an initial 6-stock spot-check wrongly
+suggested level 16 is always zero/unused; a full-dataset check found 78 of 4,001 securities
+(57 of them plain common stocks, not just ETFs) carry a nonzero level 16. In every case sampled
+it has **exactly one holder** and a small/round share count (1,000–376,000 shares across four
+names inspected) — inconsistent with "an even-higher ownership tier" (level 15's holdings are
+far larger). Documented honestly as an unresolved technical/administrative bucket, excluded from
+`BIG_HOLDER_LEVELS` on the basis that its observed magnitudes never approach the 400-lot
+threshold either way — see `data/providers/tdcc.py`'s docstring for the full writeup.
+
+**Point-in-time lag — the "stop and ask" trigger.** Two conflicting signals: (a) a secondary web
+source claimed "updated every Saturday 09:00" (~1-day lag); (b) a live probe (2026-07-12) found
+the bulk endpoint still serving 2026-07-03 data nine calendar days later — the 2026-07-10 weekly
+file had not appeared, with no official delay notice found. No date parameter exists on the
+endpoint, so this couldn't be resolved by querying history directly. **User decision
+(2026-07-12): the conservative bound — `available_at = data_date + 14 days`** — mirroring this
+project's TW `filed_at` precedent (a safely-late legal/practical bound beats a possibly-too-early
+guess; the wrong-direction error here is look-ahead bias, not staleness).
+
+**Shipped:** `data/providers/tdcc.py` (provider, layer-pure — never imports `screener/`;
+`normalize()` takes an injected `market_by_id` since TDCC's bulk file carries no market-type
+field, unlike FinMind's `TaiwanStockInfo`), `research/tdcc_cache.py` (the cross-layer CLI wiring
+`tw_symbols()` into the provider — **no historical backfill exists**, the endpoint only ever
+serves "the current week", so history is built by running this once a week over real calendar
+time, the same operational shape as `research.mops_probe`, roadmap 17.9), and a new panel
+feature `big_holder_ratio_delta_4w` in `research/dataset.py` (PIT-leak tested; NaN until 4 real
+weeks have accumulated on disk). 0 OOS attempts — this is a feature/provider card, not a
+research card; per 13.9's own DoD, evaluating this feature for selection skill is deferred to a
+future `tw-bigholder` family card.

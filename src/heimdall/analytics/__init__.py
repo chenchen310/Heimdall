@@ -6,6 +6,12 @@ optionally, the decoupled ``personas`` AI-report layer. No LLM calls here.
 
 from __future__ import annotations
 
+from heimdall.analytics.big_holder import (
+    big_holder_pct,
+    monthly_delta_ranking,
+    symbol_history,
+    weekly_delta_ranking,
+)
 from heimdall.analytics.chips import cumulative_flows
 from heimdall.analytics.earnings import EarningsReport, earnings_report
 from heimdall.analytics.flows import (
@@ -53,4 +59,8 @@ __all__ = [
     "top_net_buy_sell",
     "trust_streak",
     "holding_ratio_delta",
+    "big_holder_pct",
+    "weekly_delta_ranking",
+    "monthly_delta_ranking",
+    "symbol_history",
 ]

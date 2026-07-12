@@ -37,6 +37,7 @@ import numpy as np
 import pandas as pd
 
 from heimdall.data.base import DataProvider, NotSupported, ProviderError
+from heimdall.data.providers.tdcc import BIG_HOLDER_LEVELS
 from heimdall.data.schema import FUNDAMENTALS_COLUMNS
 from heimdall.data.store import data_root
 from heimdall.factors.metrics import snapshot_row
@@ -234,6 +235,48 @@ def _lending_features(
     return out
 
 
+_BIG_HOLDER_KEY = "big_holder_ratio_delta_4w"
+
+
+def _big_holder_features(
+    tdcc_weeks: pd.DataFrame, symbol: str, as_of: pd.Timestamp
+) -> dict[str, float]:
+    """TW big-holder concentration feature — 集保大戶 (roadmap 13.9), keyed to
+    ``available_at`` (never ``data_date``) for point-in-time correctness: a
+    rebalance at ``as_of`` may only read weekly TDCC files already available
+    by then (the **PIT leak test is mandatory** — a week published after
+    ``as_of`` must not move this feature).
+
+    ``tdcc_weeks`` is ``data.providers.tdcc.load_cached_weeks()`` output — every
+    accumulated weekly file, all symbols, concatenated (there is no per-symbol
+    fetch for TDCC; the caller loads the whole cache once).
+
+    - ``big_holder_ratio_delta_4w`` — percentage-point change in the ≥400-lot
+      (大戶, ``BIG_HOLDER_LEVELS``) share of TDCC custody, from the oldest to
+      the newest of the last **4** *available* weekly files for this symbol
+      (not a fixed calendar window — "4 weekly files", per the card). Direction
+      prior **+**: rising concentration is read as large-holder accumulation.
+      NaN with fewer than 4 available weeks.
+    """
+    out = {_BIG_HOLDER_KEY: float("nan")}
+    if tdcc_weeks.empty:
+        return out
+    mine = tdcc_weeks[(tdcc_weeks["symbol"] == symbol) & (tdcc_weeks["available_at"] <= as_of)]
+    if mine.empty:
+        return out
+    big = (
+        mine[mine["level"].isin(BIG_HOLDER_LEVELS)]
+        .groupby("data_date")["pct_of_custody"]
+        .sum()
+        .sort_index()
+    )
+    if len(big) < 4:
+        return out
+    last4 = big.tail(4)
+    out[_BIG_HOLDER_KEY] = float(last4.iloc[-1] - last4.iloc[0])
+    return out
+
+
 def _eligibility(market: str, n_bars: int, raw_close: float, dollar_vol: float) -> tuple[bool, str]:
     """Playbook §3 hygiene; first failing reason wins. NaN inputs fail their check."""
     if n_bars < gates.MIN_HISTORY_BARS:
@@ -260,6 +303,7 @@ def build_dataset_iter(
     monthly_revenue: Callable[[str, date, date], pd.DataFrame] | None = None,
     daily_chips: Callable[[str, date, date], pd.DataFrame] | None = None,
     daily_lending: Callable[[str, date, date], pd.DataFrame] | None = None,
+    tdcc_weeks: pd.DataFrame | None = None,
 ) -> Iterator[DatasetProgress]:
     """Build (or extend) the panel month by month, yielding progress per month.
 
@@ -370,6 +414,8 @@ def build_dataset_iter(
                 row.update(_flow_features(chips_hist.get(sym, pd.DataFrame()), ohlcv, t))
             if daily_lending is not None:
                 row.update(_lending_features(lending_hist.get(sym, pd.DataFrame()), ohlcv, t))
+            if tdcc_weeks is not None:
+                row.update(_big_holder_features(tdcc_weeks, sym, t))
             ok, why = _eligibility(
                 market,
                 len(hist),

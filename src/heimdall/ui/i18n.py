@@ -461,6 +461,31 @@ _ZH: dict[str, str] = {
     "Direction": "方向",
     "Foreign holding % change": "外資持股比變化",
     "Δ (pp)": "Δ（百分點）",
+    # --- big-holder view (roadmap 15.3, in flows_page + chips_page) ---
+    "Institutional Flows": "法人買賣",
+    "Big Holders (大戶)": "大戶動向",
+    "TDCC publishes this weekly, with a conservative {lag}-day availability lag — "
+    "never interpolated to daily.": (
+        "集保結算所每週公布，保守估計 {lag} 天後才可視為可用資料 — 不會內插成每日資料。"
+    ),
+    "Period": "週期",
+    "No TDCC big-holder data cached yet.": "尚未建立集保大戶資料快取。",
+    "Build it with: `uv run python -m heimdall.research.tdcc_cache`": (
+        "請執行以下指令建立：`uv run python -m heimdall.research.tdcc_cache`"
+    ),
+    "Not enough accumulated weeks yet for this view.": "累積週數尚不足以顯示此檢視。",
+    "No liquid (≥ the §3 floor) names in this ranking yet.": "此排行中尚無符合流動性門檻的標的。",
+    "Risers — rising concentration": "集中度上升排行",
+    "Fallers — falling concentration": "集中度下降排行",
+    "Latest 大戶 %": "最新大戶持股比 %",
+    "Big holder % (≥400 lots) vs price": "大戶持股比（≥400張）vs 股價",
+    "TDCC publishes this weekly, with a conservative {lag}-day availability lag — "
+    "sparse weekly points, never interpolated to daily.": (
+        "集保結算所每週公布，保守估計 {lag} 天後才可視為可用資料 — 僅顯示稀疏的週資料點，"
+        "不會內插成每日資料。"
+    ),
+    "No TDCC big-holder data cached yet for this symbol.": "此標的尚無集保大戶資料快取。",
+    "Big holder %": "大戶持股比 %",
     # --- misc labels referenced inline ---
     "Field": "欄位",
     "Op": "運算子",
