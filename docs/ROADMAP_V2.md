@@ -520,6 +520,16 @@ completeness); don't touch providers.
 
 ### 13.6 US new-feature families — research card  `[ ]`
 
+> **Deferred (2026-07-12, user decision): blocked on 17.7.** The 13.3–13.5 features are merged
+> (code + tests), but this card's DEV/VAL `evaluate()` needs them as **columns in `panel_us`**, and
+> `panel_us` is only rebuilt with the new columns by card **17.7** (Wave 3, sequenced before this
+> Wave-4 card). 17.7's governance precondition is already satisfied (no US signal is `certified` —
+> only `us-fcf-yield` rejected). Two notes for whoever runs this next: (a) the `us-insider` family
+> additionally needs a real Form 4 crawl — `Form4Provider` exists but no filings are cached, and a
+> US rebuild will trigger that ~3,400-issuer network crawl unless the insider stream is disabled, so
+> 17.7 may run fundamentals-only first (PEAD + issuance), with `us-insider` waiting on a later
+> crawl+rebuild; (b) every vault touch here still stops for a recorded user go/no-go (§4).
+
 **Goal:** playbook §7 end-to-end over the 13.3–13.5 features. Family boundaries (binding for the
 3-attempt budget): `us-insider` = the insider features; `us-pead` = {sue, earn_gap};
 `us-issuance-quality` = {net_issuance_12m, asset_growth, gross_profitability}. A composite that
