@@ -37,6 +37,7 @@ import numpy as np
 import pandas as pd
 
 from heimdall.data.base import DataProvider, NotSupported, ProviderError
+from heimdall.data.providers.form4 import BUY_CODE, SELL_CODE
 from heimdall.data.providers.tdcc import BIG_HOLDER_LEVELS
 from heimdall.data.schema import FUNDAMENTALS_COLUMNS
 from heimdall.data.store import data_root
@@ -235,6 +236,200 @@ def _lending_features(
     return out
 
 
+_INSIDER_KEYS = ["insider_net_buy_90d", "insider_cluster_buy"]
+_INSIDER_WINDOW_DAYS = 90
+_CLUSTER_MIN_BUYERS = 3  # ≥3 distinct officer/director buyers in the window = a cluster buy
+
+
+def _insider_features(
+    insider: pd.DataFrame, as_of: pd.Timestamp, market_cap: float
+) -> dict[str, float]:
+    """US insider-transaction features — SEC Form 4 (roadmap 12.4/13.3), the honest
+    "smart money" axis. Keyed on ``filed_at`` (never ``txn_date``): a rebalance at
+    ``as_of`` may read only Form 4s **filed** on/before it — the same point-in-time
+    convention as EDGAR fundamentals (both are SEC filings). The trade itself
+    happened up to two business days earlier, but was not *knowable* until filed
+    (the **PIT leak test is mandatory** — a filing after ``as_of`` must not move
+    this row).
+
+    ``insider`` is one symbol's ``Form4Provider.get_insider_transactions`` output.
+    Officer/director rows only (a 10%-owner-only filer is excluded). Over the
+    trailing ``_INSIDER_WINDOW_DAYS`` (90 calendar days, ``lo < filed_at ≤ as_of``):
+
+    - ``insider_net_buy_90d`` — (Σ open-market **buys** ``P`` − Σ open-market
+      **sells** ``S``, each ``shares × price``) ÷ ``market_cap``. Direction **+**
+      (net insider buying is bullish). NaN only when the market-cap denominator is
+      unusable; a populated stream with no in-window open-market trade is a
+      genuine **0** (no net buying), not missing data.
+    - ``insider_cluster_buy`` — 1.0 when ≥ ``_CLUSTER_MIN_BUYERS`` *distinct*
+      officers/directors made an open-market purchase in the window, else 0.0 (the
+      cluster-buy literature's higher-conviction subset). Independent of
+      market cap.
+
+    Both keys are absent from a symbol with **no** insider data at all (empty
+    frame → NaN), so US rows built without the Form 4 stream simply do not carry
+    these columns (mirroring the other optional-stream features).
+    """
+    out = {k: float("nan") for k in _INSIDER_KEYS}
+    if insider.empty:
+        return out
+    lo = as_of - pd.Timedelta(days=_INSIDER_WINDOW_DAYS)
+    role = insider["is_officer"].to_numpy(bool) | insider["is_director"].to_numpy(bool)
+    win = insider[(insider["filed_at"] <= as_of) & (insider["filed_at"] > lo) & role]
+    buys = win[win["txn_code"] == BUY_CODE]
+    sells = win[win["txn_code"] == SELL_CODE]
+    out["insider_cluster_buy"] = float(buys["owner_cik"].nunique() >= _CLUSTER_MIN_BUYERS)
+    if pd.notna(market_cap) and market_cap > 0:
+        buy_usd = float((buys["shares"] * buys["price_per_share"]).sum())
+        sell_usd = float((sells["shares"] * sells["price_per_share"]).sum())
+        out["insider_net_buy_90d"] = (buy_usd - sell_usd) / market_cap
+    return out
+
+
+_PEAD_KEYS = ["sue", "earn_gap"]
+_SUE_MIN_OBS = 8  # need 8 YoY surprises before a standardized value is meaningful
+_EARN_GAP_LOOKBACK_BARS = 65  # ~one quarter; PEAD drift is spent past this
+
+
+def _annual_yoy_pct(fund: pd.DataFrame, metric: str, as_of: pd.Timestamp) -> float:
+    """YoY % change of an annual ``metric`` (latest vs prior fiscal year),
+    point-in-time on ``filed_at``. Mirrors ``factors.metrics._growth_yoy`` exactly
+    (dedup per fiscal year, base must be > 0) so ``net_issuance_12m`` is identical
+    to the snapshot's ``share_dilution_yoy``."""
+    s = fund[(fund["metric"] == metric) & (fund["filed_at"] <= as_of)]
+    if s.empty:
+        return float("nan")
+    per_year = (
+        s.sort_values(["fiscal_end", "filed_at"]).groupby("fiscal_end").tail(1)
+    ).sort_values("fiscal_end")
+    if len(per_year) < 2:
+        return float("nan")
+    prev, last = float(per_year["value"].iloc[-2]), float(per_year["value"].iloc[-1])
+    return last / prev - 1.0 if prev > 0 else float("nan")
+
+
+def _seasonal_yoy_changes(per_q: pd.Series) -> list[float]:
+    """Per-quarter YoY EPS changes (EPS_q − EPS_same-quarter-last-year), in
+    fiscal-end order. US 10-Ks file **no discrete Q4** (verified 2026-07-12: EDGAR
+    carries only 3 discrete quarterly ``eps_diluted`` rows/year — Q4 lives in the
+    annual FY figure), so a *positional* "4 rows back" would pair mismatched
+    quarters. Each quarter is instead matched to the row ~365 days earlier (span in
+    ``[300, 430]`` days, nearest to a year), which is robust to both the 3/year
+    cadence and the day-level fiscal-end drift (e.g. Apple's Dec-30 → Dec-28)."""
+    idx = list(per_q.index)
+    vals = [float(v) for v in per_q.to_numpy()]
+    changes: list[float] = []
+    for i in range(len(idx)):
+        best_j, best_gap = None, None
+        for j in range(i):
+            span = (idx[i] - idx[j]).days
+            if 300 <= span <= 430:
+                gap = abs(span - 365)
+                if best_gap is None or gap < best_gap:
+                    best_gap, best_j = gap, j
+        if best_j is not None:
+            changes.append(vals[i] - vals[best_j])
+    return changes
+
+
+def _pead_features(
+    fund_annual: pd.DataFrame,
+    fund_quarter: pd.DataFrame,
+    price: pd.DataFrame,
+    bench_adj: pd.Series,
+    as_of: pd.Timestamp,
+) -> dict[str, float]:
+    """US post-earnings-drift features — estimate-free PEAD (roadmap 13.4), keyed
+    on ``filed_at`` (never fiscal-period end): a rebalance at ``as_of`` reads only
+    filings knowable by then (the **PIT leak test is mandatory**).
+
+    - ``sue`` — standardized unexpected earnings: the latest quarterly
+      seasonal EPS surprise (EPS_q − EPS_same-quarter-prior-year) ÷ the standard
+      deviation of the last ``_SUE_MIN_OBS`` such surprises. NaN with fewer than
+      8 surprises or a zero-variance denominator. Direction **+** (positive
+      surprises drift up). The ``ddof`` of the std is immaterial — with a fixed
+      8-observation window it is a uniform scale on every stock's denominator, so
+      cross-sectional ranking is unchanged; ``np.std`` (population) is used.
+    - ``earn_gap`` — the announcement reaction: the (stock − benchmark) one-bar
+      return on the first trading bar on/after the latest EPS filing (annual **or**
+      quarterly — the 10-K carries Q4's earnings), provided that reaction bar falls
+      within the past ``_EARN_GAP_LOOKBACK_BARS`` trading days of ``as_of``. NaN
+      when there is no recent filing or no prior bar to measure the jump against.
+      Direction **+** (the initial reaction continues as drift). The filing date is
+      a conservative, PIT-safe proxy for the earlier press-release date, which
+      EDGAR does not expose.
+    """
+    out = {k: float("nan") for k in _PEAD_KEYS}
+
+    # -- sue --------------------------------------------------------------------
+    q = fund_quarter[
+        (fund_quarter["metric"] == "eps_diluted") & (fund_quarter["filed_at"] <= as_of)
+    ]
+    if not q.empty:
+        per_q = (
+            q.sort_values(["fiscal_end", "filed_at"]).groupby("fiscal_end")["value"].last()
+        ).sort_index()
+        changes = _seasonal_yoy_changes(per_q)
+        if len(changes) >= _SUE_MIN_OBS:
+            last8 = np.asarray(changes[-_SUE_MIN_OBS:], dtype=float)
+            sd = float(np.std(last8))
+            if sd > 0:
+                out["sue"] = float(last8[-1]) / sd
+
+    # -- earn_gap ---------------------------------------------------------------
+    def _eps_filings(fund: pd.DataFrame) -> pd.Series:
+        m = fund[(fund["metric"] == "eps_diluted") & (fund["filed_at"] <= as_of)]
+        return m["filed_at"]
+
+    parts = [s for s in (_eps_filings(fund_annual), _eps_filings(fund_quarter)) if not s.empty]
+    filings = pd.concat(parts) if parts else pd.Series(dtype="datetime64[ns]")
+    if not filings.empty and not price.empty:
+        latest_filed = pd.Timestamp(filings.max())
+        px = price[price["date"] <= as_of].sort_values("date").reset_index(drop=True)
+        after = px.index[px["date"] >= latest_filed]
+        if len(after) and after[0] >= 1 and (len(px) - 1 - after[0]) <= _EARN_GAP_LOOKBACK_BARS:
+            b = int(after[0])
+            d0, d1 = px["date"].iloc[b - 1], px["date"].iloc[b]
+            p0, p1 = float(px["adj_close"].iloc[b - 1]), float(px["adj_close"].iloc[b])
+            bench0 = float(bench_adj.asof(d0))  # type: ignore[arg-type]
+            bench1 = float(bench_adj.asof(d1))  # type: ignore[arg-type]
+            if p0 > 0 and bench0 > 0:
+                out["earn_gap"] = (p1 / p0 - 1.0) - (bench1 / bench0 - 1.0)
+    return out
+
+
+_ISSUANCE_KEYS = ["net_issuance_12m", "asset_growth", "gross_profitability"]
+
+
+def _issuance_quality_features(fund_annual: pd.DataFrame, as_of: pd.Timestamp) -> dict[str, float]:
+    """US issuance / asset-growth / quality features (roadmap 13.5) — three free
+    annual-EDGAR axes, all ``filed_at``-keyed (**PIT leak test mandatory**),
+    orthogonal to the already-tested roic/margin set.
+
+    - ``net_issuance_12m`` — YoY % change in ``shares_outstanding``. Direction
+      **−** (issuance dilutes; buybacks reward). *Numerically identical to the
+      snapshot's ``share_dilution_yoy``* (same ``_annual_yoy_pct`` math); kept as an
+      explicitly named member of the ``us-issuance-quality`` family (roadmap 13.6).
+    - ``asset_growth`` — YoY % change in ``assets``. Direction **−** (the
+      asset-growth anomaly: aggressive expanders underperform).
+    - ``gross_profitability`` — ``gross_profit ÷ assets`` (Novy-Marx). Direction
+      **+**. NaN when the ``GrossProfit`` tag is absent (coverage honesty over
+      completeness — never derived from revenue − COGS, which isn't normalized).
+    """
+    out = {k: float("nan") for k in _ISSUANCE_KEYS}
+    out["net_issuance_12m"] = _annual_yoy_pct(fund_annual, "shares_outstanding", as_of)
+    out["asset_growth"] = _annual_yoy_pct(fund_annual, "assets", as_of)
+
+    known = fund_annual[fund_annual["filed_at"] <= as_of]
+    if not known.empty:
+        latest = known.sort_values(["fiscal_end", "filed_at"]).groupby("metric").tail(1)
+        vals = {str(m): float(v) for m, v in zip(latest["metric"], latest["value"], strict=True)}
+        gp, assets = vals.get("gross_profit", float("nan")), vals.get("assets", float("nan"))
+        if pd.notna(gp) and pd.notna(assets) and assets > 0:
+            out["gross_profitability"] = gp / assets
+    return out
+
+
 _BIG_HOLDER_KEY = "big_holder_ratio_delta_4w"
 
 
@@ -304,6 +499,8 @@ def build_dataset_iter(
     daily_chips: Callable[[str, date, date], pd.DataFrame] | None = None,
     daily_lending: Callable[[str, date, date], pd.DataFrame] | None = None,
     tdcc_weeks: pd.DataFrame | None = None,
+    insider: Callable[[str, date, date], pd.DataFrame] | None = None,
+    quarterly_fundamentals: Callable[[str, date, date], pd.DataFrame] | None = None,
 ) -> Iterator[DatasetProgress]:
     """Build (or extend) the panel month by month, yielding progress per month.
 
@@ -366,6 +563,31 @@ def build_dataset_iter(
             except (ProviderError, NotSupported):
                 lending_hist[sym] = pd.DataFrame()
 
+    # Optional US stream: SEC Form 4 insider transactions for the 12.4/13.3
+    # features. ~180-day warm-up safely covers the 90-day trailing window before
+    # the first rebalance; the provider caches per issuer, so this is one crawl
+    # per symbol, not per month.
+    insider_hist: dict[str, pd.DataFrame] = {}
+    if insider is not None:
+        for sym in price_hist:
+            try:
+                insider_hist[sym] = insider(sym, start - timedelta(days=180), end)
+            except (ProviderError, NotSupported):
+                insider_hist[sym] = pd.DataFrame()
+
+    # Optional US stream: quarterly fundamentals — the extra data the 13.4 PEAD
+    # ``sue`` feature needs (annual rows, already fetched above, cover 13.5's
+    # issuance/quality set and PEAD's Q4/10-K earnings dates). Its presence is the
+    # US-fundamentals-feature switch: absent ⇒ neither the PEAD nor the
+    # issuance/quality columns exist (mirroring the other optional streams).
+    fund_q: dict[str, pd.DataFrame] = {}
+    if quarterly_fundamentals is not None:
+        for sym in price_hist:
+            try:
+                fund_q[sym] = quarterly_fundamentals(sym, start, end)
+            except (ProviderError, NotSupported):
+                fund_q[sym] = pd.DataFrame(columns=FUNDAMENTALS_COLUMNS)
+
     # Existing panel + meta: resume skips computed months AND previously-dropped ones.
     existing = pd.DataFrame()
     old_meta: dict[str, object] = {}
@@ -414,6 +636,18 @@ def build_dataset_iter(
                 row.update(_flow_features(chips_hist.get(sym, pd.DataFrame()), ohlcv, t))
             if daily_lending is not None:
                 row.update(_lending_features(lending_hist.get(sym, pd.DataFrame()), ohlcv, t))
+            if insider is not None:
+                row.update(
+                    _insider_features(
+                        insider_hist.get(sym, pd.DataFrame()),
+                        t,
+                        float(row["market_cap"]),  # type: ignore[arg-type]
+                    )
+                )
+            if quarterly_fundamentals is not None:
+                fq = fund_q.get(sym, pd.DataFrame(columns=FUNDAMENTALS_COLUMNS))
+                row.update(_pead_features(fund_data[sym], fq, ohlcv, bench_adj, t))
+                row.update(_issuance_quality_features(fund_data[sym], t))
             if tdcc_weeks is not None:
                 row.update(_big_holder_features(tdcc_weeks, sym, t))
             ok, why = _eligibility(

@@ -14,6 +14,7 @@ from collections.abc import Iterator
 from datetime import date
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -521,6 +522,210 @@ def test_lending_features_guards() -> None:
     assert pd.isna(zero_vol["sbl_short_delta_21d"])
 
 
+def _insider_row(
+    filed_at: str,
+    code: str,
+    shares: float,
+    price: float,
+    owner: str,
+    *,
+    officer: bool = True,
+    director: bool = False,
+    ten_pct: bool = False,
+) -> dict[str, object]:
+    """One canonical Form 4 transaction row (roadmap 12.4/13.3 shape)."""
+    return {
+        "symbol": "X.US",
+        "filed_at": pd.Timestamp(filed_at),
+        "txn_date": pd.Timestamp(filed_at) - pd.Timedelta(days=2),
+        "owner_cik": owner,
+        "owner_name": owner,
+        "is_officer": officer,
+        "is_director": director,
+        "is_ten_pct": ten_pct,
+        "txn_code": code,
+        "acquired_disposed": "A" if code == "P" else "D",
+        "shares": float(shares),
+        "price_per_share": float(price),
+        "currency": "USD",
+        "provider": "form4",
+        "fetched_at": pd.Timestamp("2024-07-01"),
+    }
+
+
+def test_insider_features_known_answer_pit_and_role_filter() -> None:
+    from heimdall.research.dataset import _insider_features
+
+    as_of = pd.Timestamp("2024-06-28")  # window = (2024-03-30, 2024-06-28]
+    frame = pd.DataFrame(
+        [
+            _insider_row("2024-04-01", "P", 100, 10.0, "A"),  # +$1000
+            _insider_row("2024-05-01", "P", 100, 10.0, "B"),  # +$1000
+            _insider_row("2024-06-01", "P", 100, 10.0, "C", officer=False, director=True),  # +$1000
+            _insider_row("2024-06-10", "S", 50, 10.0, "A"),  # −$500
+            # A 10%-owner-only buy: excluded (not an officer/director).
+            _insider_row("2024-06-20", "P", 1000, 10.0, "E", officer=False, ten_pct=True),
+            # PIT leak: filed AFTER as_of — must not move the row.
+            _insider_row("2024-07-15", "P", 100_000, 10.0, "F"),
+            # Before the 90-day window opens — excluded.
+            _insider_row("2024-01-01", "P", 100_000, 10.0, "G"),
+        ]
+    )
+    out = _insider_features(frame, as_of, market_cap=1_000_000.0)
+    assert out["insider_net_buy_90d"] == pytest.approx((3000.0 - 500.0) / 1_000_000.0)
+    assert out["insider_cluster_buy"] == 1.0  # A, B, C = 3 distinct officer/director buyers
+
+
+def test_insider_features_guards() -> None:
+    from heimdall.research.dataset import _insider_features
+
+    at = pd.Timestamp("2024-06-28")
+    # Empty stream (no data at all) → both NaN, so the column is genuinely absent.
+    empty = _insider_features(pd.DataFrame(), at, market_cap=1_000_000.0)
+    assert pd.isna(empty["insider_net_buy_90d"]) and pd.isna(empty["insider_cluster_buy"])
+
+    # Populated stream but no open-market trade in the window → a real 0, not NaN.
+    quiet = pd.DataFrame([_insider_row("2024-06-01", "M", 100, 10.0, "A")])  # option exercise
+    q = _insider_features(quiet, at, market_cap=1_000_000.0)
+    assert q["insider_net_buy_90d"] == 0.0 and q["insider_cluster_buy"] == 0.0
+
+    # Two buyers < the 3-buyer cluster threshold.
+    two = pd.DataFrame(
+        [
+            _insider_row("2024-06-01", "P", 100, 10.0, "A"),
+            _insider_row("2024-06-02", "P", 1, 1.0, "B"),
+        ]
+    )
+    assert _insider_features(two, at, market_cap=1_000_000.0)["insider_cluster_buy"] == 0.0
+
+    # Unusable market-cap denominator → net NaN, but the cluster flag still computes.
+    bad = _insider_features(two, at, market_cap=float("nan"))
+    assert pd.isna(bad["insider_net_buy_90d"]) and bad["insider_cluster_buy"] == 0.0
+
+
+def _q_eps(fiscal_end: str, filed_at: str, value: float) -> pd.DataFrame:
+    """One quarterly ``eps_diluted`` fundamental row (13.4 PEAD input)."""
+    return pd.DataFrame(
+        [
+            {
+                "symbol": "X.US",
+                "metric": "eps_diluted",
+                "statement": "income",
+                "period": "quarter",
+                "fiscal_end": pd.Timestamp(fiscal_end),
+                "filed_at": pd.Timestamp(filed_at),
+                "value": float(value),
+                "currency": "USD",
+                "provider": "test",
+                "fetched_at": pd.Timestamp("2024-01-01"),
+            }
+        ]
+    )
+
+
+_EMPTY_FUND = pd.DataFrame(columns=FUNDAMENTALS_COLUMNS)
+
+
+def test_pead_sue_known_answer_seasonal_alignment_and_pit() -> None:
+    from heimdall.research.dataset import _pead_features
+
+    # 4 years × 3 discrete quarters (US files no discrete Q4). YoY of the same
+    # fiscal quarter a year earlier is +1 every quarter except the final Q3 (+5),
+    # so the seasonal-surprise series ends [1,1,1,1,1,1,1,5] over its last 8.
+    rows = []
+    base = {"03-31": 10.0, "06-30": 20.0, "09-30": 30.0}
+    filed_month = {"03-31": "05-14", "06-30": "08-14", "09-30": "11-14"}
+    for yr in (2019, 2020, 2021, 2022):
+        for md, b in base.items():
+            bump = (yr - 2019) * 1.0
+            if yr == 2022 and md == "09-30":
+                bump += 4.0  # the final surprise is +5 vs +1
+            rows.append(_q_eps(f"{yr}-{md}", f"{yr}-{filed_month[md]}", b + bump))
+    q = pd.concat(rows, ignore_index=True)
+    as_of = pd.Timestamp("2022-12-31")
+
+    out = _pead_features(_EMPTY_FUND, q, pd.DataFrame(), pd.Series(dtype=float), as_of)
+    expected = 5.0 / float(np.std([1, 1, 1, 1, 1, 1, 1, 5]))
+    assert out["sue"] == pytest.approx(expected)
+
+    # PIT: a quarter filed AFTER as_of (absurd value) must not move sue.
+    leaked = pd.concat([q, _q_eps("2023-03-31", "2023-05-15", 9999.0)], ignore_index=True)
+    assert _pead_features(_EMPTY_FUND, leaked, pd.DataFrame(), pd.Series(dtype=float), as_of)[
+        "sue"
+    ] == pytest.approx(expected)
+
+    # Fewer than 8 seasonal surprises → NaN.
+    thin = pd.concat(
+        [_q_eps("2021-03-31", "2021-05-14", 1.0), _q_eps("2022-03-31", "2022-05-14", 2.0)],
+        ignore_index=True,
+    )
+    assert pd.isna(
+        _pead_features(_EMPTY_FUND, thin, pd.DataFrame(), pd.Series(dtype=float), as_of)["sue"]
+    )
+
+
+def test_pead_earn_gap_known_answer_and_recency() -> None:
+    from heimdall.research.dataset import _pead_features
+
+    filed = pd.Timestamp("2022-11-14")
+    q = _q_eps("2022-09-30", "2022-11-14", 1.0)  # latest eps filing = 2022-11-14
+
+    dates = pd.bdate_range("2022-10-03", "2022-12-30")
+    b = int(next(i for i, d in enumerate(dates) if d >= filed))
+    close = pd.Series(100.0, index=range(len(dates)))
+    close.iloc[b:] = 110.0  # +10% jump on the first bar ≥ the filing, then flat
+    price = pd.DataFrame({"date": dates, "adj_close": close.to_numpy()})
+    bench = pd.Series(50.0, index=dates)  # flat benchmark → 0 benchmark return
+
+    out = _pead_features(_EMPTY_FUND, q, price, bench, dates[-1])
+    assert out["earn_gap"] == pytest.approx(0.10)  # 110/100 − 1 − 0
+
+    # Recency: the same filing seen from far in the future (> 65 trading bars later)
+    # is stale drift → NaN, not a re-measured jump.
+    far = pd.bdate_range("2022-10-03", "2023-06-30")
+    fb = int(next(i for i, d in enumerate(far) if d >= filed))
+    fclose = pd.Series(100.0, index=range(len(far)))
+    fclose.iloc[fb:] = 110.0
+    fprice = pd.DataFrame({"date": far, "adj_close": fclose.to_numpy()})
+    fbench = pd.Series(50.0, index=far)
+    assert pd.isna(_pead_features(_EMPTY_FUND, q, fprice, fbench, far[-1])["earn_gap"])
+
+
+def test_issuance_quality_features_known_answer_and_pit() -> None:
+    from heimdall.research.dataset import _issuance_quality_features
+
+    fund = pd.DataFrame(
+        [
+            _fund_row("X.US", "shares_outstanding", "2021-12-31", "2022-02-01", 1000),
+            _fund_row("X.US", "shares_outstanding", "2022-12-31", "2023-02-01", 1100),  # +10%
+            _fund_row("X.US", "assets", "2021-12-31", "2022-02-01", 5000),
+            _fund_row("X.US", "assets", "2022-12-31", "2023-02-01", 6000),  # +20%
+            _fund_row("X.US", "gross_profit", "2022-12-31", "2023-02-01", 1500),  # /6000 = 0.25
+        ]
+    )
+    as_of = pd.Timestamp("2023-06-30")
+    out = _issuance_quality_features(fund, as_of)
+    assert out["net_issuance_12m"] == pytest.approx(0.10)
+    assert out["asset_growth"] == pytest.approx(0.20)
+    assert out["gross_profitability"] == pytest.approx(0.25)
+
+    # PIT: a later annual filed after as_of must not move the YoY figure.
+    leaked = pd.DataFrame(
+        [
+            _fund_row("X.US", "shares_outstanding", "2021-12-31", "2022-02-01", 1000),
+            _fund_row("X.US", "shares_outstanding", "2022-12-31", "2023-02-01", 1100),
+            _fund_row(
+                "X.US", "shares_outstanding", "2023-12-31", "2024-02-01", 5000
+            ),  # after as_of
+        ]
+    )
+    assert _issuance_quality_features(leaked, as_of)["net_issuance_12m"] == pytest.approx(0.10)
+
+    # No GrossProfit tag → NaN (never derived from revenue − COGS).
+    no_gp = pd.DataFrame([_fund_row("X.US", "assets", "2022-12-31", "2023-02-01", 6000)])
+    assert pd.isna(_issuance_quality_features(no_gp, as_of)["gross_profitability"])
+
+
 def _tdcc_week(symbol: str, data_date: str, level_pcts: dict[int, float]) -> pd.DataFrame:
     """One TDCC weekly file's rows for one symbol (roadmap 13.9's canonical
     shape), ``available_at`` = data_date + the provider's real 14-day lag."""
@@ -714,6 +919,86 @@ def test_panel_carries_pit_lending_features_for_tw(tmp_path: Path) -> None:
     assert june["sbl_short_delta_63d"] == pytest.approx(63 * step / v)
 
 
+def test_panel_carries_pit_insider_features_for_us(tmp_path: Path) -> None:
+    """roadmap 12.4/13.3: the injected ``insider`` callable feeds the US panel."""
+    frames = {
+        "SPY.US": _ohlcv_geo("SPY.US", 700, 0.0005),
+        "X.US": _ohlcv_geo("X.US", 700, 0.0, s0=100.0),  # flat $100
+    }
+    # shares_outstanding = 1000 → market_cap = $100 × 1000 = $100,000.
+    funds = _Funds(
+        {
+            "X.US": pd.DataFrame(
+                [_fund_row("X.US", "shares_outstanding", "2023-12-31", "2024-02-01", 1000)]
+            )
+        }
+    )
+    # One officer buy of $1000 inside the June window → net = 1000 / 100000 = 0.01.
+    frame = pd.DataFrame([_insider_row("2024-06-03", "P", 100, 10.0, "A")])
+    _drive(
+        build_dataset_iter(
+            ["X.US"],
+            _Prices(frames),
+            funds,
+            "US",
+            date(2024, 6, 1),
+            date(2024, 7, 31),
+            root=tmp_path,
+            min_cross_section=0,
+            insider=lambda sym, s, e: frame,
+        )
+    )
+    june = load_panel("US", tmp_path).set_index("date").loc[pd.Timestamp("2024-06-28")]
+    assert june["insider_net_buy_90d"] == pytest.approx(1000.0 / 100_000.0)
+    assert june["insider_cluster_buy"] == 0.0  # a single buyer is not a cluster
+
+
+def test_panel_carries_us_pead_and_issuance_features_when_quarterly_stream_present(
+    tmp_path: Path,
+) -> None:
+    """roadmap 13.4/13.5: the injected ``quarterly_fundamentals`` callable switches
+    on the US PEAD + issuance/quality columns; absent, they never appear."""
+    frames = {
+        "SPY.US": _ohlcv_geo("SPY.US", 700, 0.0005),
+        "X.US": _ohlcv_geo("X.US", 700, 0.0, s0=100.0),
+    }
+    funds = _Funds(
+        {
+            "X.US": pd.DataFrame(
+                [
+                    _fund_row("X.US", "shares_outstanding", "2022-12-31", "2023-02-01", 1000),
+                    _fund_row(
+                        "X.US", "shares_outstanding", "2023-12-31", "2024-02-01", 1100
+                    ),  # +10%
+                ]
+            )
+        }
+    )
+    qeps = pd.concat(
+        [_q_eps("2024-03-31", "2024-05-14", 1.5), _q_eps("2023-12-31", "2024-02-14", 1.2)],
+        ignore_index=True,
+    )
+    _drive(
+        build_dataset_iter(
+            ["X.US"],
+            _Prices(frames),
+            funds,
+            "US",
+            date(2024, 6, 1),
+            date(2024, 7, 31),
+            root=tmp_path,
+            min_cross_section=0,
+            quarterly_fundamentals=lambda sym, s, e: qeps,
+        )
+    )
+    panel = load_panel("US", tmp_path)
+    assert {"sue", "earn_gap", "net_issuance_12m", "asset_growth", "gross_profitability"} <= set(
+        panel.columns
+    )
+    june = panel.set_index("date").loc[pd.Timestamp("2024-06-28")]
+    assert june["net_issuance_12m"] == pytest.approx(0.10)  # 1000 → 1100
+
+
 def test_us_panel_has_no_flow_columns_without_the_stream(tmp_path: Path) -> None:
     _drive(
         build_dataset_iter(
@@ -731,6 +1016,11 @@ def test_us_panel_has_no_flow_columns_without_the_stream(tmp_path: Path) -> None
     assert "foreign_net_buy_21d" not in cols and "margin_delta_21d" not in cols
     assert "sbl_short_delta_21d" not in cols  # roadmap 17.1: no stream ⇒ no lending columns
     assert "big_holder_ratio_delta_4w" not in cols  # roadmap 13.9: no tdcc_weeks ⇒ no column
+    assert "insider_net_buy_90d" not in cols  # roadmap 12.4/13.3: no insider stream ⇒ no column
+    # roadmap 13.4/13.5: no quarterly stream ⇒ no US PEAD / issuance-quality columns
+    assert (
+        "sue" not in cols and "net_issuance_12m" not in cols and "gross_profitability" not in cols
+    )
 
 
 def test_hygiene_constants_mirror_playbook() -> None:

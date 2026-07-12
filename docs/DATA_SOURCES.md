@@ -11,6 +11,12 @@ Decision reference for which vendor feeds what, and when to pay. All vendors are
 - **SEC EDGAR** — gold standard for **point-in-time** US fundamentals. `companyfacts`/`frames` JSON
   give as-reported XBRL with filing dates → the best mitigation for fundamental look-ahead bias. No
   key; descriptive `User-Agent` required (~10 req/s). Feeds Goldman/JPM/RenTech.
+- **SEC Form 4** (EDGAR, `data/providers/form4.py`, roadmap 12.4/13.3) — officers/directors report
+  their own open-market trades within two business days. The credible *free* US "smart money" stream
+  (the US has no public daily institutional flow; 13F is quarterly + 45-day-lagged). Same shared
+  `User-Agent`/CIK cache as the fundamentals provider; `ownershipDocument` XML → canonical
+  per-transaction rows, keyed on the **filing** timestamp (point-in-time). Feeds the `us-insider`
+  research family. No key.
 - **FRED** (St. Louis Fed) — 800k+ macro series (GDP, CPI, unemployment, yield curve `T10Y2Y`, Fed
   funds). Free key, 1,000 req/day. Use `fredapi`. Feeds Two Sigma macro + Citadel rate sensitivity.
 - **yfinance** — quick prices for US **and** TW (`.TW`/`.TWO`). Unofficial/scraping-based and

@@ -67,6 +67,8 @@ def main(argv: list[str] | None = None) -> int:
     daily_chips = None
     daily_lending = None
     tdcc_weeks = None
+    insider = None
+    quarterly_fundamentals = None
     if args.market == "tw":  # extra TW streams: 月營收 (11.2) + 法人籌碼 (11.3) + 借券/融券 (17.1)
         from heimdall.data.providers import FinMindProvider
         from heimdall.data.providers import tdcc as tdcc_provider
@@ -79,6 +81,19 @@ def main(argv: list[str] | None = None) -> int:
         # no per-symbol fetch here (build/refresh the weekly cache separately via
         # `python -m heimdall.research.tdcc_cache`, once a week, over real time).
         tdcc_weeks = tdcc_provider.load_cached_weeks()
+    elif args.market == "us":  # extra US streams: Form 4 insider (12.4/13.3) + quarterly PEAD
+        from heimdall.data.providers import Form4Provider
+
+        # Delta-cached per issuer; a real crawl is network-heavy — the sanctioned
+        # place to actually populate these columns is the one panel_us rebuild
+        # (roadmap 17.7), which this wiring makes mechanical.
+        insider = Form4Provider().get_insider_transactions
+        # Quarterly income rows (re-normalized from the same cached companyfacts
+        # JSON as the annual fetch — no extra network) power 13.4's PEAD ``sue``;
+        # its presence also switches on 13.5's annual issuance/quality features.
+        quarterly_fundamentals = lambda sym, s, e: fundamentals.get_fundamentals(  # noqa: E731
+            sym, "income", "quarter"
+        )
 
     progress = build_dataset_iter(
         symbols,
@@ -93,6 +108,8 @@ def main(argv: list[str] | None = None) -> int:
         daily_chips=daily_chips,
         daily_lending=daily_lending,
         tdcc_weeks=tdcc_weeks,
+        insider=insider,
+        quarterly_fundamentals=quarterly_fundamentals,
     )
     last = next(progress)  # the plan
     print(f"Universe: {len(symbols)} symbols | months to build: {last.total_months}")

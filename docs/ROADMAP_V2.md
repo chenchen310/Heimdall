@@ -311,7 +311,11 @@ an integration; the user decides.
 > User decision 2026-07-11: the trigger is armed but this card stays **unscheduled** — write the
 > memo only when the user asks. Not part of the Phase 13–16 waves.
 
-### 12.4 US insider-transactions feature (Form 4) — the honest US "smart money"  `[ ]`
+### 12.4 US insider-transactions feature (Form 4) — the honest US "smart money"  `[x]`
+
+> **Outcome (2026-07-12):** executed via card **13.3** (both checkboxes ticked in one PR).
+> See 13.3's outcome for the provider + feature + tests.
+
 **Reality note (binding):** the US has **no public daily institutional flow**. Retail-app "money
 flow" for US stocks is a price/volume proxy (tick-rule buy/sell imbalance) — it may be added as a
 *technical* feature but must never be labelled institutional flow. 13F is quarterly with a 45-day
@@ -424,13 +428,44 @@ Steps:
 DoD: verdict logged either way; immutable report committed if run.
 **Don't:** touch the vault before the recorded go; never adjust weights after seeing an OOS number.
 
-### 13.3 US insider-transactions feature — execute card 12.4  `[ ]`
+### 13.3 US insider-transactions feature — execute card 12.4  `[x]`
+
+> **Outcome (2026-07-12):** new layer-pure `data/providers/form4.py` — `normalize_ownership_doc`
+> (Form 4 `ownershipDocument` XML → canonical per-transaction rows, golden-tested from a hand-built
+> namespace-free fixture) + a `Form4Provider` whose `get_insider_transactions` crawls the issuer's
+> EDGAR submissions index and caches per symbol. Keyed on **`filed_at`** (the filing date, supplied
+> alongside the XML since it lives in submission metadata, not the document) — never `txn_date`, so
+> the two-business-day reporting lag can't leak the future. Panel feature `insider_net_buy_90d`
+> (officer/director open-market **P** buys − **S** sells, each `shares × price`, ÷ market cap, 90-day
+> trailing window) + a boolean `insider_cluster_buy` (≥3 distinct insiders buying) in
+> `research.dataset._insider_features`, wired as an optional per-symbol `insider` stream in
+> `build_dataset_iter` and the US branch of the build CLI. Tests: golden + no-symbol guard
+> (`test_form4.py`), plus known-answer / PIT-leak / role-filter / market-cap-guard / panel-wiring
+> (`test_research_dataset.py`). An empty stream ⇒ NaN (column genuinely absent for a symbol with no
+> Form 4s); a populated stream with no in-window trade ⇒ a real 0. **No real crawl was run** — the
+> data acquisition + `panel_us` column population is card 17.7's one rebuild (this card is "insider
+> if merged" there). Quality gates green; full suite 372 passed.
 
 **Card 12.4 verbatim** (Form 4 provider + `insider_net_buy_90d` + cluster-buy flag, point-in-time
 on the filing timestamp), sequenced into this phase's feature wave. Mark both checkboxes in the
 same PR. The feature then enters the `us-insider` family in 13.6.
 
-### 13.4 US earnings-surprise (PEAD) features — estimate-free  `[ ]`
+### 13.4 US earnings-surprise (PEAD) features — estimate-free  `[x]`
+
+> **Outcome (2026-07-12):** `research.dataset._pead_features` adds `sue` and `earn_gap` (US rows).
+> **Key correction, verified against the real cached EDGAR data:** US 10-Ks file **no discrete Q4**,
+> so EDGAR carries only **3** quarterly `eps_diluted` rows/year — a *positional* "q−4" would pair
+> mismatched quarters. `sue` therefore aligns each quarter to the same fiscal quarter a year earlier
+> (fiscal-end span in [300, 430] days, nearest 365 — robust to the day-drift, e.g. Apple's
+> Dec-30→Dec-28), then standardizes the latest seasonal surprise by the std of the last 8 (`np.std`;
+> the ddof is ranking-immaterial at a fixed 8-obs window). `earn_gap` is the (stock − benchmark)
+> one-bar return on the first bar ≥ the latest EPS filing (annual **or** quarterly, so 10-K/Q4
+> earnings count), gated to a 65-trading-day recency window. Quarterly rows reach the panel via a new
+> optional `quarterly_fundamentals` stream (re-normalized from the same cached companyfacts JSON — no
+> extra network) whose presence is the US-fundamentals-feature switch. Tests: seasonal-alignment
+> known-answer + PIT-leak + <8-obs guard for `sue`; known-answer + recency guard for `earn_gap`;
+> panel-wiring. **Panel extension is consolidated into card 17.7** (the one `panel_us` rebuild), per
+> the Wave-3 design — not run here. Gates green.
 
 **Goal:** the post-earnings-drift axis without paid analyst estimates.
 **Files:** `src/heimdall/research/dataset.py` (panel-only features),
@@ -453,7 +488,19 @@ first-bar-≥-`filed_at` rule; suite green.
 **Don't:** key anything off fiscal period end; don't synthesize EPS from net income when the tag
 is missing (report coverage instead).
 
-### 13.5 US issuance / asset-growth / gross-profitability features  `[ ]`
+### 13.5 US issuance / asset-growth / gross-profitability features  `[x]`
+
+> **Outcome (2026-07-12):** `research.dataset._issuance_quality_features` adds `net_issuance_12m`
+> (YoY % Δ shares_outstanding, dir −), `asset_growth` (YoY % Δ assets, dir −), and
+> `gross_profitability` (`gross_profit ÷ assets`, Novy-Marx, dir +; NaN when the `GrossProfit` tag is
+> absent — never derived from revenue − COGS). All annual, `filed_at`-keyed via a local
+> `_annual_yoy_pct` mirroring `factors.metrics._growth_yoy`. **Noted overlap:** `net_issuance_12m` is
+> numerically identical to the snapshot's existing `share_dilution_yoy` — it is kept as an explicitly
+> named member of the `us-issuance-quality` family (13.6) rather than aliased; the panel will carry
+> both columns with equal values (flagged to the user). Gated on the same `quarterly_fundamentals`
+> US switch as 13.4. Tests: known-answer + PIT-leak + missing-GrossProfit for the three features,
+> plus the shared panel-wiring test. **Panel extension consolidated into card 17.7** (not run here).
+> Gates green.
 
 **Goal:** three documented free axes orthogonal to the already-tested roic/margin set.
 **Files:** `src/heimdall/research/dataset.py`, `tests/test_research_dataset.py`.
