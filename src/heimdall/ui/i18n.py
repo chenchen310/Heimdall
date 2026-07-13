@@ -515,17 +515,31 @@ _ZH: dict[str, str] = {
         "尚無凍結的每月組合——實時追蹤紀錄將於第一次每月凍結（排程的 `ledger freeze`）後開始。"
     ),
     "Month": "月份",
+    "Frozen on": "凍結日期",
     "Frozen": "凍結檔數",
     "Unrealized (vs benchmark)": "未實現報酬（相對大盤）",
     "Unrealized uses today's prices (gross, benchmark-relative) for cohorts still inside "
-    "their 6-month window; the official figures take over once realized.": (
+    "their 6-month window; the official figures (book / universe / selection skill) stay "
+    "blank until that window closes, then take over.": (
         "「未實現」是仍在 6 個月觀察期內的組合，以今日最新價格試算的報酬（相對大盤、未扣成本）；"
-        "待正式實現後，將以下方的正式數字為準。"
+        "正式欄位（組合／全市場／選股技術）會等 6 個月觀察期結束才有數字，屆時以正式數字為準。"
     ),
     "Book 6m (vs benchmark)": "組合 6 個月報酬（相對大盤）",
     "Universe 6m (vs benchmark)": "全市場 6 個月報酬（相對大盤）",
     "Selection skill": "選股技術",
     "Realized": "已實現",
+    # --- per-symbol live P&L breakdown (roadmap 16.1 follow-up) ---
+    "Per-symbol P&L — frozen {d} · {n}/{total} priced · latest {m}": (
+        "各檔即時損益 — 凍結於 {d} · 已取價 {n}/{total} 檔 · 最新 {m}"
+    ),
+    "Entry ({ccy})": "進場參考價（{ccy}）",
+    "Latest ({ccy})": "最新價（{ccy}）",
+    "Return": "報酬",
+    "vs benchmark": "相對大盤",
+    "Gross price return since each name was frozen (nothing sold — no costs); "
+    "“vs benchmark” subtracts {bench} over the same window.": (
+        "自各檔凍結日起的價格報酬（未賣出、未扣成本）；「相對大盤」為同期間減去 {bench} 的報酬。"
+    ),
     "Followed every month": "逐月跟單",
     "Growth of 1 (net of {bps} bps/side)": "1 元的成長（已扣每邊 {bps} bps 成本）",
     "Certified {d} · live since {m} · survivorship: current universe (optimistic).": (

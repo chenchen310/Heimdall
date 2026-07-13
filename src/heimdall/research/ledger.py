@@ -257,6 +257,18 @@ def _equity_curve(months: list[str], gross: list[float], sets: list[set[str]]) -
 
 
 @dataclass
+class PositionMark:
+    """One frozen pick's live, benchmark-relative mark from today's prices."""
+
+    symbol: str
+    entry: float  # adj_close on/after as_of (the reference "entry" the day it was frozen)
+    current: float  # latest adj_close
+    return_pct: float  # current / entry − 1 (gross — nothing has been sold)
+    alpha_pct: float  # return_pct − the benchmark's same-window return
+    marked_at: str  # the latest price date actually used for this symbol
+
+
+@dataclass
 class UnrealizedMark:
     """A live "how is this doing so far" read for a cohort still inside its
     6-month window — the panel has no verdict yet (``realized_track_record``
@@ -271,6 +283,7 @@ class UnrealizedMark:
     )
     as_of: str
     marked_at: str  # the latest price date actually used
+    positions: list[PositionMark] = field(default_factory=list)  # per-symbol breakdown
 
 
 def unrealized_mark(
@@ -282,6 +295,7 @@ def unrealized_mark(
     **separate** from :func:`realized_track_record`: it reads raw OHLCV, not the
     monthly research panel, so it has an answer even for a cohort frozen mid-month,
     before the panel has a cross-section for it — the actual gap this closes.
+    Carries a per-symbol ``positions`` breakdown so the UI can show each pick's mark.
 
     ``prices``/``bench`` are canonical OHLCV frames (``date``, ``adj_close``) —
     the caller fetches them (e.g. ``ui._data.get_ohlcv``); each is filtered here to
@@ -290,7 +304,8 @@ def unrealized_mark(
     """
     as_of_ts = pd.Timestamp(as_of)
 
-    def _leg_return(frame: pd.DataFrame) -> tuple[float, str] | None:
+    def _leg(frame: pd.DataFrame) -> tuple[float, float, float, str] | None:
+        """(entry, current, return, latest-date) for one symbol's ``>= as_of`` window."""
         if frame.empty or "date" not in frame.columns:
             return None
         f = frame[frame["date"] >= as_of_ts].sort_values("date")
@@ -299,28 +314,33 @@ def unrealized_mark(
         entry, current = float(f["adj_close"].iloc[0]), float(f["adj_close"].iloc[-1])
         if entry <= 0:
             return None
-        return current / entry - 1.0, cast("pd.Timestamp", f["date"].iloc[-1]).date().isoformat()
+        dt = cast("pd.Timestamp", f["date"].iloc[-1]).date().isoformat()
+        return entry, current, current / entry - 1.0, dt
 
-    bench_leg = _leg_return(bench)
-    rets: list[float] = []
+    bench_leg = _leg(bench)
+    bench_ret = bench_leg[2] if bench_leg is not None else float("nan")
+
+    positions: list[PositionMark] = []
     marked_at = as_of
     for sym in picks:
-        leg = _leg_return(prices.get(sym, pd.DataFrame()))
-        if leg is not None:
-            ret, dt = leg
-            rets.append(ret)
-            marked_at = max(marked_at, dt)
+        leg = _leg(prices.get(sym, pd.DataFrame()))
+        if leg is None:
+            continue
+        entry, current, ret, dt = leg
+        positions.append(PositionMark(sym, entry, current, ret, ret - bench_ret, dt))
+        marked_at = max(marked_at, dt)
 
+    rets = [p.return_pct for p in positions]
     ew_ret = float(np.mean(rets)) if rets else float("nan")
-    bench_ret = bench_leg[0] if bench_leg is not None else float("nan")
     return UnrealizedMark(
         n_frozen=len(picks),
-        n_priced=len(rets),
+        n_priced=len(positions),
         return_pct=ew_ret,
         bench_return_pct=bench_ret,
         alpha_pct=ew_ret - bench_ret,
         as_of=as_of,
         marked_at=marked_at,
+        positions=positions,
     )
 
 

@@ -121,6 +121,39 @@ def _unrealized_for(market: str, symbols: tuple[str, ...], as_of: str) -> Unreal
     return unrealized_mark(list(symbols), as_of, prices, bench)
 
 
+def _positions_breakdown(
+    spec: SignalSpec, cohort: RealizedCohort, mark: UnrealizedMark, *, expanded: bool
+) -> None:
+    """Each frozen pick's live return, marked to today's prices — best performers first."""
+    label = t("Per-symbol P&L — frozen {d} · {n}/{total} priced · latest {m}").format(
+        d=cohort.as_of or cohort.month, n=mark.n_priced, total=mark.n_frozen, m=mark.marked_at
+    )
+    currency = REGION_CURRENCY[spec.market]
+    with st.expander(label, expanded=expanded):
+        rows = [
+            {
+                t("Symbol"): p.symbol,
+                t("Entry ({ccy})").format(ccy=currency): round(p.entry, 2),
+                t("Latest ({ccy})").format(ccy=currency): round(p.current, 2),
+                t("Return"): _fmt_pct(p.return_pct),
+                t("vs benchmark"): _fmt_pct(p.alpha_pct),
+            }
+            for p in sorted(mark.positions, key=lambda p: p.return_pct, reverse=True)
+        ]
+        st.dataframe(
+            pd.DataFrame(rows),
+            width="stretch",
+            hide_index=True,
+            column_config={t("Symbol"): st.column_config.Column(pinned=True)},
+        )
+        st.caption(
+            t(
+                "Gross price return since each name was frozen (nothing sold — no costs); "
+                "“vs benchmark” subtracts {bench} over the same window."
+            ).format(bench=BENCHMARK[spec.market])
+        )
+
+
 def _track_record(spec: SignalSpec, report: dict[str, object]) -> None:
     """The live, costed track record (16.1): each cohort was frozen the day it was
     shown, then scored on realized returns from the panel — no backfill, no hindsight."""
@@ -145,12 +178,18 @@ def _track_record(spec: SignalSpec, report: dict[str, object]) -> None:
         )
         return
 
+    # One live mark per not-yet-realized cohort, reused by the table and the per-symbol view.
+    marks: dict[str, UnrealizedMark | None] = {
+        c.month: (None if c.realized else _unrealized_for(spec.market, tuple(c.symbols), c.as_of))
+        for c in tr.cohorts
+    }
+
     def _row(c: RealizedCohort) -> dict[str, object]:
-        unreal = None if c.realized else _unrealized_for(spec.market, tuple(c.symbols), c.as_of)
+        mark = marks.get(c.month)
         return {
-            t("Month"): c.month,
+            t("Frozen on"): c.as_of or c.month,  # the snapshot date the picks were frozen from
             t("Frozen"): c.n_frozen,
-            t("Unrealized (vs benchmark)"): _fmt_pct(unreal.alpha_pct) if unreal else "—",
+            t("Unrealized (vs benchmark)"): _fmt_pct(mark.alpha_pct) if mark else "—",
             t("Book 6m (vs benchmark)"): _fmt_pct(c.book_rel_6m),
             t("Universe 6m (vs benchmark)"): _fmt_pct(c.univ_rel_6m),
             t("Selection skill"): _fmt_pct(c.alpha_6m),
@@ -162,9 +201,15 @@ def _track_record(spec: SignalSpec, report: dict[str, object]) -> None:
     st.caption(
         t(
             "Unrealized uses today's prices (gross, benchmark-relative) for cohorts still inside "
-            "their 6-month window; the official figures take over once realized."
+            "their 6-month window; the official figures (book / universe / selection skill) stay "
+            "blank until that window closes, then take over."
         )
     )
+
+    # Per-symbol P&L for each still-live cohort (the frozen names, marked to today's prices).
+    live = [c for c in tr.cohorts if marks.get(c.month) and marks[c.month].positions]  # type: ignore[union-attr]
+    for c in live:
+        _positions_breakdown(spec, c, marks[c.month], expanded=len(live) == 1)  # type: ignore[arg-type]
 
     if tr.curve:
         fig = go.Figure()

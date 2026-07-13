@@ -712,9 +712,9 @@ def test_today_page_track_record_renders_with_frozen_cohorts(
     _nav(at, "Today's Picks")
     assert not at.exception
     assert any(s.value == "Live track record" for s in at.subheader)
-    # The track-record table is the one carrying a Month column (a rebalance table also renders).
-    track = next(df.value for df in at.dataframe if "Month" in list(df.value.columns))
-    row = track[track["Month"] == "2024-01"].iloc[0]
+    # The track-record table is keyed by the freeze date now, not the month.
+    track = next(df.value for df in at.dataframe if "Frozen on" in list(df.value.columns))
+    row = track[track["Frozen on"] == "2024-01-15"].iloc[0]  # the cohort's as_of date
     assert row["Frozen"] == 2  # the true frozen count, independent of realization
     # Formatted as a percentage string, never the raw "None"/NaN the pandas default shows.
     assert row["Book 6m (vs benchmark)"].endswith("%")
@@ -752,12 +752,17 @@ def test_today_page_track_record_shows_unrealized_mark_for_an_open_cohort(
     at = AppTest.from_file(APP).run(timeout=60)
     _nav(at, "Today's Picks")
     assert not at.exception
-    track = next(df.value for df in at.dataframe if "Month" in list(df.value.columns))
-    row = track[track["Month"] == "2024-03"].iloc[0]
+    track = next(df.value for df in at.dataframe if "Frozen on" in list(df.value.columns))
+    row = track[track["Frozen on"] == "2024-03-15"].iloc[0]  # keyed by freeze date
     assert row["Frozen"] == 2  # the freeze is visible even though nothing can be scored yet
     assert row["Unrealized (vs benchmark)"] == "+15.0%"
     assert row["Book 6m (vs benchmark)"] == "—"  # not realized — an honest dash, not "None"
     assert bool(row["Realized"]) is False
+
+    # Per-symbol P&L breakdown for the live cohort, best performers first.
+    positions = next(df.value for df in at.dataframe if "vs benchmark" in list(df.value.columns))
+    assert list(positions["Symbol"]) == ["A.US", "B.US"]  # +20% sorted before +10%
+    assert positions.iloc[0]["Return"] == "+20.0%"
 
 
 def test_today_page_rebalance_helper_renders_order_plan(

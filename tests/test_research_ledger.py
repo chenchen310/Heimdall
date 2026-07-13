@@ -156,6 +156,14 @@ def test_unrealized_mark_known_answer_benchmark_relative() -> None:
     assert mark.alpha_pct == pytest.approx(-0.01)
     assert mark.marked_at == "2024-07-13"
 
+    # Per-symbol breakdown: each name's entry/current/return and its benchmark-relative alpha.
+    by_sym = {p.symbol: p for p in mark.positions}
+    assert set(by_sym) == {"A.US", "B.US"}
+    assert by_sym["A.US"].entry == 100.0 and by_sym["A.US"].current == 110.0
+    assert by_sym["A.US"].return_pct == pytest.approx(0.10)
+    assert by_sym["A.US"].alpha_pct == pytest.approx(0.10 - 0.01)  # its own return − benchmark
+    assert by_sym["B.US"].return_pct == pytest.approx(-0.10)
+
 
 def test_unrealized_mark_filters_to_on_or_after_as_of() -> None:
     # A wider frame (includes a pre-freeze row) must not be used as the entry price.
@@ -171,6 +179,7 @@ def test_unrealized_mark_skips_symbols_with_no_price_yet() -> None:
     mark = unrealized_mark(["A.US", "B.US"], "2024-07-01", prices, bench)
     assert mark.n_frozen == 2 and mark.n_priced == 1  # B skipped, not zero-filled
     assert mark.return_pct == pytest.approx(0.10)
+    assert [p.symbol for p in mark.positions] == ["A.US"]  # only the priced name appears
 
 
 def test_unrealized_mark_all_nan_when_nothing_priced() -> None:

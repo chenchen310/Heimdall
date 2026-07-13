@@ -914,6 +914,14 @@ DoD: known-answer Δ math tests; AppTest smoke; zh strings; gates green.
 > Table columns reformatted to percentage strings with "—" for missing, eliminating the raw "None"
 > text. Tests: 4 known-answer `unrealized_mark` cases + 1 AppTest smoke reproducing the exact
 > mid-month scenario. Gates green; suite 405.
+>
+> **Follow-up 2 (2026-07-14, user-requested):** `unrealized_mark` now carries a per-symbol
+> `positions: list[PositionMark]` breakdown (each pick's entry/latest/return + benchmark-relative
+> alpha); the track-record UI keys the table by the freeze **date** (`as_of`) instead of the month
+> and, for each still-live cohort, shows a per-symbol P&L expander (best performers first, pinned
+> symbol column). Also clarified the caption so the intentionally-blank certified columns (book /
+> universe / selection skill — they only fill after the 6-month window closes) read as expected, not
+> broken. Verified against the real 19-name 2026-07 cohort. Suite 405.
 
 **Goal:** freeze each month's certified picks and show the realized, costed track record — the
 strongest honest trust feature the app can have.
