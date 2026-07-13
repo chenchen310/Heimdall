@@ -714,11 +714,50 @@ def test_today_page_track_record_renders_with_frozen_cohorts(
     assert any(s.value == "Live track record" for s in at.subheader)
     # The track-record table is the one carrying a Month column (a rebalance table also renders).
     track = next(df.value for df in at.dataframe if "Month" in list(df.value.columns))
-    assert "2024-01" in list(track["Month"])
+    row = track[track["Month"] == "2024-01"].iloc[0]
+    assert row["Frozen"] == 2  # the true frozen count, independent of realization
+    # Formatted as a percentage string, never the raw "None"/NaN the pandas default shows.
+    assert row["Book 6m (vs benchmark)"].endswith("%")
+    assert "None" not in track.to_string()
 
     from heimdall.ui.i18n import _ZH
 
     assert "Live track record" in _ZH  # zh strings present
+
+
+def test_today_page_track_record_shows_unrealized_mark_for_an_open_cohort(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The exact real-world case this closes: a cohort frozen mid-month, before the
+    panel has a cross-section for that month at all — was previously an all-"None"
+    row with no way to tell it apart from "nothing was frozen"."""
+    _force_english(monkeypatch)
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_today_snapshot(tmp_path)
+    _point_registry_at(tmp_path, monkeypatch)
+    _certify_us_signal(tmp_path)
+    _write_us_panel(tmp_path)  # panel's only month is 2024-01 — nothing for 2024-03
+    _write_ledger_cohort(tmp_path, "us-mom", "2024-03", ["A.US", "B.US"])
+
+    def _fake_get_ohlcv(symbol: str, start: object, end: object) -> pd.DataFrame:
+        # A.US +20%, B.US +10% -> EW +15%; benchmark flat -> alpha = +15%.
+        entry_exit = {"A.US": (100.0, 120.0), "B.US": (100.0, 110.0)}.get(symbol, (100.0, 100.0))
+        return pd.DataFrame(
+            {"date": pd.to_datetime(["2024-03-15", "2024-03-20"]), "adj_close": list(entry_exit)}
+        )
+
+    monkeypatch.setattr("heimdall.ui.today_page.get_ohlcv", _fake_get_ohlcv)
+    st.cache_data.clear()
+
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Today's Picks")
+    assert not at.exception
+    track = next(df.value for df in at.dataframe if "Month" in list(df.value.columns))
+    row = track[track["Month"] == "2024-03"].iloc[0]
+    assert row["Frozen"] == 2  # the freeze is visible even though nothing can be scored yet
+    assert row["Unrealized (vs benchmark)"] == "+15.0%"
+    assert row["Book 6m (vs benchmark)"] == "—"  # not realized — an honest dash, not "None"
+    assert bool(row["Realized"]) is False
 
 
 def test_today_page_rebalance_helper_renders_order_plan(

@@ -1,0 +1,87 @@
+{
+  "name": "tw-revenue-momentum",
+  "version": 1,
+  "market": "Taiwan",
+  "month": "2026-07",
+  "as_of": "2026-07-13",
+  "frozen_at": "2026-07-13T15:29:36.261089+00:00",
+  "spec_hash": "146f08a6e5df9d2ecb1b5a80c781b9ea029302ca9a10ef736a3ddb85234c0c2b",
+  "picks": [
+    {
+      "symbol": "8422.TW",
+      "signal_score": 2.8042173644467057
+    },
+    {
+      "symbol": "3450.TW",
+      "signal_score": 2.1828782508125903
+    },
+    {
+      "symbol": "2241.TW",
+      "signal_score": 1.0650282465388654
+    },
+    {
+      "symbol": "9921.TW",
+      "signal_score": 0.4198159800407704
+    },
+    {
+      "symbol": "9914.TW",
+      "signal_score": 0.2456263237170584
+    },
+    {
+      "symbol": "2495.TW",
+      "signal_score": -0.013017861120424072
+    },
+    {
+      "symbol": "6670.TW",
+      "signal_score": -0.057083430992072706
+    },
+    {
+      "symbol": "3708.TW",
+      "signal_score": -0.2936977120777887
+    },
+    {
+      "symbol": "9910.TW",
+      "signal_score": -0.41011176709930447
+    },
+    {
+      "symbol": "2753.TW",
+      "signal_score": -0.44100267964678247
+    },
+    {
+      "symbol": "8438.TW",
+      "signal_score": -0.46307075042487683
+    },
+    {
+      "symbol": "2727.TW",
+      "signal_score": -0.5091867763546489
+    },
+    {
+      "symbol": "2340.TW",
+      "signal_score": -0.5205334524563119
+    },
+    {
+      "symbol": "9904.TW",
+      "signal_score": -0.525107501108971
+    },
+    {
+      "symbol": "8454.TW",
+      "signal_score": -0.5608202685054035
+    },
+    {
+      "symbol": "8464.TW",
+      "signal_score": -0.5697732094770742
+    },
+    {
+      "symbol": "5904.TWO",
+      "signal_score": -0.6437939861600367
+    },
+    {
+      "symbol": "1736.TW",
+      "signal_score": -0.7794345675133798
+    },
+    {
+      "symbol": "2731.TW",
+      "signal_score": -0.9309322026189154
+    }
+  ]
+}

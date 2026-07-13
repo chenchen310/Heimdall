@@ -21,6 +21,7 @@ from heimdall.research.ledger import (
     freeze,
     load_cohorts,
     realized_track_record,
+    unrealized_mark,
 )
 from heimdall.research.spec import SignalSpec
 
@@ -117,8 +118,9 @@ def test_realized_track_record_known_answer_alpha_and_costed_curve(tmp_path: Pat
     assert jan.book_rel_6m == pytest.approx(0.20)
     assert jan.univ_rel_6m == pytest.approx(0.075)
     assert jan.alpha_6m == pytest.approx(0.125)
-    assert jan.realized is True and jan.n_picks == 2
+    assert jan.realized is True and jan.n_frozen == 2 and jan.n_realized == 2
     assert feb.realized is False and np.isnan(feb.book_rel_6m)  # 6m window open
+    assert feb.n_frozen == 2 and feb.n_realized == 0  # frozen count known even before realization
 
     # Curve: gross = [mean(0.10,0.20)=0.15, mean(0.05,0.15)=0.10]; turnover {A,B}->{B,C} = 0.5.
     # net month0 = 0.15 - 1.0*0.002 = 0.148 (full buy); net month1 = 0.10 - 2*0.5*0.002 = 0.098.
@@ -134,3 +136,46 @@ def test_realized_track_record_empty_when_nothing_frozen(tmp_path: Path) -> None
     panel = pd.DataFrame([_row("2024-01-31", "A.US", 0.1, 0.1, 0.1)])
     tr = realized_track_record(_SPEC, panel, "2024-01", root=tmp_path)
     assert tr.cohorts == [] and tr.curve == []
+
+
+def _px(dates: list[str], closes: list[float]) -> pd.DataFrame:
+    return pd.DataFrame({"date": pd.to_datetime(dates), "adj_close": closes})
+
+
+def test_unrealized_mark_known_answer_benchmark_relative() -> None:
+    # A: 100 -> 110 (+10%); B: 50 -> 45 (-10%); EW = 0%. Benchmark: 200 -> 202 (+1%).
+    prices = {
+        "A.US": _px(["2024-07-01", "2024-07-13"], [100.0, 110.0]),
+        "B.US": _px(["2024-07-01", "2024-07-13"], [50.0, 45.0]),
+    }
+    bench = _px(["2024-07-01", "2024-07-13"], [200.0, 202.0])
+    mark = unrealized_mark(["A.US", "B.US"], "2024-07-01", prices, bench)
+    assert mark.n_frozen == 2 and mark.n_priced == 2
+    assert mark.return_pct == pytest.approx(0.0)  # EW of +10% and -10%
+    assert mark.bench_return_pct == pytest.approx(0.01)
+    assert mark.alpha_pct == pytest.approx(-0.01)
+    assert mark.marked_at == "2024-07-13"
+
+
+def test_unrealized_mark_filters_to_on_or_after_as_of() -> None:
+    # A wider frame (includes a pre-freeze row) must not be used as the entry price.
+    prices = {"A.US": _px(["2024-06-01", "2024-07-01", "2024-07-13"], [999.0, 100.0, 120.0])}
+    bench = _px(["2024-07-01", "2024-07-13"], [100.0, 100.0])
+    mark = unrealized_mark(["A.US"], "2024-07-01", prices, bench)
+    assert mark.return_pct == pytest.approx(0.20)  # entry is the 07-01 row, not the 06-01 one
+
+
+def test_unrealized_mark_skips_symbols_with_no_price_yet() -> None:
+    prices = {"A.US": _px(["2024-07-01", "2024-07-13"], [100.0, 110.0])}  # B.US missing entirely
+    bench = _px(["2024-07-01", "2024-07-13"], [100.0, 100.0])
+    mark = unrealized_mark(["A.US", "B.US"], "2024-07-01", prices, bench)
+    assert mark.n_frozen == 2 and mark.n_priced == 1  # B skipped, not zero-filled
+    assert mark.return_pct == pytest.approx(0.10)
+
+
+def test_unrealized_mark_all_nan_when_nothing_priced() -> None:
+    mark = unrealized_mark(["A.US"], "2024-07-01", {}, pd.DataFrame())
+    assert mark.n_priced == 0
+    assert (
+        np.isnan(mark.return_pct) and np.isnan(mark.bench_return_pct) and np.isnan(mark.alpha_pct)
+    )

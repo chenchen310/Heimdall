@@ -515,7 +515,13 @@ _ZH: dict[str, str] = {
         "尚無凍結的每月組合——實時追蹤紀錄將於第一次每月凍結（排程的 `ledger freeze`）後開始。"
     ),
     "Month": "月份",
-    "Picks": "候選檔數",
+    "Frozen": "凍結檔數",
+    "Unrealized (vs benchmark)": "未實現報酬（相對大盤）",
+    "Unrealized uses today's prices (gross, benchmark-relative) for cohorts still inside "
+    "their 6-month window; the official figures take over once realized.": (
+        "「未實現」是仍在 6 個月觀察期內的組合，以今日最新價格試算的報酬（相對大盤、未扣成本）；"
+        "待正式實現後，將以下方的正式數字為準。"
+    ),
     "Book 6m (vs benchmark)": "組合 6 個月報酬（相對大盤）",
     "Universe 6m (vs benchmark)": "全市場 6 個月報酬（相對大盤）",
     "Selection skill": "選股技術",

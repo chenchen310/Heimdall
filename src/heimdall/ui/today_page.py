@@ -15,6 +15,7 @@ point the page at a scratch registry by monkeypatching that one function.
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 from typing import cast
 
@@ -22,18 +23,25 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from heimdall.data.base import ProviderError
 from heimdall.data.symbols import REGION_CURRENCY
 from heimdall.research import registry
 from heimdall.research.benchmark import BENCHMARK
 from heimdall.research.dataset import load_panel
-from heimdall.research.ledger import load_cohorts, realized_track_record
+from heimdall.research.ledger import (
+    RealizedCohort,
+    UnrealizedMark,
+    load_cohorts,
+    realized_track_record,
+    unrealized_mark,
+)
 from heimdall.research.monitor import TRAILING, load_monitoring
 from heimdall.research.rebalance import diff_picks, orders_to_csv, rebalance_plan
 from heimdall.research.spec import SignalSpec, load_spec
 from heimdall.research.today import freshness, todays_picks
 from heimdall.screener.snapshot import MONETARY_FIELDS
 from heimdall.ui import _glossary
-from heimdall.ui._data import snapshot
+from heimdall.ui._data import get_ohlcv, snapshot
 from heimdall.ui._freshness import freshness_word
 from heimdall.ui._markets import market_radio
 from heimdall.ui._nav import no_snapshot_cta, switch_to
@@ -91,6 +99,28 @@ def _panel(market: str) -> pd.DataFrame:
     return load_panel(market)
 
 
+def _fmt_pct(x: float) -> str:
+    return "—" if pd.isna(x) else f"{x:+.1%}"
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _unrealized_for(market: str, symbols: tuple[str, ...], as_of: str) -> UnrealizedMark | None:
+    """Live mark for a not-yet-realized cohort — see ``ledger.unrealized_mark``.
+
+    Gracefully absent (not a page-crashing error) on any provider hiccup: this is
+    a nice-to-have interim read, not the certified number.
+    """
+    if not symbols or not as_of:
+        return None
+    try:
+        start, end = date.fromisoformat(as_of), date.today()
+        prices = {sym: get_ohlcv(sym, start, end) for sym in symbols}
+        bench = get_ohlcv(BENCHMARK[market], start, end)
+    except ProviderError:
+        return None
+    return unrealized_mark(list(symbols), as_of, prices, bench)
+
+
 def _track_record(spec: SignalSpec, report: dict[str, object]) -> None:
     """The live, costed track record (16.1): each cohort was frozen the day it was
     shown, then scored on realized returns from the panel — no backfill, no hindsight."""
@@ -115,20 +145,26 @@ def _track_record(spec: SignalSpec, report: dict[str, object]) -> None:
         )
         return
 
-    table = pd.DataFrame(
-        [
-            {
-                t("Month"): c.month,
-                t("Picks"): c.n_picks,
-                t("Book 6m (vs benchmark)"): c.book_rel_6m,
-                t("Universe 6m (vs benchmark)"): c.univ_rel_6m,
-                t("Selection skill"): c.alpha_6m,
-                t("Realized"): c.realized,
-            }
-            for c in tr.cohorts
-        ]
-    )
+    def _row(c: RealizedCohort) -> dict[str, object]:
+        unreal = None if c.realized else _unrealized_for(spec.market, tuple(c.symbols), c.as_of)
+        return {
+            t("Month"): c.month,
+            t("Frozen"): c.n_frozen,
+            t("Unrealized (vs benchmark)"): _fmt_pct(unreal.alpha_pct) if unreal else "—",
+            t("Book 6m (vs benchmark)"): _fmt_pct(c.book_rel_6m),
+            t("Universe 6m (vs benchmark)"): _fmt_pct(c.univ_rel_6m),
+            t("Selection skill"): _fmt_pct(c.alpha_6m),
+            t("Realized"): c.realized,
+        }
+
+    table = pd.DataFrame([_row(c) for c in tr.cohorts])
     st.dataframe(table, width="stretch", hide_index=True)
+    st.caption(
+        t(
+            "Unrealized uses today's prices (gross, benchmark-relative) for cohorts still inside "
+            "their 6-month window; the official figures take over once realized."
+        )
+    )
 
     if tr.curve:
         fig = go.Figure()

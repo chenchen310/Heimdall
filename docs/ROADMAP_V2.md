@@ -901,6 +901,19 @@ DoD: known-answer Δ math tests; AppTest smoke; zh strings; gates green.
 > table + net equity curve + cert-date/survivorship caption) with an honest empty state before the
 > first freeze. Tests: freeze-idempotency + no-backfill, known-answer alpha + costed curve, load
 > ordering (`test_research_ledger.py`); 2 AppTest smokes (empty + populated). Gates green; suite 400.
+>
+> **Follow-up (2026-07-13):** the first real freeze (`tw-revenue-momentum` v1, month 2026-07)
+> surfaced a UX gap — a cohort frozen mid-month, before the panel has *any* cross-section for that
+> month yet, showed every column as a literal "None" and a candidate count of 0, indistinguishable
+> from "nothing was frozen." Root cause: `RealizedCohort.n_picks` conflated "frozen" with "realized
+> with a complete 6m label." Fixed without touching the certified month-anchored math (that stays
+> exactly aligned with `certify`/`monitor` on purpose): split into `n_frozen` (always known) and
+> `n_realized`; added a new, deliberately **separate** `unrealized_mark()` — a benchmark-relative,
+> gross (nothing sold yet) live mark computed from today's cached prices via `ui._data.get_ohlcv`,
+> shown only for not-yet-realized cohorts so it never competes with the official 6-month figure.
+> Table columns reformatted to percentage strings with "—" for missing, eliminating the raw "None"
+> text. Tests: 4 known-answer `unrealized_mark` cases + 1 AppTest smoke reproducing the exact
+> mid-month scenario. Gates green; suite 405.
 
 **Goal:** freeze each month's certified picks and show the realized, costed track record — the
 strongest honest trust feature the app can have.

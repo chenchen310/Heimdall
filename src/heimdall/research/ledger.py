@@ -133,11 +133,13 @@ def load_cohorts(name: str, version: int, root: Path | None = None) -> list[dict
 class RealizedCohort:
     month: str
     as_of: str
-    n_picks: int  # frozen picks found in the panel with a complete 6m label
+    n_frozen: int  # total picks in the frozen cohort — always known, panel-independent
+    n_realized: int  # of those, how many the panel currently carries a complete 6m label for
     book_rel_6m: float  # EW book 6m return, benchmark-relative
     univ_rel_6m: float  # EW eligible-universe 6m return, benchmark-relative
     alpha_6m: float  # book − universe: the G3 selection skill (the certified edge)
     realized: bool  # the 6m forward window has completed
+    symbols: list[str] = field(default_factory=list)  # the frozen picks (for a live price mark)
 
 
 @dataclass
@@ -209,11 +211,13 @@ def realized_track_record(
             RealizedCohort(
                 month=month,
                 as_of=str(c.get("as_of", "")),
-                n_picks=int(book_rows["fwd_6m"].notna().sum()) if not book_rows.empty else 0,
+                n_frozen=len(picks),
+                n_realized=int(book_rows["fwd_6m"].notna().sum()) if not book_rows.empty else 0,
                 book_rel_6m=book_rel,
                 univ_rel_6m=univ_rel,
                 alpha_6m=book_rel - univ_rel,
                 realized=bool(book_rows["fwd_6m"].notna().any()) if not book_rows.empty else False,
+                symbols=sorted(symbols),
             )
         )
         # Curve leg: this cohort's realized one-month book return.
@@ -247,6 +251,77 @@ def _equity_curve(months: list[str], gross: list[float], sets: list[set[str]]) -
         equity *= 1.0 + net[i]
         points.append(CurvePoint(months[i], g_prefix[i], net[i], equity))
     return points
+
+
+# --- unrealized mark (live, price-only — orthogonal to the certified panel math) ---
+
+
+@dataclass
+class UnrealizedMark:
+    """A live "how is this doing so far" read for a cohort still inside its
+    6-month window — the panel has no verdict yet (``realized_track_record``
+    correctly shows NaN there), but raw prices already exist."""
+
+    n_frozen: int
+    n_priced: int  # of those, how many had a price on/after as_of AND today
+    return_pct: float  # EW mean raw price return since as_of
+    bench_return_pct: float
+    alpha_pct: (
+        float  # return_pct − bench_return_pct — same _rel convention as every other number here
+    )
+    as_of: str
+    marked_at: str  # the latest price date actually used
+
+
+def unrealized_mark(
+    picks: list[str], as_of: str, prices: dict[str, pd.DataFrame], bench: pd.DataFrame
+) -> UnrealizedMark:
+    """Benchmark-relative mark-to-market from **today's cached prices** — never net
+    of costs (nothing has been sold), never a bare price return (playbook §2: every
+    return in this app is benchmark-relative, so this one is too). Deliberately
+    **separate** from :func:`realized_track_record`: it reads raw OHLCV, not the
+    monthly research panel, so it has an answer even for a cohort frozen mid-month,
+    before the panel has a cross-section for it — the actual gap this closes.
+
+    ``prices``/``bench`` are canonical OHLCV frames (``date``, ``adj_close``) —
+    the caller fetches them (e.g. ``ui._data.get_ohlcv``); each is filtered here to
+    ``>= as_of`` so a wider-window frame is fine to pass in. A symbol with no row
+    on/after ``as_of`` (not yet cached, delisted, …) is skipped, not zero-filled.
+    """
+    as_of_ts = pd.Timestamp(as_of)
+
+    def _leg_return(frame: pd.DataFrame) -> tuple[float, str] | None:
+        if frame.empty or "date" not in frame.columns:
+            return None
+        f = frame[frame["date"] >= as_of_ts].sort_values("date")
+        if f.empty:
+            return None
+        entry, current = float(f["adj_close"].iloc[0]), float(f["adj_close"].iloc[-1])
+        if entry <= 0:
+            return None
+        return current / entry - 1.0, cast("pd.Timestamp", f["date"].iloc[-1]).date().isoformat()
+
+    bench_leg = _leg_return(bench)
+    rets: list[float] = []
+    marked_at = as_of
+    for sym in picks:
+        leg = _leg_return(prices.get(sym, pd.DataFrame()))
+        if leg is not None:
+            ret, dt = leg
+            rets.append(ret)
+            marked_at = max(marked_at, dt)
+
+    ew_ret = float(np.mean(rets)) if rets else float("nan")
+    bench_ret = bench_leg[0] if bench_leg is not None else float("nan")
+    return UnrealizedMark(
+        n_frozen=len(picks),
+        n_priced=len(rets),
+        return_pct=ew_ret,
+        bench_return_pct=bench_ret,
+        alpha_pct=ew_ret - bench_ret,
+        as_of=as_of,
+        marked_at=marked_at,
+    )
 
 
 # --- CLI (freeze every certified signal — the monthly ledger step) ---------------
