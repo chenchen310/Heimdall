@@ -546,7 +546,25 @@ Steps:
 DoD: log entries committed; zero OOS reads outside a user-authorized, pre-registered certify run.
 **Don't:** mix family budgets; don't add candidates mid-session.
 
-### 13.7 FinMind paced crawler (full-TW streams, free tier)  `[ ]`
+### 13.7 FinMind paced crawler (full-TW streams, free tier)  `[x]`
+
+> **Outcome (2026-07-13):** `research/finmind_crawl.py` — a paced pre-warmer over `tw_symbols()` ×
+> {revenue, chips, fundamentals, lending} that persists each `(symbol, dataset)` to a disk stream
+> cache and yields progress per item. **Placed in `research/`, not the card's suggested `data/`:**
+> the card's own Step 2 iterates `screener.tw_symbols()`, and `data/` may never import `screener`
+> (the one-way layer rule — no `data/` module does); universe-iterating provider-orchestrators
+> already live in `research/` (`build_dataset.py`, `tdcc_cache.py`). Since **no committed stream
+> cache existed** (the 005/006 one was scratch, 560 calls, long gone), this defines the *one*
+> canonical format: `data/research/streams/{dataset}/{TICKER_MARKET}.parquet` + `streams/_ledger.json`,
+> with `load_cached_stream()` reading it back with a provider-method-shaped signature for 13.8's
+> offline substrate. Ledger-keyed skip ⇒ interrupt-then-rerun makes **zero** duplicate calls;
+> hourly-budget pacing (`--budget-per-hour`, default 550); 402/403 quota-ban backoff sleeps a
+> window (~26 min) and **retries the same item** (never marked done until it truly completes), while
+> a genuine failure is recorded-not-retried. Tests (`test_finmind_crawl.py`, 7): a fake provider,
+> injected `sleep`/`monotonic`, **no network** — ledger idempotency, interrupt-then-rerun zero-dup,
+> canned-402/403 backoff, non-quota handling, budget pause. **The multi-day crawl itself was not
+> run** (it is the operator chore this tool enables — ~9+ quota-hours over days). Gates green;
+> suite 379.
 
 **Goal:** the full ~2,130-name TW streams on disk without a paid tier. The 11.4 constraint
 measured ~5,600 calls ≈ 9 quota-hours — make that a background chore, not a blocked session.
@@ -571,6 +589,17 @@ detached/overnight or across days.
 **Don't:** bypass the provider's rate limiter; don't invent a second cache format.
 
 ### 13.8 Full-universe `panel_tw` + revenue-momentum v2 (user-gated)  `[ ]`
+
+> **Blocked (2026-07-13): needs 13.7's crawl to have actually _run_, + a mandatory user gate.**
+> 13.7 shipped the crawler tool, but Step 1's precondition is the full-universe streams **on disk**,
+> which requires running that crawl — ~9+ FinMind quota-hours across days, with 26-min IP bans —
+> and that **cannot happen in-session** (live network + quota). Every step here (build to
+> `data/research/full/`, DEV/VAL re-eval, then the Step-4 vault decision) sits on that substrate.
+> Correction for whoever picks this up: the shipped `panel_tw` is **price/fundamentals-only** — it
+> carries *none* of the `rev_mom_*` / flow columns (verified 2026-07-13), so v1's certification used
+> a separate reduced-universe substrate, not this file. Path once the crawl has run: wire
+> `finmind_crawl.load_cached_stream` as the stream callables into a `root=data/research/full/`
+> build, run the free re-eval, then **stop and ask the user** (Step 4) before any vault touch.
 
 **Goal:** rebuild the TW panel on the full universe (entry 010's hard substrate), re-evaluate the
 closed TW candidates fairly, and — with sign-off — take revenue momentum's v2 shot, removing the
