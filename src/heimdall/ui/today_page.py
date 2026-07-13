@@ -18,12 +18,17 @@ import json
 from pathlib import Path
 from typing import cast
 
+import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 from heimdall.data.symbols import REGION_CURRENCY
 from heimdall.research import registry
 from heimdall.research.benchmark import BENCHMARK
+from heimdall.research.dataset import load_panel
+from heimdall.research.ledger import load_cohorts, realized_track_record
 from heimdall.research.monitor import TRAILING, load_monitoring
+from heimdall.research.rebalance import diff_picks, orders_to_csv, rebalance_plan
 from heimdall.research.spec import SignalSpec, load_spec
 from heimdall.research.today import freshness, todays_picks
 from heimdall.screener.snapshot import MONETARY_FIELDS
@@ -79,6 +84,137 @@ def _drift_banner(spec: SignalSpec) -> None:
                 name=spec.name, v=spec.version
             )
         )
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _panel(market: str) -> pd.DataFrame:
+    return load_panel(market)
+
+
+def _track_record(spec: SignalSpec, report: dict[str, object]) -> None:
+    """The live, costed track record (16.1): each cohort was frozen the day it was
+    shown, then scored on realized returns from the panel — no backfill, no hindsight."""
+    st.subheader(t("Live track record"))
+    st.caption(
+        t("Picks are frozen the day they're shown, then scored on realized returns — no backfill.")
+    )
+    try:
+        panel = _panel(spec.market)
+    except FileNotFoundError:
+        st.info(t("The track record needs the research panel on disk to score frozen cohorts."))
+        return
+    cert_month = str(report.get("generated_at", ""))[:7]
+    surv = str(report.get("survivorship", "current_universe (optimistic)"))
+    tr = realized_track_record(spec, panel, cert_month, survivorship=surv, root=_root())
+    if not tr.cohorts:
+        st.info(
+            t(
+                "No frozen cohorts yet — the live track record starts at the first monthly freeze "
+                "(the scheduled `ledger freeze`, roadmap 16.2)."
+            )
+        )
+        return
+
+    table = pd.DataFrame(
+        [
+            {
+                t("Month"): c.month,
+                t("Picks"): c.n_picks,
+                t("Book 6m (vs benchmark)"): c.book_rel_6m,
+                t("Universe 6m (vs benchmark)"): c.univ_rel_6m,
+                t("Selection skill"): c.alpha_6m,
+                t("Realized"): c.realized,
+            }
+            for c in tr.cohorts
+        ]
+    )
+    st.dataframe(table, width="stretch", hide_index=True)
+
+    if tr.curve:
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=[p.month for p in tr.curve],
+                y=[p.equity for p in tr.curve],
+                mode="lines+markers",
+                name=t("Followed every month"),
+                line={"color": "#2e7d32"},
+            )
+        )
+        fig.add_hline(y=1.0, line={"color": "#9e9e9e", "width": 1, "dash": "dot"})
+        fig.update_layout(
+            height=300,
+            margin={"l": 0, "r": 0, "t": 10, "b": 0},
+            yaxis_title=t("Growth of 1 (net of {bps} bps/side)").format(bps=20),
+        )
+        st.plotly_chart(fig, width="stretch")
+
+    certified_on = str(report.get("generated_at", ""))[:10]
+    st.caption(
+        t("Certified {d} · live since {m} · survivorship: current universe (optimistic).").format(
+            d=certified_on, m=cert_month
+        )
+    )
+
+
+def _rebalance(spec: SignalSpec, snap: pd.DataFrame, picks: pd.DataFrame) -> None:
+    """Turn today's picks into an equal-weight order plan vs the last frozen cohort (16.3).
+
+    An execution aid only — no order placement, no advice, no scheme but equal weight.
+    """
+    st.subheader(t("Rebalance helper"))
+    st.caption(
+        t("An execution aid, not an order system, not advice; orders are placed at your broker.")
+    )
+    cohorts = load_cohorts(spec.name, spec.version, _root())
+    if not cohorts:
+        st.info(t("No frozen cohort yet to diff against — freeze one first (roadmap 16.1/16.2)."))
+        return
+
+    previous = [str(p["symbol"]) for p in cast("list[dict[str, object]]", cohorts[-1]["picks"])]
+    current = [str(s) for s in picks["symbol"]]
+    diff = diff_picks(current, previous)
+    st.caption(t("Changes vs last frozen cohort"))
+    c1, c2, c3 = st.columns(3)
+    c1.metric(t("Added"), len(diff.added))
+    c2.metric(t("Dropped"), len(diff.dropped))
+    c3.metric(t("Kept"), len(diff.kept))
+
+    default_budget = 1_000_000.0 if spec.market == "Taiwan" else 100_000.0
+    budget = st.number_input(
+        t("Budget"), min_value=0.0, value=default_budget, step=1000.0, key=f"reb_budget_{spec.name}"
+    )
+    odd_lot = (
+        st.checkbox(t("Allow odd lots (TW)"), value=False, key=f"reb_odd_{spec.name}")
+        if spec.market == "Taiwan"
+        else False
+    )
+    closes = dict(zip(snap["symbol"].astype(str), snap["price"].astype(float), strict=False))
+    orders = rebalance_plan(current, previous, closes, float(budget), spec.market, odd_lot=odd_lot)
+    if not orders:
+        return
+
+    st.subheader(t("Order plan (equal-weight)"))
+    table = pd.DataFrame(
+        [
+            {
+                t("Symbol"): o.symbol,
+                t("Side"): t(o.side),
+                t("Shares"): o.shares,
+                t("Reference close"): o.ref_close,
+                t("Est. cost"): round(o.est_cost, 2),
+            }
+            for o in orders
+        ]
+    )
+    st.dataframe(table, width="stretch", hide_index=True)
+    st.download_button(
+        t("Download order plan (CSV)"),
+        orders_to_csv(orders),
+        file_name=f"{spec.name}_v{spec.version}_rebalance.csv",
+        mime="text/csv",
+        key=f"reb_csv_{spec.name}",
+    )
 
 
 def _monitoring_line(spec: SignalSpec) -> None:
@@ -220,3 +356,5 @@ def render() -> None:
         st.caption(
             t("z = strength vs today's eligible pool; the score is the weighted sum of z columns.")
         )
+        _track_record(spec, report)
+        _rebalance(spec, snap, picks)

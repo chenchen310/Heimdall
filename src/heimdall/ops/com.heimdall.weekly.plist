@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Heimdall weekly self-refresh + notifications (roadmap 16.2 / 12.1). TEMPLATE:
+  replace every __REPLACE_WITH_ABSOLUTE_REPO_PATH__ with the absolute path to your
+  checkout, and the uv path if yours differs (`which uv`). Install steps live in
+  docs/OPERATIONS.md. Runs Mondays 08:00 local; the job needs no GUI / Streamlit.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.heimdall.weekly</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/uv</string>
+        <string>run</string>
+        <string>python</string>
+        <string>-m</string>
+        <string>heimdall.ops.notify</string>
+        <string>run-weekly</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>__REPLACE_WITH_ABSOLUTE_REPO_PATH__</string>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Weekday</key>
+        <integer>1</integer>
+        <key>Hour</key>
+        <integer>8</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>__REPLACE_WITH_ABSOLUTE_REPO_PATH__/data/logs/weekly.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__REPLACE_WITH_ABSOLUTE_REPO_PATH__/data/logs/weekly.err.log</string>
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

@@ -502,6 +502,50 @@ _ZH: dict[str, str] = {
         "⚠️ 在「當前」股票池下，這些結果帶有存活者偏差——今天的贏家已內含其中。"
         "請把報酬當成樂觀上限，而非預測。"
     ),
+    # --- live track record (roadmap 16.1) ---
+    "Live track record": "實時追蹤紀錄",
+    "Picks are frozen the day they're shown, then scored on realized returns — no backfill.": (
+        "候選在顯示當下即被凍結，之後以實現報酬計分——不回填歷史。"
+    ),
+    "The track record needs the research panel on disk to score frozen cohorts.": (
+        "追蹤紀錄需要磁碟上的研究面板，才能為凍結的每月組合計分。"
+    ),
+    "No frozen cohorts yet — the live track record starts at the first monthly freeze "
+    "(the scheduled `ledger freeze`, roadmap 16.2).": (
+        "尚無凍結的每月組合——實時追蹤紀錄將於第一次每月凍結（排程的 `ledger freeze`）後開始。"
+    ),
+    "Month": "月份",
+    "Picks": "候選檔數",
+    "Book 6m (vs benchmark)": "組合 6 個月報酬（相對大盤）",
+    "Universe 6m (vs benchmark)": "全市場 6 個月報酬（相對大盤）",
+    "Selection skill": "選股技術",
+    "Realized": "已實現",
+    "Followed every month": "逐月跟單",
+    "Growth of 1 (net of {bps} bps/side)": "1 元的成長（已扣每邊 {bps} bps 成本）",
+    "Certified {d} · live since {m} · survivorship: current universe (optimistic).": (
+        "認證於 {d} · 自 {m} 起實時追蹤 · 存活者偏差：當前股票池（樂觀上限）。"
+    ),
+    # --- rebalance helper (roadmap 16.3) ---
+    "Rebalance helper": "再平衡輔助",
+    "An execution aid, not an order system, not advice; orders are placed at your broker.": (
+        "這是執行輔助工具，並非下單系統，也非投資建議；請自行至券商下單。"
+    ),
+    "Budget": "投入資金",
+    "Allow odd lots (TW)": "允許零股（台股）",
+    "Changes vs last frozen cohort": "相對上次凍結組合的異動",
+    "Added": "新增",
+    "Dropped": "移除",
+    "Kept": "續留",
+    "Order plan (equal-weight)": "下單計畫（等權重）",
+    "Shares": "股數",
+    "Reference close": "參考收盤價",
+    "Est. cost": "預估成本",
+    "Download order plan (CSV)": "下載下單計畫（CSV）",
+    "No frozen cohort yet to diff against — freeze one first (roadmap 16.1/16.2).": (
+        "尚無可比對的凍結組合——請先凍結一次（roadmap 16.1/16.2）。"
+    ),
+    "buy": "買進",
+    "sell": "賣出",
 }
 
 

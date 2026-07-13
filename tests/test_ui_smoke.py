@@ -593,6 +593,158 @@ def test_today_page_renders_certified_evidence_then_picks(
     assert "🎯 Today's Picks" in _ZH  # zh strings present
 
 
+def _certify_us_signal(
+    tmp_path: Path, *, name: str = "us-mom", generated_at: str = "2024-01-02T00:00:00+00:00"
+) -> None:
+    """Set up a certified US signal (spec + immutable report + registry) via the real lifecycle."""
+    from heimdall.research import registry as reg
+    from heimdall.research.spec import SignalSpec
+
+    spec = SignalSpec.model_validate(
+        {
+            "name": name,
+            "family": name,
+            "market": "US",
+            "version": 1,
+            "features": {"ret_12_1": 1.0},
+            "top_n": 3,
+        }
+    )
+    specs = tmp_path / "signals" / "specs"
+    specs.mkdir(parents=True, exist_ok=True)
+    (specs / f"{name}.json").write_text(spec.model_dump_json())
+    report_file = tmp_path / "signals" / "certifications" / f"{name}_v1.json"
+    report_file.parent.mkdir(parents=True, exist_ok=True)
+    report_file.write_text(
+        json.dumps(
+            {
+                "verdict": "CERTIFIED",
+                "portfolio_beat_rate": 0.72,
+                "portfolio_beat_ci95": [0.58, 0.86],
+                "selection_alpha_mean": 0.031,
+                "selection_alpha_t": 2.4,
+                "cohorts": [{"date": "2023-01-31"}] * 30,
+                "window_start": "2023-01-31",
+                "window_end": "2025-06-30",
+                "generated_at": generated_at,
+                "survivorship": "current_universe (optimistic)",
+                "gates": [{"gate": "G1_ic", "value": 0.05, "threshold": 0.03, "passed": True}],
+            }
+        )
+    )
+    reg.add(spec, f"signals/specs/{name}.json", root=tmp_path)
+    reg.transition(name, 1, "registered", root=tmp_path)
+    reg.transition(name, 1, "certified", cert_report=str(report_file), oos_attempt=1, root=tmp_path)
+
+
+def _write_us_panel(tmp_path: Path) -> None:
+    rows = [
+        {
+            "date": pd.Timestamp("2024-01-31"),
+            "symbol": sym,
+            "eligible": True,
+            "fwd_1m": f1,
+            "fwd_6m": f6,
+            "fwd_6m_rel": f6r,
+        }
+        for sym, f1, f6, f6r in [
+            ("A.US", 0.10, 0.36, 0.30),
+            ("B.US", 0.20, 0.12, 0.10),
+            ("C.US", 0.00, 0.00, 0.00),
+            ("D.US", -0.05, -0.12, -0.10),
+            ("E.US", 0.01, 0.02, 0.01),
+        ]
+    ]
+    (tmp_path / "research").mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows).to_parquet(tmp_path / "research" / "panel_us.parquet")
+
+
+def _write_ledger_cohort(tmp_path: Path, name: str, month: str, picks: list[str]) -> None:
+    from heimdall.research.ledger import cohort_path
+
+    p = cohort_path(name, 1, month, tmp_path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(
+        json.dumps(
+            {
+                "name": name,
+                "version": 1,
+                "market": "US",
+                "month": month,
+                "as_of": f"{month}-15",
+                "picks": [{"symbol": s, "signal_score": 1.0} for s in picks],
+            }
+        )
+    )
+
+
+def test_today_page_track_record_empty_state_without_cohorts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _force_english(monkeypatch)
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_today_snapshot(tmp_path)
+    _point_registry_at(tmp_path, monkeypatch)
+    _certify_us_signal(tmp_path)
+    _write_us_panel(tmp_path)  # panel present, but nothing frozen yet
+    st.cache_data.clear()
+
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Today's Picks")
+    assert not at.exception
+    assert any(s.value == "Live track record" for s in at.subheader)
+    assert any("No frozen cohorts yet" in i.value for i in at.info)
+
+
+def test_today_page_track_record_renders_with_frozen_cohorts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _force_english(monkeypatch)
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_today_snapshot(tmp_path)
+    _point_registry_at(tmp_path, monkeypatch)
+    _certify_us_signal(tmp_path)
+    _write_us_panel(tmp_path)
+    _write_ledger_cohort(tmp_path, "us-mom", "2024-01", ["A.US", "B.US"])
+    st.cache_data.clear()
+
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Today's Picks")
+    assert not at.exception
+    assert any(s.value == "Live track record" for s in at.subheader)
+    # The track-record table is the one carrying a Month column (a rebalance table also renders).
+    track = next(df.value for df in at.dataframe if "Month" in list(df.value.columns))
+    assert "2024-01" in list(track["Month"])
+
+    from heimdall.ui.i18n import _ZH
+
+    assert "Live track record" in _ZH  # zh strings present
+
+
+def test_today_page_rebalance_helper_renders_order_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _force_english(monkeypatch)
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_today_snapshot(tmp_path)
+    _point_registry_at(tmp_path, monkeypatch)
+    _certify_us_signal(tmp_path)
+    _write_us_panel(tmp_path)
+    # Frozen cohort {A,B}; today's picks are the snapshot's top-3 {A,B,C} ⇒ C is an "added" buy.
+    _write_ledger_cohort(tmp_path, "us-mom", "2024-01", ["A.US", "B.US"])
+    st.cache_data.clear()
+
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Today's Picks")
+    assert not at.exception
+    assert any(s.value == "Rebalance helper" for s in at.subheader)
+    # The fixed execution-aid disclaimer is always on screen.
+    assert any("not an order system" in c.value for c in at.caption)
+    # The order plan lists the added name as a buy.
+    plan = next(df.value for df in at.dataframe if "Side" in list(df.value.columns))
+    assert "C.US" in list(plan["Symbol"]) and "buy" in list(plan["Side"])
+
+
 def test_today_page_shows_drift_banner_for_under_review(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -281,13 +281,13 @@ looks like a recommendation ranking.
 
 ## Phase 12 — Operations & evolution
 
-### 12.1 Scheduled refresh  `[ ]`
+### 12.1 Scheduled refresh  `[x]`
 A `launchd` plist template + `docs/OPERATIONS.md` (weekly: snapshot refresh + panel extension via
 the existing resumable CLIs), or extend the Build-data page with a one-click "refresh all
 certified inputs". Staleness banners already exist (9.2).
 
-> Folded into card **16.2** (scheduled refresh + notifications), Phase 16 — execute there; mark
-> both checkboxes in the same PR.
+> **Done via card 16.2 (2026-07-13)** — the plist + `docs/OPERATIONS.md` + the weekly chain shipped
+> there; see 16.2's outcome.
 
 ### 12.2 Drift monitoring  `[x]`
 `research/monitor.py` + a monitoring section on Today's Picks: each month append the newest
@@ -886,7 +886,21 @@ DoD: known-answer Δ math tests; AppTest smoke; zh strings; gates green.
 > (unchanged institutions): no paid 分點/broker-branch data, no sub-month signals, no
 > social-sentiment scraping, no black-box weight optimizers. 12.3 stays armed-but-unscheduled.
 
-### 16.1 Forward performance ledger (live track record)  `[ ]`
+### 16.1 Forward performance ledger (live track record)  `[x]`
+
+> **Outcome (2026-07-13):** new `research/ledger.py`. `freeze(spec, snapshot, cert_month)` writes
+> `signals/ledger/{name}_v{v}/{YYYY-MM}.json` from `today.todays_picks` — **append-only** (a second
+> freeze of a month raises `FileExistsError`) and **no-backfill** (a month before `cert_month` raises
+> `BackfillRefused`). `realized_track_record` recomputes each frozen cohort from the panel on the
+> exact monitor/certify basis (EW book 6m rel, EW eligible-universe 6m rel, their alpha = the G3
+> selection skill) and a "followed every month" equity curve chaining realized 1-month book returns
+> **through `certify.apply_costs`/`cohort_turnover` at `gates.G4_COST_BPS`** — one home for the cost
+> math. `freeze_all` (the monthly step 16.2 schedules) reads the registry (the one certified-only
+> gate), each cert report's month + survivorship, and freezes the live snapshot; already-frozen and
+> pre-cert months are silent no-ops. Today's Picks gained a **Live track record** section (cohort
+> table + net equity curve + cert-date/survivorship caption) with an honest empty state before the
+> first freeze. Tests: freeze-idempotency + no-backfill, known-answer alpha + costed curve, load
+> ordering (`test_research_ledger.py`); 2 AppTest smokes (empty + populated). Gates green; suite 400.
 
 **Goal:** freeze each month's certified picks and show the realized, costed track record — the
 strongest honest trust feature the app can have.
@@ -908,7 +922,21 @@ Steps:
 DoD: freeze-idempotency test; known-answer curve math incl. costs; AppTest smoke; gates green.
 **Don't:** backfill; don't track non-certified signals; don't drop the stamp.
 
-### 16.2 Scheduled refresh + notifications (completes 12.1)  `[ ]`
+### 16.2 Scheduled refresh + notifications (completes 12.1)  `[x]`
+
+> **Outcome (2026-07-13):** new `src/heimdall/ops/` package (CLI-altitude — imports research/data,
+> imported by nothing). `notify.run_weekly` chains the resumable CLIs (snapshot build → panel extend
+> US+TW → `monitor --apply`) via an **injectable runner** (subprocess by default), then freezes the
+> month's cohorts **in-process** through `ledger.freeze_all` (idempotent — one freeze/month on a
+> weekly cadence, so no first-weekday date logic needed). It emits **one digest per run**: job-step
+> failures (non-zero exit, never aborts the chain), drift flips (certified→under_review, detected by
+> before/after registry status), cohorts frozen, and snapshot staleness (best-effort via
+> `today.freshness`). Channels from `.env` — SMTP and/or Telegram (**not** LINE Notify, discontinued);
+> unconfigured ⇒ **print-only dry run**. `com.heimdall.weekly.plist` (Mon 08:00; passes `plutil
+> -lint`, a placeholder repo path the operator fills) + `docs/OPERATIONS.md` (install/verify/uninstall
+> + what each notification means). Tests (`test_ops_notify.py`, 8): formatting worst-first,
+> channel-selection, dry-run print, chained-run order + failure reporting + frozen-cohort events, plist
+> lint — **no network, fake runner**. **12.1 marked `[x]` in the same PR.** Gates green; suite 400.
 
 **Goal:** the weekly chore runs itself and pings the user only when something needs them.
 **Files:** `docs/OPERATIONS.md`, a launchd plist template (checked in), new
@@ -928,7 +956,20 @@ DoD: message-formatting + dry-run tests (no network); plist passes `plutil -lint
 **Don't:** schedulers that require the Streamlit app to be running; no notification spam (one
 digest per run).
 
-### 16.3 Monthly rebalance helper  `[ ]`
+### 16.3 Monthly rebalance helper  `[x]`
+
+> **Outcome (2026-07-13):** new pure `research/rebalance.py`. `diff_picks` classifies
+> current-vs-last-frozen-cohort into added/dropped/kept; `target_shares` floors to TW 1,000-share
+> board lots (odd-lot toggle relaxes it) / US whole shares (floor, never overspend); `trade_cost`
+> encodes the **asymmetry** — TW 0.1425% fee/side + 0.3% tax on **sells only**, US flat bps
+> (editable constants). `rebalance_plan` buys the **added** names to the equal-weight target and
+> sells the **dropped** names (sized at the prior EW book — a documented assumption), holding kept
+> names (no churn, no scheme beyond equal weight); `orders_to_csv` exports symbol/side/shares/ref-
+> close/est-cost. Today's Picks gained a **Rebalance helper** section (added/dropped/kept metrics,
+> budget input, TW odd-lot toggle, order table, CSV download) under the fixed bilingual "execution
+> aid, not an order system, not advice" caption. Tests: known-answer lot rounding + odd-lot + the
+> sell-tax asymmetry + the plan + CSV (`test_research_rebalance.py`, 6) and 1 AppTest smoke; zh
+> strings added. Gates green; suite 400.
 
 **Goal:** from "here are the picks" to "here is exactly what to change", with costs — an
 execution aid, never an order system.
