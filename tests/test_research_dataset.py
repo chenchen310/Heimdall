@@ -827,6 +827,55 @@ def test_accel_gross_margin_delta_known_answer_and_missing_gp() -> None:
     )
 
 
+def test_accruals_known_answer_pit_and_mismatched_year() -> None:
+    from heimdall.research.dataset import _accruals_features
+
+    fund = pd.DataFrame(
+        [
+            _fund_row("X.US", "net_income", "2022-12-31", "2023-02-01", 300.0),
+            _fund_row("X.US", "cfo", "2022-12-31", "2023-02-01", 200.0),
+            _fund_row("X.US", "assets", "2022-12-31", "2023-02-01", 1000.0),
+        ]
+    )
+    as_of = pd.Timestamp("2023-06-30")
+    assert _accruals_features(fund, as_of)["accruals"] == pytest.approx(0.10)  # (300−200)/1000
+
+    # PIT: a later fiscal year filed after as_of must not move it.
+    leaked = pd.concat(
+        [
+            fund,
+            pd.DataFrame(
+                [
+                    _fund_row("X.US", "net_income", "2023-12-31", "2024-02-01", 9999.0),
+                    _fund_row("X.US", "cfo", "2023-12-31", "2024-02-01", 0.0),
+                    _fund_row("X.US", "assets", "2023-12-31", "2024-02-01", 1000.0),
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
+    assert _accruals_features(leaked, as_of)["accruals"] == pytest.approx(0.10)
+
+    # Mismatched fiscal years (assets a year behind the income legs) ⇒ NaN.
+    mism = pd.DataFrame(
+        [
+            _fund_row("X.US", "net_income", "2022-12-31", "2023-02-01", 300.0),
+            _fund_row("X.US", "cfo", "2022-12-31", "2023-02-01", 200.0),
+            _fund_row("X.US", "assets", "2021-12-31", "2022-02-01", 1000.0),
+        ]
+    )
+    assert pd.isna(_accruals_features(mism, as_of)["accruals"])
+
+    # A missing leg ⇒ NaN (never partial).
+    no_cfo = pd.DataFrame(
+        [
+            _fund_row("X.US", "net_income", "2022-12-31", "2023-02-01", 300.0),
+            _fund_row("X.US", "assets", "2022-12-31", "2023-02-01", 1000.0),
+        ]
+    )
+    assert pd.isna(_accruals_features(no_cfo, as_of)["accruals"])
+
+
 def _tdcc_week(symbol: str, data_date: str, level_pcts: dict[int, float]) -> pd.DataFrame:
     """One TDCC weekly file's rows for one symbol (roadmap 13.9's canonical
     shape), ``available_at`` = data_date + the provider's real 14-day lag."""
@@ -1101,6 +1150,7 @@ def test_panel_carries_us_pead_and_issuance_features_when_quarterly_stream_prese
         "gross_profitability",
         "rev_accel_q",  # roadmap 17.4
         "gross_margin_delta_q",  # roadmap 17.4
+        "accruals",  # roadmap 17.6
     } <= set(panel.columns)
     june = panel.set_index("date").loc[pd.Timestamp("2024-06-28")]
     assert june["net_issuance_12m"] == pytest.approx(0.10)  # 1000 → 1100
@@ -1129,6 +1179,7 @@ def test_us_panel_has_no_flow_columns_without_the_stream(tmp_path: Path) -> None
         "sue" not in cols and "net_issuance_12m" not in cols and "gross_profitability" not in cols
     )
     assert "rev_accel_q" not in cols and "gross_margin_delta_q" not in cols
+    assert "accruals" not in cols  # roadmap 17.6
 
 
 def test_panel_carries_static_sector_when_map_given(tmp_path: Path) -> None:

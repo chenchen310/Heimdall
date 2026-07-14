@@ -1313,7 +1313,16 @@ green.
 **Don't:** neutralize by default; don't invent a sector taxonomy (14.1 owns it); don't research
 here (17.8 owns `us-value-neutral`).
 
-### 17.6 US earnings-quality feature (accruals)  `[ ]`
+### 17.6 US earnings-quality feature (accruals)  `[x]`
+
+> **Outcome (2026-07-14):** `research.dataset._accruals_features` adds `accruals` =
+> `(net_income − cfo) ÷ assets` (US rows, direction −), all three legs from the latest annual rows
+> with `filed_at ≤ t` and **required to share one `fiscal_end`** (mismatched fiscal years ⇒ NaN — a
+> fresh income figure is never crossed with a stale balance sheet). The parameter-free NI−CFO form
+> (finer working-capital decompositions need thin-coverage tags, deliberately excluded). Gated on the
+> same `quarterly_fundamentals` US switch as 13.4/13.5/17.4 (so it rides the same US-fundamentals
+> presence). Tests: known-answer + PIT-leak + mismatched-fiscal-year NaN + missing-leg NaN, plus the
+> shared panel-wiring / no-stream guards. **Panel extension consolidated into 17.7.** Gates green.
 
 **Goal:** the Sloan (1996) accruals anomaly — earnings not backed by cash flow revert. The one
 documented free US axis untouched by Phases 10/13 (13.5 covers issuance/asset-growth/

@@ -546,6 +546,41 @@ def _accel_features(
     return out
 
 
+_ACCRUALS_KEY = "accruals"
+
+
+def _accruals_features(fund_annual: pd.DataFrame, as_of: pd.Timestamp) -> dict[str, float]:
+    """US earnings-quality feature — the Sloan (1996) accruals anomaly (roadmap 17.6):
+    earnings not backed by operating cash flow revert. Keyed on ``filed_at`` (**PIT leak
+    test mandatory**); the one documented free US quality axis untouched by Phases 10/13
+    (13.5 is issuance/asset-growth/profitability; this is earnings *quality*).
+
+    - ``accruals`` = ``(net_income − cfo) ÷ assets``, all three from the latest annual
+      rows with ``filed_at ≤ as_of`` and **sharing one ``fiscal_end``** (mismatched
+      fiscal years ⇒ NaN — never cross a fresh income figure with a stale balance sheet).
+      Direction **−** (high accruals = low-quality earnings that mean-revert). The
+      parameter-free NI−CFO form; finer working-capital decompositions need thin-coverage
+      tags, so they are deliberately out of scope.
+    """
+    out = {_ACCRUALS_KEY: float("nan")}
+    known = fund_annual[fund_annual["filed_at"] <= as_of]
+    if known.empty:
+        return out
+    latest = known.sort_values(["fiscal_end", "filed_at"]).groupby("metric").tail(1)
+    by_metric = {str(r["metric"]): r for _, r in latest.iterrows()}
+    need = ("net_income", "cfo", "assets")
+    if not all(m in by_metric for m in need):
+        return out
+    if len({pd.Timestamp(by_metric[m]["fiscal_end"]) for m in need}) != 1:
+        return out  # the three legs must be the same fiscal year
+    assets = float(by_metric["assets"]["value"])
+    if assets <= 0:
+        return out
+    ni, cfo = float(by_metric["net_income"]["value"]), float(by_metric["cfo"]["value"])
+    out[_ACCRUALS_KEY] = (ni - cfo) / assets
+    return out
+
+
 _BIG_HOLDER_KEY = "big_holder_ratio_delta_4w"
 
 
@@ -776,6 +811,7 @@ def build_dataset_iter(
                 row.update(_pead_features(fund_data[sym], fq, ohlcv, bench_adj, t))
                 row.update(_issuance_quality_features(fund_data[sym], t))
                 row.update(_accel_features(fund_data[sym], fq, t))
+                row.update(_accruals_features(fund_data[sym], t))
             if tdcc_weeks is not None:
                 row.update(_big_holder_features(tdcc_weeks, sym, t))
             ok, why = _eligibility(
