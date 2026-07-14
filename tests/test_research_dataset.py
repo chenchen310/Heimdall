@@ -726,6 +726,107 @@ def test_issuance_quality_features_known_answer_and_pit() -> None:
     assert pd.isna(_issuance_quality_features(no_gp, as_of)["gross_profitability"])
 
 
+def _q_income(metric: str, fiscal_end: str, filed_at: str, value: float) -> dict[str, object]:
+    """One quarterly income-statement fundamental row (17.4 acceleration input)."""
+    return {
+        "symbol": "X.US",
+        "metric": metric,
+        "statement": "income",
+        "period": "quarter",
+        "fiscal_end": pd.Timestamp(fiscal_end),
+        "filed_at": pd.Timestamp(filed_at),
+        "value": float(value),
+        "currency": "USD",
+        "provider": "test",
+        "fetched_at": pd.Timestamp("2024-01-01"),
+    }
+
+
+def test_accel_rev_known_answer_seasonal_and_pit() -> None:
+    from heimdall.research.dataset import _accel_features
+
+    # 4 years × 3 discrete quarters (US files no discrete Q4). Revenue grows +10%
+    # YoY every quarter except the final 2022-Sep (+20%), so the seasonal YoY series
+    # is [.10×8, .20] and rev_accel_q = .20 − mean(.10, .10, .10, .10) = +0.10.
+    rows: list[dict[str, object]] = []
+    md_filed = {"03-31": "05-14", "06-30": "08-14", "09-30": "11-14"}
+    level = {2019: 100.0, 2020: 110.0, 2021: 121.0, 2022: 133.1}
+    for yr in (2019, 2020, 2021, 2022):
+        for md, fm in md_filed.items():
+            val = level[yr]
+            if yr == 2022 and md == "09-30":
+                val = 121.0 * 1.20  # +20% vs 2021-Sep instead of +10%
+            rows.append(_q_income("revenue", f"{yr}-{md}", f"{yr}-{fm}", val))
+    q = pd.DataFrame(rows)
+    as_of = pd.Timestamp("2022-12-31")
+
+    out = _accel_features(_EMPTY_FUND, q, as_of)
+    assert out["rev_accel_q"] == pytest.approx(0.10)
+
+    # PIT: a quarter filed after as_of (absurd value) must not move the acceleration.
+    leaked = pd.concat(
+        [q, pd.DataFrame([_q_income("revenue", "2022-12-31", "2023-02-15", 9999.0)])],
+        ignore_index=True,
+    )
+    assert _accel_features(_EMPTY_FUND, leaked, as_of)["rev_accel_q"] == pytest.approx(0.10)
+
+    # Fewer than 9 usable quarterly revenue observations → NaN.
+    thin = pd.DataFrame(rows[:6])
+    assert pd.isna(_accel_features(_EMPTY_FUND, thin, as_of)["rev_accel_q"])
+
+
+def test_accel_q4_derivation_arithmetic_and_filed_at() -> None:
+    from heimdall.research.dataset import _discrete_quarters
+
+    annual = pd.DataFrame([_fund_row("X.US", "revenue", "2021-12-31", "2022-02-15", 1000.0)])
+    quarter = pd.DataFrame(
+        [
+            _q_income("revenue", "2021-03-31", "2021-05-01", 200.0),
+            _q_income("revenue", "2021-06-30", "2021-08-01", 250.0),
+            _q_income("revenue", "2021-09-30", "2021-11-01", 280.0),
+        ]
+    )
+    out = _discrete_quarters(annual, quarter, "revenue", pd.Timestamp("2022-06-30"))
+    q4 = out[out["fiscal_end"] == pd.Timestamp("2021-12-31")]
+    assert len(q4) == 1
+    assert float(q4["value"].iloc[0]) == pytest.approx(1000.0 - (200.0 + 250.0 + 280.0))  # 270
+    assert q4["filed_at"].iloc[0] == pd.Timestamp("2022-02-15")  # the FY row's date (PIT)
+
+    # A real discrete Q4 is never synthesized over.
+    with_q4 = pd.concat(
+        [quarter, pd.DataFrame([_q_income("revenue", "2021-12-31", "2022-02-14", 300.0)])],
+        ignore_index=True,
+    )
+    out2 = _discrete_quarters(annual, with_q4, "revenue", pd.Timestamp("2022-06-30"))
+    q4b = out2[out2["fiscal_end"] == pd.Timestamp("2021-12-31")]
+    assert float(q4b["value"].iloc[0]) == pytest.approx(300.0)  # the reported quarter, not 270
+
+    # PIT: with the FY row filed after as_of, no Q4 is derived (residual not yet knowable).
+    out3 = _discrete_quarters(annual, quarter, "revenue", pd.Timestamp("2022-01-31"))
+    assert (out3["fiscal_end"] == pd.Timestamp("2021-12-31")).sum() == 0
+
+
+def test_accel_gross_margin_delta_known_answer_and_missing_gp() -> None:
+    from heimdall.research.dataset import _accel_features
+
+    q = pd.DataFrame(
+        [
+            _q_income("revenue", "2021-09-30", "2021-11-14", 100.0),
+            _q_income("gross_profit", "2021-09-30", "2021-11-14", 40.0),  # gm 40%
+            _q_income("revenue", "2022-09-30", "2022-11-14", 100.0),
+            _q_income("gross_profit", "2022-09-30", "2022-11-14", 42.0),  # gm 42%
+        ]
+    )
+    out = _accel_features(_EMPTY_FUND, q, pd.Timestamp("2022-12-31"))
+    assert out["gross_margin_delta_q"] == pytest.approx(2.0)  # +2 percentage points YoY
+
+    # No GrossProfit tag anywhere → NaN (never derived from revenue − COGS).
+    rev_only = q[q["metric"] == "revenue"].reset_index(drop=True)
+    assert pd.isna(
+        _accel_features(_EMPTY_FUND, rev_only, pd.Timestamp("2022-12-31"))["gross_margin_delta_q"]
+    )
+
+
 def _tdcc_week(symbol: str, data_date: str, level_pcts: dict[int, float]) -> pd.DataFrame:
     """One TDCC weekly file's rows for one symbol (roadmap 13.9's canonical
     shape), ``available_at`` = data_date + the provider's real 14-day lag."""
@@ -992,9 +1093,15 @@ def test_panel_carries_us_pead_and_issuance_features_when_quarterly_stream_prese
         )
     )
     panel = load_panel("US", tmp_path)
-    assert {"sue", "earn_gap", "net_issuance_12m", "asset_growth", "gross_profitability"} <= set(
-        panel.columns
-    )
+    assert {
+        "sue",
+        "earn_gap",
+        "net_issuance_12m",
+        "asset_growth",
+        "gross_profitability",
+        "rev_accel_q",  # roadmap 17.4
+        "gross_margin_delta_q",  # roadmap 17.4
+    } <= set(panel.columns)
     june = panel.set_index("date").loc[pd.Timestamp("2024-06-28")]
     assert june["net_issuance_12m"] == pytest.approx(0.10)  # 1000 → 1100
 
@@ -1017,10 +1124,11 @@ def test_us_panel_has_no_flow_columns_without_the_stream(tmp_path: Path) -> None
     assert "sbl_short_delta_21d" not in cols  # roadmap 17.1: no stream ⇒ no lending columns
     assert "big_holder_ratio_delta_4w" not in cols  # roadmap 13.9: no tdcc_weeks ⇒ no column
     assert "insider_net_buy_90d" not in cols  # roadmap 12.4/13.3: no insider stream ⇒ no column
-    # roadmap 13.4/13.5: no quarterly stream ⇒ no US PEAD / issuance-quality columns
+    # roadmap 13.4/13.5/17.4: no quarterly stream ⇒ no US PEAD / issuance / acceleration columns
     assert (
         "sue" not in cols and "net_issuance_12m" not in cols and "gross_profitability" not in cols
     )
+    assert "rev_accel_q" not in cols and "gross_margin_delta_q" not in cols
 
 
 def test_hygiene_constants_mirror_playbook() -> None:

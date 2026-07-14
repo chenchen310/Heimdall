@@ -1215,7 +1215,24 @@ DoD: goldens green; existing annual-based tests untouched; gates green.
 **Don't:** derive missing Q4-discrete values here (feature-builder decision, 17.4 step 4); don't
 change `FUNDAMENTALS_COLUMNS`.
 
-### 17.4 US fundamental-acceleration features (the certified idea, ported)  `[ ]`
+### 17.4 US fundamental-acceleration features (the certified idea, ported)  `[x]`
+
+> **Outcome (2026-07-14):** `research.dataset._accel_features` adds `rev_accel_q` and
+> `gross_margin_delta_q` (US rows), both keyed on `filed_at`. A shared `_discrete_quarters` helper
+> returns PIT (filed ≤ *t*), deduped-per-fiscal-end discrete-quarter rows and **derives a missing
+> fiscal Q4** as `FY − (Q1+Q2+Q3)` (only when the FY row and exactly the three prior discrete
+> quarters exist, never over a real reported Q4), stamping the derived row's `filed_at` with the FY
+> 10-K's date — so the residual is knowable only once the 10-K is filed. Seasonal alignment
+> (`_seasonal_prior`, span in [320, 410] days nearest 365) matches each quarter to the same quarter a
+> year earlier, robust to the US 3-discrete-quarters-a-year cadence (17.3) and to fiscal-end day
+> drift. `rev_accel_q` = latest quarterly YoY revenue growth − mean of the prior 4 (NaN under 9 usable
+> quarterly revenue obs or under 5 computable YoY growths); `gross_margin_delta_q` = (gross_profit ÷
+> revenue) latest-quarter minus seasonal-prior, in **pp** (NaN when `GrossProfit` absent — never
+> revenue − COGS). Gated on the same `quarterly_fundamentals` US switch as 13.4/13.5. Tests:
+> seasonal-alignment known-answer + PIT + <9-obs guard for `rev_accel_q`; Q4-derivation arithmetic +
+> derived-`filed_at` + real-Q4-not-overwritten + PIT for `_discrete_quarters`; gross-margin-delta
+> known-answer + missing-GrossProfit; panel-wiring. **Panel extension is consolidated into card 17.7**
+> (the one `panel_us` rebuild). Gates green.
 
 **Goal:** the program's only certified signal is TW monthly-revenue **acceleration** (entry 009).
 Port the economics to the US on free data: quarterly revenue acceleration + gross-margin trend
