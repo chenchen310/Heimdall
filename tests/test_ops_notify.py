@@ -8,11 +8,13 @@ import subprocess
 from datetime import date
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from heimdall.ops.notify import (
     WEEKLY_CHAIN,
     Event,
+    _tdcc_staleness_event,
     channels_from_env,
     dispatch,
     format_digest,
@@ -85,6 +87,17 @@ def test_run_weekly_chains_every_step_in_order(
     assert any("completed cleanly" in e.title for e in events)
 
 
+def test_weekly_chain_appends_tdcc_cache_last() -> None:
+    # 16.4: the TDCC weekly cache runs last; the 16.2 chain stays an intact prefix.
+    assert WEEKLY_CHAIN[-1] == ["heimdall.research.tdcc_cache"]
+    assert WEEKLY_CHAIN[:4] == [
+        ["heimdall.screener.build"],
+        ["heimdall.research.build_dataset", "--market", "us"],
+        ["heimdall.research.build_dataset", "--market", "tw"],
+        ["heimdall.research.monitor", "--apply"],
+    ]
+
+
 def test_run_weekly_reports_a_failed_step(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
     monkeypatch.setattr("heimdall.research.ledger.freeze_all", lambda **k: [])
@@ -106,6 +119,59 @@ def test_run_weekly_reports_frozen_cohorts(tmp_path: Path, monkeypatch: pytest.M
     monkeypatch.setattr("heimdall.research.ledger.freeze_all", lambda **k: frozen)
     events = run_weekly(today=date(2024, 3, 4), root=tmp_path, env={}, run=lambda s: (0, "ok"))
     assert any("Froze cohort" in e.title and "2024-03" in e.title for e in events)
+
+
+def test_run_weekly_reports_failed_tdcc_step_but_continues(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A failing tdcc_cache fetch (its own exit-1) is reported as an error but must
+    # not abort the run — the in-process cohort freeze still executes afterward.
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    frozen = [tmp_path / "signals" / "ledger" / "tw-rev_v1" / "2024-03.json"]
+    monkeypatch.setattr("heimdall.research.ledger.freeze_all", lambda **k: frozen)
+    seen: list[list[str]] = []
+    events = run_weekly(
+        today=date(2024, 3, 4),
+        root=tmp_path,
+        env={},
+        run=_fixed_run(seen, failures={"heimdall.research.tdcc_cache"}),
+    )
+    assert seen == WEEKLY_CHAIN  # tdcc ran (and failed) as the final step
+    errs = [e for e in events if e.level == "error"]
+    assert len(errs) == 1 and "tdcc_cache" in errs[0].title
+    assert any("Froze cohort" in e.title for e in events)  # post-chain work still ran
+
+
+def _tdcc_history(dates: list[date]) -> pd.DataFrame:
+    """A fake ``load_cached_weeks`` frame — only ``data_date`` matters to staleness."""
+    return pd.DataFrame({"data_date": [pd.Timestamp(d) for d in dates]})
+
+
+def test_tdcc_staleness_fresh_run_no_event(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Newest file 3 days old (a normal Monday run); an older file is also present,
+    # proving the check keys off the max data_date, not the min.
+    monkeypatch.setattr(
+        "heimdall.data.providers.tdcc.load_cached_weeks",
+        lambda *a, **k: _tdcc_history([date(2024, 2, 2), date(2024, 3, 8)]),
+    )
+    assert _tdcc_staleness_event(date(2024, 3, 11)) is None
+
+
+def test_tdcc_staleness_nine_days_warns_naming_the_date(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "heimdall.data.providers.tdcc.load_cached_weeks",
+        lambda *a, **k: _tdcc_history([date(2024, 3, 2)]),  # exactly 9 calendar days
+    )
+    ev = _tdcc_staleness_event(date(2024, 3, 11))
+    assert ev is not None and ev.level == "warn" and "2024-03-02" in ev.title
+
+
+def test_tdcc_staleness_no_history_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "heimdall.data.providers.tdcc.load_cached_weeks",
+        lambda *a, **k: _tdcc_history([]),  # nothing accumulated yet
+    )
+    assert _tdcc_staleness_event(date(2024, 3, 11)) is None
 
 
 def test_launchd_plist_is_valid_and_present() -> None:

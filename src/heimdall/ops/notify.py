@@ -1,12 +1,13 @@
 """Weekly self-refresh + notifications (roadmap 16.2, completes 12.1).
 
 A ``launchd`` job runs :func:`run_weekly`, which chains the existing **resumable**
-CLIs — snapshot refresh → panel extension (US + TW) → drift monitor — then freezes
-this month's certified cohorts in-process (idempotent, so a weekly cadence yields
-one freeze per month). It emits **one digest per run** (never spam): job failures,
-newly drift-flipped signals, cohorts frozen, and snapshot staleness. With no
-channel configured it is a **print-only dry run**; configure SMTP and/or a Telegram
-bot in ``.env`` to actually deliver. (LINE Notify is discontinued — not supported.)
+CLIs — snapshot refresh → panel extension (US + TW) → drift monitor → TDCC weekly
+cache — then freezes this month's certified cohorts in-process (idempotent, so a
+weekly cadence yields one freeze per month). It emits **one digest per run** (never
+spam): job failures, newly drift-flipped signals, cohorts frozen, and snapshot or
+TDCC-cache staleness. With no channel configured it is a **print-only dry run**;
+configure SMTP and/or a Telegram bot in ``.env`` to actually deliver. (LINE Notify
+is discontinued — not supported.)
 
 Nothing here needs the Streamlit app running. The heavy steps are subprocesses of
 the same resumable CLIs a human would run; the runner is injectable so the whole
@@ -25,13 +26,20 @@ from pathlib import Path
 from typing import cast
 
 # Each step is the ``python -m`` target + args; the runner prepends the interpreter.
+# ``tdcc_cache`` is appended **last** (roadmap 16.4) — its own exit-1 on an empty
+# fetch surfaces as an ``error`` digest event via the shared failure path below.
 WEEKLY_CHAIN: list[list[str]] = [
     ["heimdall.screener.build"],
     ["heimdall.research.build_dataset", "--market", "us"],
     ["heimdall.research.build_dataset", "--market", "tw"],
     ["heimdall.research.monitor", "--apply"],
+    ["heimdall.research.tdcc_cache"],
 ]
 _STALE_BDAYS = 5
+# The 集保 endpoint serves only the current week with no backfill (roadmap 13.9): a
+# fresh Monday run leaves the newest file ~3 days old, so 9+ calendar days means a
+# missed weekly run or the endpoint silently re-serving a stale file (the 13.9 incident).
+_TDCC_STALE_DAYS = 9
 Runner = Callable[[list[str]], tuple[int, str]]
 
 
@@ -163,6 +171,36 @@ def _staleness_event(today: date) -> Event | None:
     return None
 
 
+def _tdcc_staleness_event(today: date) -> Event | None:
+    """Best-effort: warn if the newest cached TDCC big-holder week is 9+ days old.
+
+    Since the endpoint has no backfill (roadmap 13.9), every missed week is
+    ``tw-bigholder``/15.3 history lost forever, and ``big_holder_ratio_delta_4w``
+    stays NaN until four real weeks sit on disk. Both a skipped run and the endpoint
+    silently re-serving an old file show up as a stale newest ``data_date``.
+    Empty/missing history ⇒ ``None``: a broken fetch is already an ``error`` event
+    from the chain step above, so this must not double-report it."""
+    import pandas as pd
+
+    try:
+        from heimdall.data.providers import tdcc
+
+        history = tdcc.load_cached_weeks()
+    except Exception:  # noqa: BLE001 — a monitoring read must never break the digest
+        return None
+    if history.empty:
+        return None
+    latest = pd.Timestamp(history["data_date"].max()).date()
+    age = (today - latest).days
+    if age >= _TDCC_STALE_DAYS:
+        return Event(
+            "warn",
+            f"TDCC big-holder cache is {age} days stale (latest {latest.isoformat()})",
+            "A weekly run was missed or the endpoint re-served an old file — history is lost.",
+        )
+    return None
+
+
 def _certified_status(root: Path | None) -> dict[tuple[str, int], str]:
     from heimdall.research import registry
 
@@ -217,6 +255,10 @@ def run_weekly(
     ev = _staleness_event(today)
     if ev is not None:
         events.append(ev)
+
+    tdcc_ev = _tdcc_staleness_event(today)
+    if tdcc_ev is not None:
+        events.append(tdcc_ev)
 
     if not any(e.level in ("warn", "error") for e in events):
         events.insert(0, Event("info", "Weekly refresh completed cleanly."))

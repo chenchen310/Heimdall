@@ -13,7 +13,14 @@ be running.
 2. **Panel extension** — `python -m heimdall.research.build_dataset --market us` then `--market tw`
 3. **Drift monitor** — `python -m heimdall.research.monitor --apply` (auto-flips a
    drifted signal to `under_review`; playbook §9)
-4. **Cohort freeze** — the certified picks for the current month are frozen in place
+4. **TDCC big-holder cache** — `python -m heimdall.research.tdcc_cache` fetches this
+   week's 集保 shareholding-dispersion file (roadmap 13.9/16.4). **Missed weeks are
+   unrecoverable**: the open-data endpoint serves only the current week with no
+   backfill, so every skipped run is `tw-bigholder`/15.3 history lost forever, and
+   `big_holder_ratio_delta_4w` stays NaN until four real weeks sit on disk. Note that
+   `--rebuild` only re-fetches the *current* week's file — it cannot recover a past
+   one.
+5. **Cohort freeze** — the certified picks for the current month are frozen in place
    (roadmap 16.1). This is **idempotent**: on a weekly cadence only the first run of
    each month actually writes a cohort; later runs are no-ops.
 
@@ -38,6 +45,10 @@ The digest reports only what needs you:
   significantly negative; Today's Picks now withholds its ranking until it re-certifies or retires.
 - **Froze cohort …** — this month's picks were recorded to the live track record.
 - **Snapshot is N business days stale** — the refresh did not advance the snapshot; investigate.
+- **TDCC big-holder cache is N days stale** — the newest cached 集保 week is ≥ 9 calendar days old
+  (a fresh Monday run is ~3 days). Either a weekly run was missed — that week is now lost forever —
+  or the endpoint is silently re-serving an old file (the exact 13.9 probe incident). An outright
+  fetch failure shows up as **Job step failed** above instead.
 
 If nothing needs attention the digest says so in one line.
 
@@ -58,6 +69,13 @@ If nothing needs attention the digest says so in one line.
 
    ```bash
    launchctl load ~/Library/LaunchAgents/com.heimdall.weekly.plist
+   ```
+
+3. Seed the TDCC big-holder cache **once, right now** — don't wait for Monday, or this
+   week's file (which no backfill can recover) is lost:
+
+   ```bash
+   uv run python -m heimdall.research.tdcc_cache
    ```
 
 ## Verify

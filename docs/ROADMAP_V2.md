@@ -1009,6 +1009,59 @@ smoke; zh strings.
 **Don't:** broker-API integration; no sizing schemes beyond equal weight (that would be a spec
 change requiring certification).
 
+### 16.4 TDCC weekly cache joins the scheduled chain (closes 13.9's operational loop)  `[x]`
+
+> **Outcome (2026-07-14):** `heimdall.research.tdcc_cache` appended **last** to `ops.notify`'s
+> `WEEKLY_CHAIN` (after `monitor --apply`) — the 16.2 order stays a prefix, so existing order
+> assertions hold, and the plist is untouched (the job reads the chain). A broken fetch (incl. the
+> CLI's own exit-1 on an empty week) already surfaces via the shared non-zero-exit → `error` digest
+> path, which never aborts the chain. New best-effort, read-only `_tdcc_staleness_event(today)` beside
+> `_staleness_event`: via `tdcc.load_cached_weeks()`, empty/missing history ⇒ `None` (step-1's failure
+> event already covers a broken fetch — no double-report), newest cached `data_date` **≥ 9 calendar
+> days** old ⇒ a `warn` naming the date (fresh Monday age ~3 days; the 13.9 probe caught a 9-day-old
+> re-served file). Wired into `run_weekly` next to the snapshot staleness check, so a stale TDCC cache
+> suppresses the "completed cleanly" line. `docs/OPERATIONS.md` documents the step + both event
+> meanings, the **missed-weeks-are-unrecoverable** caveat, that `--rebuild` only re-fetches the current
+> week, and a "run it once now, don't wait for Monday" seed step. Tests (`test_ops_notify.py`, +5):
+> chain-appends-tdcc-last (prior order intact), tdcc-failure-reported-but-freeze-still-runs, and three
+> staleness known-answers (fresh ⇒ none / 9-day ⇒ warn / no-history ⇒ none) with a faked
+> `load_cached_weeks`, no network. The fetch itself was **not** run in-session (it's the operator's
+> weekly chore — live network). Gates green; suite 410. **Don't**s honored: fetch stays a subprocess
+> (no in-process move), one digest per run, `data/providers/tdcc.py` + the `data_date + 14 days` PIT
+> rule untouched.
+
+**Goal:** 13.9's big-holder history accrues only in real calendar time — the TDCC endpoint serves
+**only the current week; no backfill exists** — but `research.tdcc_cache` is not in 16.2's chain
+(verified 2026-07-14: `WEEKLY_CHAIN` = snapshot → panel ×2 → monitor only). Every week it doesn't
+run is `tw-bigholder`/15.3 history lost forever, and `big_holder_ratio_delta_4w` stays NaN until
+4 real weeks sit on disk. Schedule it, and alarm on silent staleness — the 13.9 probe caught the
+endpoint serving a 9-day-old file with no delay notice.
+**Files:** `src/heimdall/ops/notify.py`, `tests/test_ops_notify.py`, `docs/OPERATIONS.md`.
+
+Steps:
+1. Append `["heimdall.research.tdcc_cache"]` to `WEEKLY_CHAIN` (append **last**, after
+   `monitor --apply`, so existing order assertions stay prefix-stable). Failure handling is
+   already built: a non-zero exit (incl. the CLI's own exit-1 on an empty fetch) becomes an
+   `error` digest event and never aborts the chain. No plist change — the job reads the chain.
+2. New `_tdcc_staleness_event(today)` beside `_staleness_event`, best-effort and read-only via
+   `tdcc.load_cached_weeks()`: empty/missing history ⇒ `None` (step 1's failure event already
+   covers a broken fetch); latest cached `data_date` **≥ 9 calendar days** old ⇒ `warn` naming
+   the date (fresh Monday-run age is ~3 days; the observed 13.9 incident was exactly 9 — this
+   catches both a missed week and the endpoint silently re-serving an old file). Wire into
+   `run_weekly` next to the snapshot staleness check.
+3. `docs/OPERATIONS.md`: document the new step and both event meanings; state the caveat in
+   bold — **missed weeks are unrecoverable** — and that `--rebuild` re-fetches a same-week file.
+4. Operator note (record it in OPERATIONS.md too): run
+   `uv run python -m heimdall.research.tdcc_cache` once immediately after merging — don't wait
+   for Monday's scheduled run.
+
+DoD: chain test updated (new step present, prior order intact); tdcc-failure-reported-but-chain-
+continues asserted; staleness known-answers (fresh ⇒ no event; 9-day-old ⇒ warn; no history ⇒
+`None`) with a faked `load_cached_weeks`, no network; plist untouched; quality gates green.
+**Don't:** move the fetch in-process (subprocess isolation, like every other data step); no extra
+notification sends (one digest per run stands); don't touch `data/providers/tdcc.py` semantics or
+the 13.9 `available_at = data_date + 14 days` PIT rule.
+
 ### 16.B Backlog — promote to a full card with the user before executing
 
 - **Regime dashboard** — benchmark concentration (top-name weight), EW−CW return spread,
@@ -1042,7 +1095,11 @@ change requiring certification).
 > budget because neutralization is not a re-weighting; this ruling is recorded here with the
 > user's roadmap sign-off and must be restated verbatim in any pre-registration entry;
 > `us-short-interest` = {short_ratio −, short_ratio_delta_63d −};
-> `tw-crowding` = {max_ret_21d −, day_trade_ratio_21d −}.
+> `tw-crowding` = {max_ret_21d −, day_trade_ratio_21d −};
+> `us-52wh` / `tw-52wh` = {pct_of_52w_high +} (17.14 — 52-week-high **anchoring**; ruled NEW
+> families distinct from the closed return-continuation momentum families (entries 001/004/010)
+> because the predictor is price vs a salient reference level, not past return; ruling recorded
+> 2026-07-14 with the user's roadmap sign-off and must be restated in any pre-registration entry).
 > A composite crossing any boundary is a new `…-composite-…` family (13.6 rule). `margin_delta_21d`
 > stays in `tw-flows` (entry 006) and is deliberately **outside** these boundaries.
 
@@ -1241,7 +1298,8 @@ finer decompositions need tags with thin coverage.
 **Goal:** panel feature values are frozen at first write (the dataset.py resume invariant), so new
 columns require a **rebuild**, not a resume. Do it once for all US features (13.3 insider if
 merged, 13.4 sue/earn_gap, 13.5 issuance set, 17.4 acceleration, 17.6 accruals, 17.11
-short-interest, 17.5/14.1 sector, 17.12's `max_ret_21d`), with a mechanical reproduction gate.
+short-interest, 17.5/14.1 sector, 17.12's `max_ret_21d`, 17.14's `pct_of_52w_high`), with a
+mechanical reproduction gate.
 **Files:** none new (7.3 CLI; add a `--rebuild` flag if it lacks one — archive the old parquet as
 `panel_us.v1.parquet` rather than deleting, per data-discipline); a RESEARCH_LOG "panel_us v2"
 note; tick the deferred extend-panel steps of 13.4/13.5 in the same PR with a "consolidated into
@@ -1416,6 +1474,35 @@ completes the card). Pre-stated candidates:
   (if shipped), equal composite of the two.
 **Don't:** blend across families; no candidates beyond this list without a new card.
 
+### 17.14 52-week-high proximity feature (George–Hwang anchoring)  `[ ]`
+
+**Goal:** nearness to the 52-week high predicts continued outperformance (George & Hwang 2004) —
+underreaction near a salient reference price. Price-only, both markets in one stroke, 1 parameter,
+zero quota. This is the **anchoring** mechanism, not return continuation — the closed momentum
+families' verdicts (entries 001/004/010) don't carry over; see the phase-intro family ruling.
+**Files:** `src/heimdall/factors/metrics.py`, `tests/test_snapshot.py`,
+`src/heimdall/research/dataset.py` (feature-table doc line only).
+
+Steps:
+1. `pct_of_52w_high` in `_technicals` — `adj_close[-1] ÷ max(adj_close over the last 252 bars)`
+   (current bar included, so the value sits in (0, 1], 1.0 = at the high); NaN under 252 bars
+   (the `ret_12_1` rule). Direction **+**. No PIT shift — closes through the row date are
+   knowable at that close, like every `_technicals` field.
+2. Feature-table doc line (direction + one-line rationale), per playbook §7.
+3. Known-answer tests in `tests/test_snapshot.py`: a hand-built path with a known interior peak
+   (exact ratio), a monotonically rising series (exactly 1.0), NaN under 252 bars.
+4. The column reaches panels via the next rebuild — **sequence this card before 17.7 and 13.8**
+   (the 17.12 rule); don't trigger either rebuild here.
+
+Research = its own future `us-52wh`/`tw-52wh` card under the 17.13 protocol (the 13.9 precedent:
+feature card ≠ research card). That log entry must additionally report the feature's dev-window
+rank correlation with `ret_12_1` and `ret_6m` — descriptive disclosure, not a gate: 52wh is
+mechanically momentum-adjacent, and the reader must see how much information is genuinely new.
+
+DoD: known-answer + NaN tests green; doc line present; quality gates green.
+**Don't:** research here; no variants (days-since-high, multi-window highs — one feature, one
+parameter); don't touch providers; don't trigger a panel rebuild.
+
 ### 17.B Backlog — promote to a full card with the user before executing
 
 - **TW insider (董監申報轉讓)** — the Form-4 analog via MOPS; wait for 17.9's findings on MOPS
@@ -1441,12 +1528,13 @@ The first "north-star moment" is completing 9.2 + one certified 10.x signal. ✅
 17.7 for US), so each panel is built once with every column.
 
 - **Wave 1 (independent; 13.1 ✅ / 13.2 ✅ already done):** 15.1 (=11.5) · 13.7 (start early —
-  background across quota windows; gains `lending` once 17.1 lands) · 17.3 · 17.1 · 17.9.
+  background across quota windows; gains `lending` once 17.1 lands) · 17.3 · 17.1 · 17.9 ·
+  16.4 (added 2026-07-14 — **run ASAP**: every unscheduled week of TDCC history is unrecoverable).
 - **Wave 2 (features + pages):** 14.1 → 14.2 · 15.2 · 13.3 (=12.4) · 13.4 → 17.4 · 13.5 ·
-  17.6 · 17.5 (needs 14.1) · 17.12 · 17.11.
-- **Wave 3 (one build per market):** 13.8 (needs 13.7; **must include the 17.1/17.12 TW
+  17.6 · 17.5 (needs 14.1) · 17.12 · 17.11 · 17.14.
+- **Wave 3 (one build per market):** 13.8 (needs 13.7; **must include the 17.1/17.12/17.14 TW
   columns — land those first**) · 17.7 (one `panel_us` rebuild carrying 13.3/13.4/13.5/17.4/
-  17.6/17.11/17.12 + sector; a card that slips past it forces a second rebuild that re-runs
+  17.6/17.11/17.12/17.14 + sector; a card that slips past it forces a second rebuild that re-runs
   17.7's reproduction gate).
 - **Wave 4 (research; every vault touch user-gated):** 13.6 · 17.8 · 17.2 · 17.13 · 13.9 → 15.3.
 - **Wave 5 (trust & mechanisms):** 16.1 → 16.2 → 16.3 · 17.10 (needs 16.1) · 14.3.
