@@ -14,17 +14,58 @@ forward labels are refreshed on every run. Output:
 from __future__ import annotations
 
 import argparse
+import contextlib
+import json
+import shutil
+import sys
 from datetime import date, datetime
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 from heimdall.data import router
 from heimdall.data.cache import CachedProvider
 from heimdall.research import gates
-from heimdall.research.dataset import build_dataset_iter, load_panel, panel_path
+from heimdall.research.dataset import build_dataset_iter, load_panel, meta_path, panel_path
+from heimdall.research.spec import load_spec
 from heimdall.screener.universe import tw_sector_map, tw_symbols, us_sector_map, vti_symbols
 
 _MARKET = {"us": "US", "tw": "Taiwan"}
+
+
+def _certified_markets() -> set[str]:
+    """Markets with a ``certified`` signal in the registry. An **in-place** panel
+    rebuild for such a market would silently move a live certified signal's (and its
+    monitoring's) substrate — the 17.7 governance guard refuses it (build to a
+    separate root instead, the 13.8 pattern). Reads the repo-root registry."""
+    reg_path = Path("signals/registry.json")
+    if not reg_path.exists():
+        return set()
+    reg = json.loads(reg_path.read_text())
+    out: set[str] = set()
+    for entry in reg.get("signals", []):
+        if entry.get("status") == "certified":
+            with contextlib.suppress(Exception):
+                out.add(load_spec(Path(entry["spec_path"])).market)
+    return out
+
+
+def _archive_panel(market: str) -> Path | None:
+    """Copy the existing panel (+ its meta) aside as ``panel_{m}.v{N}.parquet`` before
+    an in-place rebuild overwrites it — data-discipline: archive, never delete. Returns
+    the archive path, or ``None`` when there is nothing to archive."""
+    src = panel_path(market)
+    if not src.exists():
+        return None
+    n = 1
+    while src.with_name(f"{src.stem}.v{n}.parquet").exists():
+        n += 1
+    dst = src.with_name(f"{src.stem}.v{n}.parquet")
+    shutil.copy2(src, dst)
+    src_meta = meta_path(market)
+    if src_meta.exists():
+        shutil.copy2(src_meta, dst.with_name(f"{src.stem}.v{n}.meta.json"))
+    return dst
 
 
 def _parse_month(s: str) -> date:
@@ -44,7 +85,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--limit", type=int, default=None, help="cap the universe (testing/batching)")
     p.add_argument("--start", type=_parse_month, default=date(2010, 1, 1))
     p.add_argument("--end", type=_parse_month, default=date.today())
-    p.add_argument("--rebuild", action="store_true", help="ignore any existing panel")
+    p.add_argument(
+        "--rebuild",
+        action="store_true",
+        help="ignore any existing panel and rebuild from scratch (archives the old one)",
+    )
+    p.add_argument(
+        "--no-insider",
+        action="store_true",
+        help="US: skip the Form 4 insider stream — fundamentals-only rebuild (roadmap 17.7)",
+    )
     p.add_argument(
         "--min-cross-section",
         type=int,
@@ -60,6 +110,21 @@ def main(argv: list[str] | None = None) -> int:
         symbols = vti_symbols() if args.market == "us" else tw_symbols()
     if args.limit:
         symbols = symbols[: args.limit]
+
+    if args.rebuild:  # roadmap 17.7: governance + archive before an in-place rebuild
+        certified = _certified_markets()
+        if market in certified:
+            print(
+                f"REFUSED: {market} has a certified signal in the registry — an in-place "
+                "rebuild would move its certified/monitoring substrate. Build to a separate "
+                "root instead (the 13.8 pattern), or retire the signal first (playbook §4).",
+                file=sys.stderr,
+            )
+            return 2
+        print(f"Governance: no certified {market} signal — in-place rebuild sanctioned.")
+        archived = _archive_panel(market)
+        if archived is not None:
+            print(f"Archived existing panel -> {archived} (data-discipline: never deleted).")
 
     prices = CachedProvider(router.price_provider())
     fundamentals = router.fundamentals_provider()
@@ -91,8 +156,11 @@ def main(argv: list[str] | None = None) -> int:
 
         # Delta-cached per issuer; a real crawl is network-heavy — the sanctioned
         # place to actually populate these columns is the one panel_us rebuild
-        # (roadmap 17.7), which this wiring makes mechanical.
-        insider = Form4Provider().get_insider_transactions
+        # (roadmap 17.7). `--no-insider` runs that rebuild fundamentals-only (PEAD +
+        # issuance + acceleration + accruals) until a real Form 4 crawl exists — the
+        # 13.6 note; a later insider crawl+rebuild re-runs 17.7's reproduction gate.
+        if not args.no_insider:
+            insider = Form4Provider().get_insider_transactions
         # Quarterly income rows (re-normalized from the same cached companyfacts
         # JSON as the annual fetch — no extra network) power 13.4's PEAD ``sue``;
         # its presence also switches on 13.5's annual issuance/quality features.

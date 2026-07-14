@@ -1339,7 +1339,29 @@ DoD: tests green; gates green. Panel extension happens in 17.7.
 **Don't:** decompose working-capital line items — the NI−CFO form is the parameter-free version;
 finer decompositions need tags with thin coverage.
 
-### 17.7 `panel_us` v2 — one rebuild carrying every new US column  `[ ]`
+### 17.7 `panel_us` v2 — one rebuild carrying every new US column  `[x]`
+
+> **Outcome (2026-07-14):** rebuilt `panel_us` in place, once, carrying every merged US column.
+> **Governance:** no US signal is `certified` (only `us-fcf-yield` v1/v2 rejected — immutable reports
+> untouched — and the certified `tw-revenue-momentum` is Taiwan), so the in-place rebuild is
+> sanctioned; the build CLI's new guard refuses a rebuild of any market with a certified signal (TW
+> verified refused). The 2026-07-07 panel was archived to `panel_us.v1.parquet` (+ meta) — never
+> deleted. Run **fundamentals-only** (`--no-insider`, the 13.6 note): `Form4Provider` exists but no
+> filings are cached, so `us-insider` waits on a real crawl + a later rebuild that re-runs this card's
+> reproduction gate; 17.11/17.12/17.14 (not yet merged) ride a future rebuild too. Columns added:
+> `sue`, `earn_gap`, `net_issuance_12m`, `asset_growth`, `gross_profitability`, `rev_accel_q`,
+> `gross_margin_delta_q`, `accruals`, `sector`. Result: 3,436-name universe (2 skipped), **503,096
+> rows / 199 months / 2010-01→2026-07** — the identical row structure to v1, now with the new columns.
+> **Reproduction gate PASSED:** `evaluate {fcf_yield}` reproduces entry 011 to ~2 dp — dev IC +0.0220
+> (t +2.84) / alpha +2.99% (NW-t +3.92); val IC +0.0576 (t +2.71) / alpha +7.90% (NW-t +2.98). The
+> hairline drift is yfinance re-adjusting a few historical closes over the 7-day gap (all 2010–2022
+> history is read from the unchanged caches; only the ≤7-day tail was delta-fetched), so the 17.3
+> duration filter left annual rows intact. Dev-window coverage of the new columns 32–89% (the two
+> gross-profit features sparsest — real `GrossProfit` tag absence), `sector` 99.7% known. CLI
+> additions: `--no-insider`, `--rebuild` now archives the old parquet + a registry governance guard.
+> The deferred panel-extension steps of **13.4/13.5** are consolidated here (their features are now
+> `panel_us` columns). RESEARCH_LOG 015. Gates green. 13.6 / 17.8 are unblocked on data; both stay
+> user-gated.
 
 **Goal:** panel feature values are frozen at first write (the dataset.py resume invariant), so new
 columns require a **rebuild**, not a resume. Do it once for all US features (13.3 insider if
