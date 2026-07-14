@@ -22,7 +22,7 @@ from heimdall.data import router
 from heimdall.data.cache import CachedProvider
 from heimdall.research import gates
 from heimdall.research.dataset import build_dataset_iter, load_panel, panel_path
-from heimdall.screener.universe import tw_symbols, vti_symbols
+from heimdall.screener.universe import tw_sector_map, tw_symbols, us_sector_map, vti_symbols
 
 _MARKET = {"us": "US", "tw": "Taiwan"}
 
@@ -69,6 +69,10 @@ def main(argv: list[str] | None = None) -> int:
     tdcc_weeks = None
     insider = None
     quarterly_fundamentals = None
+    # Static symbol→sector map (roadmap 14.1) for within-sector scoring (17.5). Both
+    # maps are incrementally disk-cached, so a resume with a warm cache is instant;
+    # the first US build pays a one-time ~10 req/s EDGAR submissions crawl.
+    sector_map: dict[str, str] | None = None
     if args.market == "tw":  # extra TW streams: 月營收 (11.2) + 法人籌碼 (11.3) + 借券/融券 (17.1)
         from heimdall.data.providers import FinMindProvider
         from heimdall.data.providers import tdcc as tdcc_provider
@@ -81,6 +85,7 @@ def main(argv: list[str] | None = None) -> int:
         # no per-symbol fetch here (build/refresh the weekly cache separately via
         # `python -m heimdall.research.tdcc_cache`, once a week, over real time).
         tdcc_weeks = tdcc_provider.load_cached_weeks()
+        sector_map = tw_sector_map()
     elif args.market == "us":  # extra US streams: Form 4 insider (12.4/13.3) + quarterly PEAD
         from heimdall.data.providers import Form4Provider
 
@@ -94,6 +99,7 @@ def main(argv: list[str] | None = None) -> int:
         quarterly_fundamentals = lambda sym, s, e: fundamentals.get_fundamentals(  # noqa: E731
             sym, "income", "quarter"
         )
+        sector_map = us_sector_map(symbols)
 
     progress = build_dataset_iter(
         symbols,
@@ -110,6 +116,7 @@ def main(argv: list[str] | None = None) -> int:
         tdcc_weeks=tdcc_weeks,
         insider=insider,
         quarterly_fundamentals=quarterly_fundamentals,
+        sector_map=sector_map,
     )
     last = next(progress)  # the plan
     print(f"Universe: {len(symbols)} symbols | months to build: {last.total_months}")

@@ -617,6 +617,7 @@ def build_dataset_iter(
     tdcc_weeks: pd.DataFrame | None = None,
     insider: Callable[[str, date, date], pd.DataFrame] | None = None,
     quarterly_fundamentals: Callable[[str, date, date], pd.DataFrame] | None = None,
+    sector_map: dict[str, str] | None = None,
 ) -> Iterator[DatasetProgress]:
     """Build (or extend) the panel month by month, yielding progress per month.
 
@@ -624,6 +625,14 @@ def build_dataset_iter(
     the providers), then computes only the rebalance months not already in the
     parquet. Yields an initial plan row, one row per month, and a final
     ``finished=True`` row after the label-refresh pass and meta write.
+
+    ``sector_map`` (roadmap 14.1/17.5), when given, stamps every row with a static
+    ``sector`` string ("Unknown" when the symbol is absent from the map). **Accepted
+    approximation:** the *current* sector map is applied to all history — sector is a
+    grouping label for within-sector scoring, not a return-bearing feature, and
+    reclassifications are rare, but it is **not point-in-time**. Any log entry using a
+    ``neutralize="sector"`` spec must restate this. Omitted ⇒ no ``sector`` column (old
+    callers unaffected), mirroring the optional-stream precedent.
     """
     bench_adj = prices.get_ohlcv(BENCHMARK[market], start - timedelta(days=500), end).set_index(
         "date"
@@ -748,6 +757,8 @@ def build_dataset_iter(
             monthly = rev_hist.get(sym, pd.DataFrame()) if monthly_revenue is not None else None
             row = snapshot_row(sym, hist, fund_data[sym], t.date(), monthly=monthly)
             row.update(_labels(adj_by_sym[sym], bench_adj, t, next_of[t]))
+            if sector_map is not None:  # static current-map label (14.1/17.5), not point-in-time
+                row["sector"] = sector_map.get(sym, "Unknown")
             if daily_chips is not None:
                 row.update(_flow_features(chips_hist.get(sym, pd.DataFrame()), ohlcv, t))
             if daily_lending is not None:

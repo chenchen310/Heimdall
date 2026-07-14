@@ -1261,7 +1261,27 @@ DoD: tests as above; gates green. Panel extension happens in 17.7, not here.
 **Don't:** key anything off `fiscal_end`; don't mix annual rows into these features; don't touch
 providers beyond what 17.3 landed.
 
-### 17.5 Sector-neutral scoring option (needs 14.1)  `[ ]`
+### 17.5 Sector-neutral scoring option (needs 14.1)  `[x]`
+
+> **Outcome (2026-07-14):** `SignalSpec` gains `neutralize: str = ""` (validator: `""` or
+> `"sector"`). **Hash stability held:** `canonical_hash()` pops the field when it equals the default,
+> so every pre-17.5 hash is byte-identical — a new registry-wide regression test
+> (`test_registry_spec_hashes_match_on_disk`) reloads all three committed specs (certified
+> `tw-revenue-momentum` + both `us-fcf-yield`) and confirms each still hashes to its recorded
+> `spec_hash`, pinning them without a second hardcode. `score()` grows a `neutralize=="sector"` branch:
+> each feature is winsorized-z-scored *within* its `sector` group via a new `_sector_zscore` helper;
+> groups with < 5 members score NaN (excluded, never a degenerate 1–2-name z), and a missing `sector`
+> column raises `KeyError` (same posture as a missing feature). The default path is byte-for-byte
+> unchanged (an explicit `assert_series_equal` equivalence test guards it). Panel wiring:
+> `build_dataset_iter` gains a `sector_map` param that stamps a **static current-map** `sector` on
+> every row ("Unknown" when absent) — flagged in the docstring as an accepted, *not* point-in-time
+> approximation (sector is a grouping label, not a return-bearing feature); the build CLI passes
+> `us_sector_map(symbols)` / `tw_sector_map()`. `today.py` requires `sector` only when the spec
+> neutralizes, and its displayed per-feature z respects neutralization so the breakdown still
+> reconciles with the score. Tests: validator, hash-stability, registry-wide regression, neutralized
+> known-answer (raw ranks a sector wholesale, neutral picks each sector's leaders), small-group +
+> missing-column, equivalence, panel-wiring. Gates green; research deferred to 17.8. **panel_us gains
+> the `sector` column via 17.7's rebuild.**
 
 **Goal:** the recorded US failure mode (entries 011/012) is that a raw value book is a structural
 short on whatever mega-cap theme leads the index. Within-sector ranking removes the sector bet and

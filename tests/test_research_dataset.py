@@ -1131,6 +1131,48 @@ def test_us_panel_has_no_flow_columns_without_the_stream(tmp_path: Path) -> None
     assert "rev_accel_q" not in cols and "gross_margin_delta_q" not in cols
 
 
+def test_panel_carries_static_sector_when_map_given(tmp_path: Path) -> None:
+    """roadmap 17.5: ``sector_map`` stamps a static ``sector`` on every row ("Unknown"
+    for a symbol absent from the map); omitted ⇒ no ``sector`` column at all."""
+    frames = {
+        "SPY.US": _ohlcv_geo("SPY.US", 500, 0.0005),
+        "X.US": _ohlcv_geo("X.US", 500, 0.0),
+        "Y.US": _ohlcv_geo("Y.US", 500, 0.0),
+    }
+    _drive(
+        build_dataset_iter(
+            ["X.US", "Y.US"],
+            _Prices(frames),
+            _Funds(),
+            "US",
+            date(2023, 6, 1),
+            date(2023, 7, 31),
+            root=tmp_path,
+            min_cross_section=0,
+            sector_map={"X.US": "Manufacturing"},  # Y.US deliberately absent
+        )
+    )
+    panel = load_panel("US", tmp_path)
+    assert "sector" in panel.columns
+    assert set(panel[panel["symbol"] == "X.US"]["sector"]) == {"Manufacturing"}
+    assert set(panel[panel["symbol"] == "Y.US"]["sector"]) == {"Unknown"}
+
+    # Omitted map ⇒ no column (old callers/panels unaffected).
+    _drive(
+        build_dataset_iter(
+            ["X.US"],
+            _Prices(frames),
+            _Funds(),
+            "US",
+            date(2023, 6, 1),
+            date(2023, 7, 31),
+            root=tmp_path / "no_map",
+            min_cross_section=0,
+        )
+    )
+    assert "sector" not in load_panel("US", tmp_path / "no_map").columns
+
+
 def test_hygiene_constants_mirror_playbook() -> None:
     # docs/RESEARCH_PLAYBOOK.md §3 — changing either side alone must fail here.
     assert gates.MIN_PRICE == {"US": 2.0, "Taiwan": 10.0}
