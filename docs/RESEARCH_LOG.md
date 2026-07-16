@@ -591,3 +591,139 @@ feature `big_holder_ratio_delta_4w` in `research/dataset.py` (PIT-leak tested; N
 weeks have accumulated on disk). 0 OOS attempts — this is a feature/provider card, not a
 research card; per 13.9's own DoD, evaluating this feature for selection skill is deferred to a
 future `tw-bigholder` family card.
+
+## 016 — us-pead + us-issuance-quality (2026-07-17, model: Opus 4.8)
+
+> Numbering: entry **015** is reserved for card 17.7's `panel_us` v2 rebuild, which lives on the
+> not-yet-merged `phase-17.4-17.7` branch (committed 2026-07-14, logically prior — 13.6 evaluates on
+> that panel). This card was done on a branch off `main` where 17.7 is absent; when both branches
+> merge, 015 (17.7) precedes 016/017 (this session) with no collision.
+
+- Card: ROADMAP 13.6. Goal: playbook §7 DEV/VAL over the 13.3–13.5 free US feature families.
+  Family boundaries (binding for the 3-attempt budget): `us-insider` (insider features),
+  `us-pead` = {sue, earn_gap}, `us-issuance-quality` = {net_issuance_12m, asset_growth,
+  gross_profitability}.
+- **`us-insider` NOT evaluated — blocked, not closed.** `insider_net_buy_90d` /
+  `insider_cluster_buy` are **absent** from `panel_us` (verified against the columns): card 17.7
+  built the panel fundamentals-only (PEAD + issuance), and the Form 4 crawl that populates the
+  insider stream was never run (`Form4Provider` exists, no filings cached — see 13.6's own deferral
+  note). The family keeps its full 3/3 budget; a future crawl+rebuild card must precede its
+  evaluation. No look spent on it.
+- Tool: `heimdall.research.evaluate` (entry 011) — imports the certify gate helpers; refuses any
+  window ≥ `OOS_START` (2023-01, hard assert). No vault row touched.
+- Panel: `panel_us` (built 2026-07-14 by card 17.7; 3,436-name VTI universe; 199 months
+  2010-01→2026-07; `current_universe (optimistic)`). **Provenance note:** 17.7 lives on the (still
+  unmerged) `phase-17.4-17.7` branch, but its `dataset.py` diff vs this branch is **purely
+  additive** (new `_accel_features` / `_accruals_features` only — the `_pead_features` /
+  `_issuance_quality_features` calls are unchanged context), so the 13.4/13.5 columns evaluated
+  here are produced by code identical to this branch and these reads are reproducible. DEV
+  eligible-row coverage: `sue` 64.8%, `earn_gap` 81.3%, `net_issuance_12m` 80.8%, `asset_growth`
+  89.1%, **`gross_profitability` 38.2%** (13.5's flagged coverage cost — the `GrossProfit` XBRL tag
+  is sparse; NaN rows drop out of the ranking, never derived from revenue − COGS).
+
+- **Development (2010-01→2019-12, 120 months, 102 six-month cohorts; no row ≥ 2023 read —
+  evaluate() asserts it).** All 7 pre-stated candidates (each single feature + one equal-weight
+  composite per family; directions per the feature docs, weight sign = direction; no additions
+  mid-session). "beat" = portfolio-cohort beat rate vs SPY; "alpha (t)" = G3 selection alpha + NW-t:
+
+  | candidate | IC (t) [G1] | spread/mo [G2] | selection alpha (NW-t) [G3] | beat | turn | advances |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | `{sue}` | −0.0001 (−0.02) | −0.01% | −0.26% (−0.36) | 40.2% | 34% | no |
+  | `{earn_gap}` | +0.0015 (+0.30) | +0.00% | +0.88% (+1.07) | 53.3% | 39% | no |
+  | `{sue, earn_gap}` eq | +0.0027 (+0.34) | +0.07% | −0.87% (−1.66) | 42.2% | 47% | no |
+  | `{net_issuance_12m:−1}` | +0.0163 (+1.97) | +0.25% | **+1.73% (+2.50)** | 65.0% | 10% | no |
+  | `{asset_growth:−1}` | −0.0002 (−0.03) | +0.11% | −0.21% (−0.18) | 47.5% | 16% | no |
+  | `{gross_profitability}` | +0.0098 (+0.81) | +0.10% | +0.23% (+0.12) | 43.3% | 8% | no |
+  | `{net_issuance, asset_growth, gross_prof}` eq | +0.0101 (+0.89) | +0.29% | −0.27% (−0.14) | 45.8% | 9% | no |
+
+  Advance bar (entry-010/011 precedent): dev IC-t ≥ 2 **and** dev selection-alpha-t ≥ 2 — a
+  strong-IC/zero-alpha or strong-alpha/zero-IC candidate does not consume a validation look.
+
+- **Verdict: both evaluated families (`us-pead`, `us-issuance-quality`) close at development. No
+  candidate advances to validation; 0 OOS attempts spent; no vault gate reached.**
+  - `us-pead`: both estimate-free PEAD axes are ~zero in the eligible US book — `sue` has no IC and
+    negative alpha; `earn_gap` a weak positive drift (alpha +0.88%, t 1.07) that clears nothing; the
+    equal composite is *negatively* skilled (alpha −0.87%, t −1.66). No selection skill on this
+    universe/horizon.
+  - `us-issuance-quality`: only `net_issuance_12m` shows genuine selection skill (alpha +1.73%,
+    NW-t **+2.50** — clears G3) but its **IC-t is +1.97, a hair under the 2.0 ranking bar**, so it
+    does **not** advance (both gates are law — not the max of the two). **Honest disclosure:**
+    `net_issuance_12m` is **byte-identical** to the snapshot's existing `share_dilution_yoy`
+    (verified: max abs diff 0.0 over 395,443 non-null rows; 13.5 flagged this) — it is *not* new
+    data, so even had it advanced it would have re-used, not extended, information already on the
+    board. `asset_growth` and `gross_profitability` are flat (alpha t 0.12–0.18); the equal
+    composite washes out (strong-negative net-issuance mixed with two null axes → alpha −0.27%).
+- **Looks disclosed:** 7 development evaluations + 0 validation = 7 in-sample reads; **0 OOS.**
+- Registry status change: none (nothing pre-registered — honest closure completes the card per its
+  DoD).
+- Budgets after this card: `us-pead` and `us-issuance-quality` each keep **3/3** attempts (closing
+  at dev spends none); `us-insider` unevaluated, **3/3**, blocked on a Form 4 crawl+rebuild. A
+  future composite crossing these family boundaries is a new `us-composite-…` family (never billed
+  to these three).
+
+## 017 — tw-revenue-momentum v2 + tw-flows on the FULL universe (2026-07-17, model: Opus 4.8)
+
+- Card: ROADMAP 13.8 (steps 1–3; the step-4 vault gate is **not reached** — see verdict). Goal:
+  rebuild the TW panel on the full universe (remove v1's 140-name selection caveat) and re-evaluate
+  the closed TW candidates fairly on DEV/VAL **before** any vault decision.
+- **Precondition correction (step 1): 13.7's crawl has RUN.** The roadmap's 13.8 note and the prior
+  session's memory both say "blocked: needs the crawl to run" — but the full TW streams are now on
+  disk (revenue **2,129** + chips **2,125** files, a 4,260-entry ledger, completed 2026-07-14 by a
+  later session), so the offline free re-eval is feasible. Fundamentals were **not** crawled
+  (optional per step 1).
+- Substrate (step 2): a **new full-universe panel** built to a **separate root**
+  (`data/research/full/research/panel_tw.parquet`) — the certified `data/research/panel_tw.parquet`
+  is **untouched**. 1,964 names (`tw_symbols()` ∩ cached-price universe; the ~166 uncached names are
+  delisted/dataless and only yield network failures), 198 months 2010-01→2026-06,
+  `current_universe (optimistic)`. Built **fully offline** (`failures={}`): cache-only prices +
+  the 13.7 cached streams wired via `finmind_crawl.load_cached_stream`. **Fundamentals-free by
+  design** — justified because all four pre-stated candidates are revenue/flows and `_eligibility`
+  is purely price/liquidity (verified), so absent fundamentals change **neither** the eligible
+  universe **nor** any candidate's score. DEV eligible names/month: mean **259** (min 141, max 373)
+  — a genuinely broad, liquidity-unbiased set vs v1's fixed 140. Stream-feature DEV coverage:
+  rev_mom_yoy 88.7%, rev_mom_accel 83.4%, foreign_net_buy_63d 79.7%, trust_net_buy_21d 81.1%.
+- Tool: `heimdall.research.evaluate` (imports the certify gate helpers; refuses any window ≥
+  `OOS_START`; no vault row touched).
+
+- **Development (2010-01→2019-12, 120 months, 103 six-month cohorts).** The four pre-stated
+  candidates (step 3; directions all **+** per the 11.2/11.3 docs; no additions mid-session):
+
+  | candidate | IC (t) [G1] | spread/mo [G2] | selection alpha (NW-t) [G3] | beat | turn | advances |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | `{rev_mom_accel}` (v1 recipe) | **+0.0330 (+4.14)** | +0.92% | **−1.46% (−1.38)** | 40.8% | 59% | no |
+  | `{rev_mom_yoy, rev_mom_accel}` eq | +0.0315 (+3.20) | +1.13% | −1.24% (−1.06) | 43.7% | 58% | no |
+  | `{foreign_net_buy_63d}` | +0.0134 (+1.18) | +0.46% | −0.09% (−0.08) | 45.3% | 48% | no |
+  | `{foreign_net_buy_63d, trust_net_buy_21d:0.5}` | +0.0060 (+0.47) | +0.23% | +0.04% (+0.04) | 46.2% | 60% | no |
+
+  Advance bar (13.1 step 4): dev IC-t ≥ 2 **and** dev selection-alpha-t ≥ 2.
+
+- **Verdict: no candidate advances; the step-4 vault gate is NOT triggered; 0 OOS attempts spent.**
+  Pre-registration requires a DEV survivor and there is none, so the mandatory user go/no-go (which
+  gates *pre-registration*) does not arise — this closes honestly, exactly like a rejected verdict.
+  - **Headline finding — ranking ≠ selection, now on the full universe.** `rev_mom_accel` has a
+    **strong, highly-significant rank IC (+0.033, t +4.14)** — the revenue-acceleration ordering
+    genuinely predicts next-month cross-sectional returns on the full 1,964-name universe (a
+    *stronger* IC than on the 140-name panel). **But its 12.5 selection alpha is NEGATIVE
+    (−1.46%, NW-t −1.38):** the equal-weight top-20 book does **not** beat the equal-weight eligible
+    universe over 6 months. The extreme revenue-accel names do not form a book that out-selects the
+    (small-cap-inclusive) broad universe — precisely the IC-vs-selection-skill split ROADMAP 12.5
+    was built to expose. Flows stay weak (foreign IC t 1.18; the trust blend ≈ 0), consistent with
+    entry 006's crowding prior.
+  - **Honest v1 divergence note (13.8 "don't silently discredit v1").** v1
+    (`tw-revenue-momentum {rev_mom_accel}`) was **certified on the 140-name top-liquidity substrate**
+    (entries 005/009), where its selection skill was positive (val +6.35%, NW-t 2.07); on the FULL
+    universe the DEV selection alpha is negative. This does **not** void v1 — its immutable
+    certification and its live OOS **monitoring** (12.2) stand on their own substrate, and the
+    referee for a certified signal is its realized OOS cohorts, not a DEV re-eval on a *different*
+    universe. What the full-universe re-eval **does** establish: there is **no evidentiary basis for
+    a v2 full-universe vault attempt** (the recipe's DEV selection skill is absent/negative there),
+    so the family's attempt is **not** spent. This is step 4(b)'s failure branch, reached by the
+    evidence rather than by a run: the 140-name panel stays the shipped substrate, v1 and its
+    monitoring stand, and the full panel remains a **research artifact** (kept under
+    `data/research/full/`, not promoted).
+  - `tw-flows` closes at development; no separate vault authorization was sought (none warranted).
+- **Looks disclosed:** 4 development evaluations + 0 validation = 4 in-sample reads; **0 OOS.**
+- Registry status change: none. Attempt counts unchanged — `tw-revenue-momentum` keeps v1's
+  certification and spends no v2 attempt; `tw-flows` keeps its full budget. A future full-universe
+  research attempt would need its own pre-stated card + user go/no-go (the 17.12/17.14 TW columns,
+  when a rebuild adds them, are the natural trigger to revisit this substrate).
