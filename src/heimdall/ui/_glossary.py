@@ -334,10 +334,16 @@ _ENTRIES: dict[str, dict[str, str]] = {
     "entry_stop_target": {
         "category": "technical",
         "direction": "neutral",
-        "en": "Suggested level. Stop is ATR-based; targets are risk multiples (1R, 2R, 3R) away.",
+        "en": (
+            "Two suggested entries, not one: a pullback (buy a dip — at the nearest "
+            "support, else ~1 ATR below price) and a breakout (buy strength — at the "
+            "nearest resistance, else ~1 ATR above). Each stop sits ATR-based below "
+            "its own entry; targets are risk multiples (1R, 2R, 3R) away."
+        ),
         "zh": (
-            "建議的交易價位。停損以 ATR 為基礎（進場 − N×ATR）；"
-            "目標則是風險報酬倍數（1R、2R、3R）之外。"
+            "兩種建議進場，而非一種：回檔買（買回檔——在最近支撐，若無則約現價下方 1×ATR）"
+            "與突破買（買強勢——在最近壓力，若無則約現價上方 1×ATR）。每個停損以各自進場價"
+            "為基準往下 N×ATR；目標則是風險報酬倍數（1R、2R、3R）之外。"
         ),
     },
     # --- risk (Bridgewater) ---
