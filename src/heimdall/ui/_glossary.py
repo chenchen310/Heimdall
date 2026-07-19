@@ -313,6 +313,17 @@ _ENTRIES: dict[str, dict[str, str]] = {
         "en": "How far price sits above (or below) its 200-day average — the long trend.",
         "zh": "股價位於 200 日均線（長期趨勢線）之上（正）或之下（負）多少幅度。",
     },
+    "pct_of_52w_high": {
+        "category": "technical",
+        "direction": "higher",
+        "en": (
+            "Price as a fraction of its highest close over the last 52 weeks (1.0 = at a new "
+            "high) — nearness to this anchor tends to precede continued outperformance."
+        ),
+        "zh": (
+            "股價相對近 52 週最高收盤價的比值（1.0 = 創新高）——越接近此錨定價位，後續常延續強勢。"
+        ),
+    },
     "bollinger_pctb": {
         "category": "technical",
         "direction": "neutral",
@@ -570,6 +581,7 @@ _LABELS: dict[str, dict[str, str]] = {
     "vol_63d": {"en": "63-day volatility", "zh": "63 日波動度"},
     "dollar_vol_21d": {"en": "21-day $ volume", "zh": "21 日成交金額"},
     "pct_above_sma_200": {"en": "% above 200-day avg", "zh": "距 200 日均線 %"},
+    "pct_of_52w_high": {"en": "% of 52-week high", "zh": "距 52 週高點 %"},
     "market_cap": {"en": "Market cap", "zh": "市值"},
     "revenue": {"en": "Revenue", "zh": "營收"},
     "net_income": {"en": "Net income", "zh": "淨利"},

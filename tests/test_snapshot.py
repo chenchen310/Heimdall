@@ -306,6 +306,25 @@ def test_ret_12_1_skips_the_last_month() -> None:
     assert pd.isna(short["ret_12_1"])
 
 
+def test_pct_of_52w_high_measures_proximity_to_the_trailing_peak() -> None:
+    # 252 bars with an interior peak of 200 and the final bar at 160 → 160/200 = 0.8. The
+    # high is the max over the trailing 252 bars (current bar included), so it sits in (0, 1].
+    close = [100.0] * 252
+    close[100] = 200.0
+    close[-1] = 160.0
+    m = snapshot_row("X.US", _ohlcv_series(close), _empty_fund(), date(2024, 6, 1))
+    assert m["pct_of_52w_high"] == pytest.approx(0.8)  # 160 / 200
+
+    # A monotonically rising path ends at its own high → exactly 1.0.
+    rising = [100.0 + k for k in range(252)]
+    at_high = snapshot_row("X.US", _ohlcv_series(rising), _empty_fund(), date(2024, 6, 1))
+    assert at_high["pct_of_52w_high"] == pytest.approx(1.0)
+
+    # Under 252 bars the 52-week window is undefined → NaN (the ret_12_1 rule).
+    short = snapshot_row("X.US", _ohlcv_series(close[:251]), _empty_fund(), date(2024, 6, 1))
+    assert pd.isna(short["pct_of_52w_high"])
+
+
 def test_vol_63d_windowed_and_annualized() -> None:
     # Wild head, then 64 bars of exact 1% growth: the last 63 daily returns are constant,
     # so annualized realized vol is 0 — proving only the trailing window is used.
