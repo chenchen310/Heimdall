@@ -518,7 +518,20 @@ DoD: tests as above; gates green.
 **Don't:** derive gross profit from revenue − COGS (COGS isn't normalized; coverage honesty over
 completeness); don't touch providers.
 
-### 13.6 US new-feature families — research card  `[ ]`
+### 13.6 US new-feature families — research card  `[x]`
+
+> **Outcome (2026-07-17, RESEARCH_LOG 016): `us-pead` and `us-issuance-quality` both closed at
+> development; `us-insider` remains blocked.** The 17.7 panel (built 2026-07-14, 3,436-name VTI,
+> 199 months) carries the PEAD + issuance columns, so both families were evaluable now; the diff of
+> 17.7's `dataset.py` vs this branch is purely additive, so the reads are reproducible. DEV
+> (2010–19, 102 cohorts) result: no candidate clears the entry-011 advance bar (IC-t ≥ 2 **and**
+> selection-alpha-t ≥ 2). PEAD is ~zero (sue no IC/neg alpha; earn_gap a weak +0.88% t1.07; the
+> composite negatively skilled). In issuance-quality only `net_issuance_12m` has real selection
+> skill (alpha +1.73%, NW-t **+2.50**) but IC-t **+1.97** falls a hair under the 2.0 ranking bar, so
+> it does not advance — and it is byte-identical to the existing `share_dilution_yoy` (not new data).
+> **7 dev looks, 0 VAL, 0 OOS; no vault gate reached** (so no user go/no-go was needed). `us-insider`
+> was *not* evaluated (its columns are absent — the Form 4 crawl never ran); it keeps its full 3/3
+> budget for a future crawl+rebuild card. All three families keep 3/3 attempts.
 
 > **Deferred (2026-07-12, user decision): blocked on 17.7.** The 13.3–13.5 features are merged
 > (code + tests), but this card's DEV/VAL `evaluate()` needs them as **columns in `panel_us`**, and
@@ -588,7 +601,22 @@ backoff unit-tested from canned 402/403 responses; no network in tests. Operator
 detached/overnight or across days.
 **Don't:** bypass the provider's rate limiter; don't invent a second cache format.
 
-### 13.8 Full-universe `panel_tw` + revenue-momentum v2 (user-gated)  `[ ]`
+### 13.8 Full-universe `panel_tw` + revenue-momentum v2 (user-gated)  `[x]`
+
+> **Outcome (2026-07-17, RESEARCH_LOG 017): full-universe re-eval done; NO candidate advances → no
+> vault gate reached; v1 stands.** Precondition correction: 13.7's crawl **has run** (streams on
+> disk since 2026-07-14), so the free re-eval was feasible after all. Built a fully-offline,
+> fundamentals-free full-universe panel (1,964 names, 198 months) to a **separate root**
+> (`data/research/full/`) — cache-only prices + the cached streams via `load_cached_stream`;
+> certified `panel_tw` untouched. DEV (2010–19, 103 cohorts, mean 259 eligible/mo vs v1's 140): the
+> **key finding is ranking ≠ selection** — `{rev_mom_accel}` (v1's recipe) has a *stronger* rank IC
+> than on the 140-name panel (**+0.033, t +4.14**) yet its 12.5 selection alpha turns **negative
+> (−1.46%, NW-t −1.38)** on the broad universe; the yoy+accel blend and both flow candidates also
+> fail. Since the advance bar (IC-t ≥ 2 **and** selection-alpha-t ≥ 2) isn't met, pre-registration's
+> precondition doesn't hold, so **the mandatory step-4 user go/no-go never arises** and no attempt is
+> spent (step 4(b)'s failure branch, reached by evidence not a run). v1's certification + live
+> monitoring stand on their own 140-name substrate; the full panel stays a research artifact.
+> `tw-flows` closed at dev. 4 dev looks, 0 VAL, **0 OOS**.
 
 > **Blocked (2026-07-13): needs 13.7's crawl to have actually _run_, + a mandatory user gate.**
 > 13.7 shipped the crawler tool, but Step 1's precondition is the full-universe streams **on disk**,
