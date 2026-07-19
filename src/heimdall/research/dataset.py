@@ -430,6 +430,157 @@ def _issuance_quality_features(fund_annual: pd.DataFrame, as_of: pd.Timestamp) -
     return out
 
 
+_ACCEL_KEYS = ["rev_accel_q", "gross_margin_delta_q"]
+_ACCEL_MIN_QUARTERS = 9  # ≥9 usable quarterly revenue obs before an acceleration is meaningful
+_ACCEL_MIN_YOY = 5  # latest rev_yoy_q + the prior 4 it is compared against
+_SEASON_LO_DAYS = 320  # ~365 − 45: same-quarter-a-year-ago match tolerance (roadmap 17.4 step 1)
+_SEASON_HI_DAYS = 410  # ~365 + 45
+_FY_SPAN_DAYS = 330  # a fiscal year's three prior discrete quarters all end within this window
+
+
+def _seasonal_prior(fiscal_ends: list[pd.Timestamp], i: int) -> int | None:
+    """Position of the discrete quarter ~one year before ``fiscal_ends[i]`` (span in
+    ``[320, 410]`` days, nearest to 365), or ``None``. US files 3 discrete quarters a
+    year (Q4 lives in the 10-K), so a *positional* q−4 would misalign seasons; matching
+    by fiscal-end **date** is robust to the 3/year cadence and to fiscal-year day drift."""
+    best_j, best_gap = None, None
+    for j in range(i):
+        span = (fiscal_ends[i] - fiscal_ends[j]).days
+        if _SEASON_LO_DAYS <= span <= _SEASON_HI_DAYS:
+            gap = abs(span - 365)
+            if best_gap is None or gap < best_gap:
+                best_gap, best_j = gap, j
+    return best_j
+
+
+def _discrete_quarters(
+    fund_annual: pd.DataFrame, fund_quarter: pd.DataFrame, metric: str, as_of: pd.Timestamp
+) -> pd.DataFrame:
+    """Discrete-quarter ``metric`` rows (columns ``fiscal_end``/``value``/``filed_at``),
+    point-in-time (``filed_at ≤ as_of``), deduped per fiscal_end (latest filing wins).
+
+    Fiscal **Q4 is derived** as ``FY − (Q1+Q2+Q3)`` wherever a discrete Q4 is absent but
+    the FY row and exactly the three prior discrete quarters of that fiscal year all
+    exist (roadmap 17.4 step 4 — the derivation lives here, in the feature builder, so
+    providers stay as-reported). The derived Q4's ``filed_at`` is the FY row's: the
+    residual is knowable only once the 10-K is filed, so it inherits the 10-K's date and
+    the ``filed_at ≤ as_of`` filter above already makes it point-in-time.
+    """
+    q = fund_quarter[(fund_quarter["metric"] == metric) & (fund_quarter["filed_at"] <= as_of)]
+    disc = (
+        q.sort_values(["fiscal_end", "filed_at"])
+        .groupby("fiscal_end")
+        .tail(1)
+        .loc[:, ["fiscal_end", "value", "filed_at"]]
+    )
+    a = fund_annual[(fund_annual["metric"] == metric) & (fund_annual["filed_at"] <= as_of)]
+    a = a.sort_values(["fiscal_end", "filed_at"]).groupby("fiscal_end").tail(1)
+    have = set(disc["fiscal_end"])
+    q_by_fe = disc.set_index("fiscal_end")["value"]
+    derived: list[dict[str, object]] = []
+    for _, fy in a.iterrows():
+        fe = pd.Timestamp(fy["fiscal_end"])
+        if fe in have:  # a real discrete Q4 is already present — never synthesize over it
+            continue
+        lo = fe - pd.Timedelta(days=_FY_SPAN_DAYS)
+        prior = q_by_fe[(q_by_fe.index < fe) & (q_by_fe.index > lo)]
+        if len(prior) == 3:  # exactly the fiscal year's Q1–Q3
+            derived.append(
+                {
+                    "fiscal_end": fe,
+                    "value": float(fy["value"]) - float(prior.sum()),
+                    "filed_at": pd.Timestamp(fy["filed_at"]),
+                }
+            )
+    if derived:
+        disc = pd.concat([disc, pd.DataFrame(derived)], ignore_index=True)
+    return disc.sort_values("fiscal_end").reset_index(drop=True)
+
+
+def _accel_features(
+    fund_annual: pd.DataFrame, fund_quarter: pd.DataFrame, as_of: pd.Timestamp
+) -> dict[str, float]:
+    """US fundamental-acceleration features (roadmap 17.4) — the economics of the
+    program's one certified signal (TW monthly-revenue **acceleration**, entry 009)
+    ported to the US on free EDGAR 10-Q data: fundamentals improving *faster than
+    before*. Keyed on ``filed_at`` (never fiscal-period end): a rebalance at ``as_of``
+    reads only filings knowable by then (the **PIT leak test is mandatory**).
+
+    - ``rev_accel_q`` — the latest quarterly YoY revenue growth minus the mean of the
+      prior 4 such growths, where each YoY growth pairs a quarter with the discrete
+      quarter ~one year earlier (``_seasonal_prior``). NaN with fewer than
+      ``_ACCEL_MIN_QUARTERS`` usable quarterly revenue observations (or fewer than
+      ``_ACCEL_MIN_YOY`` computable YoY growths). Direction **+** (accelerating growth).
+    - ``gross_margin_delta_q`` — (gross_profit ÷ revenue) of the latest discrete quarter
+      minus the same ratio a year earlier, in **percentage points**. NaN when the
+      ``GrossProfit`` tag is absent (coverage honesty — never derived from
+      revenue − COGS, the 13.5 precedent) or no seasonal match exists. Direction **+**.
+
+    Both use ``_discrete_quarters`` (which derives a missing fiscal Q4 from the 10-K),
+    so a full four-quarter-a-year series is available where the FY figure permits.
+    """
+    out = {k: float("nan") for k in _ACCEL_KEYS}
+
+    rev = _discrete_quarters(fund_annual, fund_quarter, "revenue", as_of)
+    if len(rev) >= _ACCEL_MIN_QUARTERS:
+        fes = list(rev["fiscal_end"])
+        vals = rev["value"].to_numpy(float)
+        yoy: list[float] = []
+        for i in range(len(fes)):
+            j = _seasonal_prior(fes, i)
+            if j is not None and vals[j] > 0:
+                yoy.append(float(vals[i] / vals[j] - 1.0))
+        if len(yoy) >= _ACCEL_MIN_YOY:
+            out["rev_accel_q"] = yoy[-1] - float(np.mean(yoy[-_ACCEL_MIN_YOY:-1]))
+
+    gp = _discrete_quarters(fund_annual, fund_quarter, "gross_profit", as_of)
+    if not gp.empty and not rev.empty:
+        merged = rev.merge(gp, on="fiscal_end", suffixes=("_rev", "_gp"))
+        merged = merged[merged["value_rev"] > 0].sort_values("fiscal_end")
+        if len(merged) >= 2:
+            fes = list(merged["fiscal_end"])
+            margin = (merged["value_gp"] / merged["value_rev"]).to_numpy(float)
+            j = _seasonal_prior(fes, len(fes) - 1)
+            if j is not None:
+                out["gross_margin_delta_q"] = float(margin[-1] - margin[j]) * 100.0
+    return out
+
+
+_ACCRUALS_KEY = "accruals"
+
+
+def _accruals_features(fund_annual: pd.DataFrame, as_of: pd.Timestamp) -> dict[str, float]:
+    """US earnings-quality feature — the Sloan (1996) accruals anomaly (roadmap 17.6):
+    earnings not backed by operating cash flow revert. Keyed on ``filed_at`` (**PIT leak
+    test mandatory**); the one documented free US quality axis untouched by Phases 10/13
+    (13.5 is issuance/asset-growth/profitability; this is earnings *quality*).
+
+    - ``accruals`` = ``(net_income − cfo) ÷ assets``, all three from the latest annual
+      rows with ``filed_at ≤ as_of`` and **sharing one ``fiscal_end``** (mismatched
+      fiscal years ⇒ NaN — never cross a fresh income figure with a stale balance sheet).
+      Direction **−** (high accruals = low-quality earnings that mean-revert). The
+      parameter-free NI−CFO form; finer working-capital decompositions need thin-coverage
+      tags, so they are deliberately out of scope.
+    """
+    out = {_ACCRUALS_KEY: float("nan")}
+    known = fund_annual[fund_annual["filed_at"] <= as_of]
+    if known.empty:
+        return out
+    latest = known.sort_values(["fiscal_end", "filed_at"]).groupby("metric").tail(1)
+    by_metric = {str(r["metric"]): r for _, r in latest.iterrows()}
+    need = ("net_income", "cfo", "assets")
+    if not all(m in by_metric for m in need):
+        return out
+    if len({pd.Timestamp(by_metric[m]["fiscal_end"]) for m in need}) != 1:
+        return out  # the three legs must be the same fiscal year
+    assets = float(by_metric["assets"]["value"])
+    if assets <= 0:
+        return out
+    ni, cfo = float(by_metric["net_income"]["value"]), float(by_metric["cfo"]["value"])
+    out[_ACCRUALS_KEY] = (ni - cfo) / assets
+    return out
+
+
 _BIG_HOLDER_KEY = "big_holder_ratio_delta_4w"
 
 
@@ -501,6 +652,7 @@ def build_dataset_iter(
     tdcc_weeks: pd.DataFrame | None = None,
     insider: Callable[[str, date, date], pd.DataFrame] | None = None,
     quarterly_fundamentals: Callable[[str, date, date], pd.DataFrame] | None = None,
+    sector_map: dict[str, str] | None = None,
 ) -> Iterator[DatasetProgress]:
     """Build (or extend) the panel month by month, yielding progress per month.
 
@@ -508,6 +660,14 @@ def build_dataset_iter(
     the providers), then computes only the rebalance months not already in the
     parquet. Yields an initial plan row, one row per month, and a final
     ``finished=True`` row after the label-refresh pass and meta write.
+
+    ``sector_map`` (roadmap 14.1/17.5), when given, stamps every row with a static
+    ``sector`` string ("Unknown" when the symbol is absent from the map). **Accepted
+    approximation:** the *current* sector map is applied to all history — sector is a
+    grouping label for within-sector scoring, not a return-bearing feature, and
+    reclassifications are rare, but it is **not point-in-time**. Any log entry using a
+    ``neutralize="sector"`` spec must restate this. Omitted ⇒ no ``sector`` column (old
+    callers unaffected), mirroring the optional-stream precedent.
     """
     bench_adj = prices.get_ohlcv(BENCHMARK[market], start - timedelta(days=500), end).set_index(
         "date"
@@ -632,6 +792,8 @@ def build_dataset_iter(
             monthly = rev_hist.get(sym, pd.DataFrame()) if monthly_revenue is not None else None
             row = snapshot_row(sym, hist, fund_data[sym], t.date(), monthly=monthly)
             row.update(_labels(adj_by_sym[sym], bench_adj, t, next_of[t]))
+            if sector_map is not None:  # static current-map label (14.1/17.5), not point-in-time
+                row["sector"] = sector_map.get(sym, "Unknown")
             if daily_chips is not None:
                 row.update(_flow_features(chips_hist.get(sym, pd.DataFrame()), ohlcv, t))
             if daily_lending is not None:
@@ -648,6 +810,8 @@ def build_dataset_iter(
                 fq = fund_q.get(sym, pd.DataFrame(columns=FUNDAMENTALS_COLUMNS))
                 row.update(_pead_features(fund_data[sym], fq, ohlcv, bench_adj, t))
                 row.update(_issuance_quality_features(fund_data[sym], t))
+                row.update(_accel_features(fund_data[sym], fq, t))
+                row.update(_accruals_features(fund_data[sym], t))
             if tdcc_weeks is not None:
                 row.update(_big_holder_features(tdcc_weeks, sym, t))
             ok, why = _eligibility(

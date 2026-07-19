@@ -34,6 +34,14 @@ class SignalSpec(BaseModel):
     features: dict[str, float]
     top_n: int = Field(default=20, ge=1)
     description: str = ""  # free text; excluded from the canonical hash
+    neutralize: str = ""  # "" = raw cross-section | "sector" = within-sector ranking (17.5)
+
+    @field_validator("neutralize")
+    @classmethod
+    def _known_neutralize(cls, v: str) -> str:
+        if v not in ("", "sector"):
+            raise ValueError(f"neutralize must be '' or 'sector', got {v!r}")
+        return v
 
     @field_validator("market")
     @classmethod
@@ -60,14 +68,36 @@ class SignalSpec(BaseModel):
 
         Feature insertion order and prose must not change the hash — the log
         entry pins *what is tested*, not how the JSON happened to be written.
+
+        Hash stability across the 17.5 ``neutralize`` addition is load-bearing: a
+        spec that does not neutralize hashes exactly as it did before the field
+        existed (the field is popped from the payload when it holds its default),
+        so every pre-17.5 committed hash — including the certified TW signal — is
+        unchanged. A registry-wide test pins this.
         """
         payload = self.model_dump(exclude={"description"})
+        if payload.get("neutralize", "") == "":
+            payload.pop("neutralize", None)
         blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(blob.encode()).hexdigest()
 
 
 def load_spec(path: Path) -> SignalSpec:
     return SignalSpec.model_validate(json.loads(Path(path).read_text()))
+
+
+_MIN_SECTOR_MEMBERS = 5  # a sector group smaller than this can't yield a meaningful z (17.5)
+
+
+def _sector_zscore(values: pd.Series, sectors: pd.Series) -> pd.Series:
+    """Winsorized z-score computed *within* each sector group (17.5). Groups with
+    fewer than ``_MIN_SECTOR_MEMBERS`` members score NaN — a 1–2 name z-score is
+    degenerate — so those rows are excluded, never forced to a spurious rank."""
+    out = pd.Series(float("nan"), index=values.index)
+    for _, idx in values.groupby(sectors).groups.items():
+        if len(idx) >= _MIN_SECTOR_MEMBERS:
+            out.loc[idx] = _zscore(values.loc[idx])
+    return out
 
 
 def score(spec: SignalSpec, cross_section: pd.DataFrame) -> pd.Series:
@@ -78,6 +108,12 @@ def score(spec: SignalSpec, cross_section: pd.DataFrame) -> pd.Series:
     A row missing any feature value gets NaN — missing data excludes, never
     silently re-weights (same philosophy as the screener). Reuses
     ``factors.scoring._zscore`` so the math has exactly one home.
+
+    When ``spec.neutralize == "sector"`` each feature is z-scored **within its
+    ``sector`` group** instead of across the whole eligible pool (the practitioner
+    fix for a value book that is otherwise a structural short on the leading
+    mega-cap theme — roadmap 17.5). A missing ``sector`` column then raises
+    ``KeyError``, the same posture as a missing feature.
     """
     out = pd.Series(float("nan"), index=cross_section.index)
     if "eligible" in cross_section.columns:
@@ -86,11 +122,15 @@ def score(spec: SignalSpec, cross_section: pd.DataFrame) -> pd.Series:
         pool = cross_section
     if pool.empty:
         return out
+    neutral = spec.neutralize == "sector"
+    if neutral and "sector" not in cross_section.columns:
+        raise KeyError("sector")
     total = pd.Series(0.0, index=pool.index)
     for feat, weight in spec.features.items():
         if feat not in cross_section.columns:
             raise KeyError(f"feature {feat!r} not in the cross-section")
-        total = total + weight * _zscore(pool[feat])
+        z = _sector_zscore(pool[feat], pool["sector"]) if neutral else _zscore(pool[feat])
+        total = total + weight * z
     out.loc[pool.index] = total
     return out
 

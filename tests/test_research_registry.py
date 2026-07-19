@@ -116,6 +116,79 @@ def test_score_missing_feature_column_raises() -> None:
         score(_spec(features={"nope": 1.0}), _cross())
 
 
+# --- spec: sector neutralization (roadmap 17.5) -------------------------------
+
+
+def test_neutralize_validator_and_default() -> None:
+    assert _spec().neutralize == ""
+    assert _spec(neutralize="sector").neutralize == "sector"
+    with pytest.raises(ValidationError, match="neutralize"):
+        _spec(neutralize="industry")
+
+
+def test_neutralize_default_preserves_hash_but_sector_changes_it() -> None:
+    base = _spec()
+    # Hash stability: the default is popped from the payload, so a non-neutralized
+    # spec hashes exactly as it did before the field existed.
+    assert _spec(neutralize="").canonical_hash() == base.canonical_hash()
+    assert _spec(neutralize="sector").canonical_hash() != base.canonical_hash()
+
+
+def test_registry_spec_hashes_match_on_disk() -> None:
+    """The load-bearing 17.5 regression: every committed registry spec must still
+    hash to its recorded ``spec_hash`` after the ``neutralize`` addition (pins the
+    certified tw-revenue-momentum hash and both us-fcf-yield hashes, no duplication)."""
+    import json
+
+    reg = json.loads(Path("signals/registry.json").read_text())
+    assert reg["signals"], "registry is empty — the regression would pass vacuously"
+    for entry in reg["signals"]:
+        spec = load_spec(Path(entry["spec_path"]))
+        assert spec.canonical_hash() == entry["spec_hash"], entry["name"]
+
+
+def _sector_cross() -> pd.DataFrame:
+    # Two 5-name sectors; feature ``a`` is uniformly high in T, low in F. Raw z ranks
+    # all of T above all of F; within-sector z ranks each sector's internal leaders.
+    return pd.DataFrame(
+        {
+            "symbol": [f"T{i}" for i in range(5)] + [f"F{i}" for i in range(5)],
+            "a": [10.0, 11.0, 12.0, 13.0, 14.0, 0.0, 1.0, 2.0, 3.0, 4.0],
+            "sector": ["T"] * 5 + ["F"] * 5,
+            "eligible": [True] * 10,
+        }
+    )
+
+
+def test_sector_neutral_scoring_known_answer() -> None:
+    cross = _sector_cross()
+    raw = score(_spec(features={"a": 1.0}), cross)
+    neu = score(_spec(features={"a": 1.0}, neutralize="sector"), cross)
+    # Raw: sector T (higher feature) outranks all of sector F wholesale.
+    assert raw.iloc[:5].min() > raw.iloc[5:].max()
+    # Neutralized: each sector's internal leader/laggard scores identically (same
+    # within-group z shape), so the ranking interleaves the two sectors' leaders.
+    assert neu.iloc[4] == pytest.approx(neu.iloc[9])  # top of T == top of F
+    assert neu.iloc[0] == pytest.approx(neu.iloc[5])  # bottom of T == bottom of F
+
+
+def test_sector_neutral_small_group_and_missing_column() -> None:
+    cross = _sector_cross().iloc[:9].copy()  # sector F shrunk to 4 (< 5) members
+    neu = score(_spec(features={"a": 1.0}, neutralize="sector"), cross)
+    assert neu.iloc[:5].notna().all()  # sector T (5 members) still scored
+    assert neu.iloc[5:9].isna().all()  # sector F (< 5) excluded, never a degenerate z
+    with pytest.raises(KeyError, match="sector"):
+        score(_spec(features={"a": 1.0}, neutralize="sector"), cross.drop(columns=["sector"]))
+
+
+def test_neutralize_default_scores_identically_to_no_field() -> None:
+    # roadmap 17.5 step 5: neutralize="" reproduces the old, non-neutral scores bit-for-bit.
+    cross = _sector_cross()
+    a = score(_spec(features={"a": 1.0}), cross)
+    b = score(_spec(features={"a": 1.0}, neutralize=""), cross)
+    pd.testing.assert_series_equal(a, b)
+
+
 # --- registry: add / get ------------------------------------------------------
 
 

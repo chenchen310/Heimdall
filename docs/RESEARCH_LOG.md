@@ -592,6 +592,56 @@ weeks have accumulated on disk). 0 OOS attempts — this is a feature/provider c
 research card; per 13.9's own DoD, evaluating this feature for selection skill is deferred to a
 future `tw-bigholder` family card.
 
+## 015 — panel_us v2 rebuild (2026-07-14, model: Opus 4.8)
+
+- Card: ROADMAP 17.7. Not a research card — no OOS row read, no spec registered. Panel feature
+  values are frozen at first write (the `dataset.py` resume invariant), so the new US columns from
+  Phases 13.4/13.5/17.4/17.6 (+ the 17.5/14.1 `sector` label) required a full **rebuild**, not a
+  resume. Done once, carrying every merged US column, with a mechanical reproduction gate.
+- **Governance (printed + logged):** no US signal is `certified` — only `us-fcf-yield` v1/v2 (both
+  **rejected**, immutable reports untouched) and the certified `tw-revenue-momentum` (Taiwan,
+  unaffected). The build CLI's new 17.7 guard refuses an in-place rebuild of any market with a
+  certified signal; US passed, Taiwan verified refused.
+- **Archive (data-discipline, never delete):** the 2026-07-07 panel was copied to
+  `panel_us.v1.parquet` (+ `.v1.meta.json`) before the rebuild overwrote `panel_us.parquet`.
+- **Scope — fundamentals-only (`--no-insider`, the 13.6 note).** `Form4Provider` exists but no Form 4
+  filings are cached, so enabling insider would trigger a ~3,400-issuer live crawl. Deferred:
+  `us-insider` waits on a real crawl + a later rebuild that re-runs THIS card's reproduction gate;
+  17.11 (short-interest), 17.12 (`max_ret_21d`), 17.14 (`pct_of_52w_high`) are not yet merged and
+  ride a future rebuild too. Columns added this rebuild: `sue`, `earn_gap`, `net_issuance_12m`,
+  `asset_growth`, `gross_profitability`, `rev_accel_q`, `gross_margin_delta_q`, `accruals`, `sector`.
+- **Build:** `python -m heimdall.research.build_dataset --market us --start 2010-01 --rebuild
+  --no-insider`. VTI current constituents (`current_universe (optimistic)`); EDGAR + prices are local
+  caches. 3,436-name universe, **2 symbols skipped** (SchemaError); **503,096 rows, 2010-01-29 →
+  2026-07-13, 199 months** — the identical row structure to the archived v1 (same universe ×
+  eligibility), now with the new feature columns.
+
+- **Reproduction gate (mandatory, 17.7 step 4) — `evaluate {fcf_yield}` on the rebuilt panel vs
+  entry 011:**
+
+  | window | rebuilt IC (t) | target 011 | rebuilt selection alpha (NW-t) | target 011 |
+  | --- | --- | --- | --- | --- |
+  | dev 2010–2019 (120 mo) | +0.0220 (+2.84) | +0.022 (+2.87) | +2.99% (+3.92) | +2.99% (+3.92) |
+  | val 2020–2022 (36 mo) | +0.0576 (+2.71) | +0.058 (+2.71) | +7.90% (+2.98) | +7.89% (+2.98) |
+
+  **PASS** (reproduces to ~2 dp). The 17.3 discrete-quarter filter touches only duration facts
+  (annual FY rows 330–430d survive), so `fcf_yield`'s inputs (CFO, market cap) are unchanged; the
+  hairline drift (dev IC-t 2.84 vs 2.87; val alpha +7.90% vs +7.89%) is yfinance re-adjusting a
+  handful of historical adjusted closes over the 7-day gap since the v1 build, flowing through the
+  labels — well inside tolerance. All 2010–2022 history is read from the unchanged price/EDGAR
+  caches (only the ≤7-day tail was delta-fetched), which is why the match is near-exact.
+
+- **Dev-window (2010–2019) coverage of the new columns (non-NaN share of the 134,695 eligible rows):**
+  `asset_growth` 89.1%, `earn_gap` 81.3%, `net_issuance_12m` 80.8%, `rev_accel_q` 65.2%, `sue` 64.8%,
+  `accruals` 61.8%, `gross_profitability` 38.2%, `gross_margin_delta_q` 32.3%; `sector` 99.7% known.
+  The two gross-profit features are the sparsest — the `GrossProfit` XBRL tag is genuinely absent for
+  many filers (coverage honesty over completeness, the 13.5 precedent; never derived from
+  revenue − COGS).
+- **Consolidation:** the deferred "extend `panel_us`" steps of cards **13.4** and **13.5** are
+  satisfied by this rebuild (their features are now `panel_us` columns). Cards 13.6 and 17.8 are
+  unblocked on the data side; both stay user-gated before any vault touch.
+- **OOS attempts spent: 0 of 3** (no family). Registry status change: none.
+
 ## 016 — us-pead + us-issuance-quality (2026-07-17, model: Opus 4.8)
 
 > Numbering: entry **015** is reserved for card 17.7's `panel_us` v2 rebuild, which lives on the

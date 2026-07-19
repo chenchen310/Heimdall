@@ -26,7 +26,7 @@ import pandas as pd
 from heimdall.data.symbols import parse_symbol
 from heimdall.factors.scoring import _zscore
 from heimdall.research import gates
-from heimdall.research.spec import SignalSpec, score
+from heimdall.research.spec import SignalSpec, _sector_zscore, score
 
 _REQUIRED = {"symbol", "as_of", "price", "dollar_vol_21d", "ret_12_1"}
 
@@ -64,7 +64,10 @@ def todays_picks(spec: SignalSpec, snapshot: pd.DataFrame) -> pd.DataFrame:
     data excludes). Raises ``ValueError`` when the snapshot lacks required
     columns (e.g. built before the 7.1 fields) — rebuild it rather than guess.
     """
-    missing = sorted((_REQUIRED | set(spec.features)) - set(snapshot.columns))
+    required = _REQUIRED | set(spec.features)
+    if spec.neutralize == "sector":  # 17.5: within-sector ranking needs the group label
+        required = required | {"sector"}
+    missing = sorted(required - set(snapshot.columns))
     if missing:
         raise ValueError(
             f"snapshot is missing {missing}; rebuild it (Build data page or "
@@ -81,7 +84,12 @@ def todays_picks(spec: SignalSpec, snapshot: pd.DataFrame) -> pd.DataFrame:
 
     pool = df[df["eligible"]]
     for feat in spec.features:
-        df.loc[pool.index, f"z_{feat}"] = _zscore(pool[feat])
+        z = (
+            _sector_zscore(pool[feat], pool["sector"])
+            if spec.neutralize == "sector"
+            else _zscore(pool[feat])
+        )
+        df.loc[pool.index, f"z_{feat}"] = z
 
     picks = (
         df[df["signal_score"].notna()]
