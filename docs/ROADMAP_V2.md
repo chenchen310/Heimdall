@@ -1420,7 +1420,19 @@ Steps:
 DoD: rebuilt panel + meta; reproduction table committed in the log note; gates green.
 **Don't:** touch `panel_tw` or `data/research/full/`; don't start 17.8 in the same PR.
 
-### 17.8 US new-family research: acceleration · earnings-quality · neutral-value (user-gated)  `[ ]`
+### 17.8 US new-family research: acceleration · earnings-quality · neutral-value (user-gated)  `[x]`
+
+> **Outcome (2026-07-19, RESEARCH_LOG 018): all three families close at development; 0 VAL, 0 OOS,
+> no vault gate reached, no user go/no-go arose.** 5 pre-stated candidates evaluated in-memory on
+> `panel_us` v2 (DEV 2010-2019). **`{rev_accel_q}` has real ranking IC (t +2.68, clears G1) but
+> negative selection alpha (−0.80%, NW-t −0.69)** — the certified TW acceleration idea *ranks* US
+> names but its concentrated book does not out-select the equal-weight universe, the identical
+> IC-vs-selection split entry 017 found for TW `rev_mom_accel` on the full universe. `{accruals:−1}`
+> flat (Sloan decay). `{fcf_yield}` neutralize=sector is closest-but-fails (IC t 1.77, α +1.45%
+> NW-t 1.74) — notably, sector-neutralization **weakened** raw `fcf_yield` on DEV (entry 011 was IC
+> t 2.87 / α +2.99%), showing a material part of its 2010-2019 edge was a sector tilt; the OOS-reversal
+> fix hypothesis stays untested (closed before any VAL/OOS look). All three families keep 3/3 budgets.
+> Today's Picks stays US-empty; certified TW v1 unaffected; the 12.3 paid-data memo stays armed.
 
 **Goal:** playbook §7 over the 17.x US features on the 17.7 panel — plus the sector-neutral
 re-read of the one US signal with proven OOS ranking information.
