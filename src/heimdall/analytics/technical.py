@@ -94,6 +94,7 @@ def technical_report(symbol: str, ohlcv: pd.DataFrame) -> TechnicalReport:
     up, mid, low = bollinger(close, 20)
     band = float(up.iloc[-1]) - float(low.iloc[-1])
     line, signal, hist = macd(close)
+    support, resistance = _support_resistance(ohlcv, price)
 
     return TechnicalReport(
         symbol=symbol,
@@ -122,8 +123,16 @@ def technical_report(symbol: str, ohlcv: pd.DataFrame) -> TechnicalReport:
             "percent_b": (price - float(low.iloc[-1])) / band if band else float("nan"),
         },
         atr_14=float(atr(ohlcv["high"], ohlcv["low"], ohlcv["close"], 14).iloc[-1]),
-        support=_support_resistance(ohlcv, price)[0],
-        resistance=_support_resistance(ohlcv, price)[1],
+        support=support,
+        resistance=resistance,
         fibonacci=_fibonacci(ohlcv),
-        setup=trade_setup(ohlcv),
+        # Anchor the two structural entries to real chart levels: buy a dip to the
+        # nearest support, buy a breakout over the nearest resistance. Lists are
+        # ordered nearest-to-price first (see ``_support_resistance``); when a side
+        # has no swing level, ``trade_setup`` falls back to an ATR offset.
+        setup=trade_setup(
+            ohlcv,
+            pullback_level=support[0] if support else None,
+            breakout_level=resistance[0] if resistance else None,
+        ),
     )

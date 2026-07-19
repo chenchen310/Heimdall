@@ -13,11 +13,24 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from heimdall.analytics import technical_report
+from heimdall.backtest.setup import EntryPlan
 from heimdall.factors.indicators import bollinger
 from heimdall.ui import _glossary
 from heimdall.ui._data import get_ohlcv
 from heimdall.ui._personas import ai_report
 from heimdall.ui.i18n import t
+
+
+def _plan_row(label: str, plan: EntryPlan, rr: list[float]) -> None:
+    """One structural entry (pullback / breakout) as a row of tiles: entry, stop, targets."""
+    st.markdown(f"**{label}**")
+    cols = st.columns(2 + len(plan.targets))
+    cols[0].metric("Entry", f"{plan.entry:.2f}", help=_glossary.help("entry_stop_target"))
+    cols[1].metric(
+        "Stop", f"{plan.stop:.2f}", f"-{plan.risk:.2f}", help=_glossary.help("entry_stop_target")
+    )
+    for col, mult, target in zip(cols[2:], rr, plan.targets, strict=True):
+        col.metric(f"Target {mult:g}R", f"{target:.2f}", help=_glossary.help("entry_stop_target"))
 
 
 def render(symbol: str) -> None:
@@ -31,15 +44,19 @@ def render(symbol: str) -> None:
 
     # --- Trading Plan Summary ---
     st.subheader(t("Trading Plan Summary"))
-    box = st.columns(5)
-    box[0].metric("Price", f"{tr.price:.2f}")
-    box[1].metric("Entry", f"{s.entry:.2f}", help=_glossary.help("entry_stop_target"))
-    box[2].metric(
-        "Stop", f"{s.stop:.2f}", f"-{s.risk:.2f}", help=_glossary.help("entry_stop_target")
+    st.caption(
+        t(
+            "Price is what you'd pay right now. The plan frames two ways in instead: "
+            "buy a pullback to support, or a breakout above resistance — each with its "
+            "own ATR stop and R-multiple targets."
+        )
     )
-    box[3].metric("Target 1 (1R)", f"{s.targets[0]:.2f}", help=_glossary.help("entry_stop_target"))
+    ctx = st.columns(2)
+    ctx[0].metric("Price", f"{tr.price:.2f}")
     trend = "/".join(tr.trend[k][0].upper() for k in ("short", "medium", "long"))
-    box[4].metric("Trend S/M/L", trend, help=_glossary.help("trend_sml"))
+    ctx[1].metric("Trend S/M/L", trend, help=_glossary.help("trend_sml"))
+    _plan_row(t("⤵ Pullback (buy the dip)"), s.pullback, s.rr)
+    _plan_row(t("⤴ Breakout (buy strength)"), s.breakout, s.rr)
     row = st.columns(4)
     row[0].metric("RSI(14)", f"{tr.rsi_14:.0f}", help=_glossary.help("rsi_14"))
     row[1].metric("ATR(14)", f"{tr.atr_14:.2f}", help=_glossary.help("atr_14"))
@@ -75,17 +92,17 @@ def render(symbol: str) -> None:
     for lvl in tr.resistance:
         fig.add_hline(y=lvl, line_dash="dot", line_color="#ef5350", opacity=0.5)
     fig.add_hline(
-        y=s.stop,
+        y=s.pullback.entry,
         line_dash="dash",
-        line_color="#ef5350",
-        annotation_text="stop",
+        line_color="#26a69a",
+        annotation_text="pullback",
         annotation_position="right",
     )
     fig.add_hline(
-        y=s.targets[0],
+        y=s.breakout.entry,
         line_dash="dash",
-        line_color="#26a69a",
-        annotation_text="T1",
+        line_color="#ff9800",
+        annotation_text="breakout",
         annotation_position="right",
     )
     fig.update_layout(
@@ -116,10 +133,21 @@ def render(symbol: str) -> None:
         "resistance": tr.resistance,
         "fibonacci": tr.fibonacci,
         "setup": {
-            "entry": round(s.entry, 2),
-            "stop": round(s.stop, 2),
-            "targets": [round(t, 2) for t in s.targets],
+            "market_entry": round(s.entry, 2),  # the latest close ("buy now" == price)
+            "atr": round(s.atr, 2),
             "rr": s.rr,
+            "pullback": _plan_payload(s.pullback),
+            "breakout": _plan_payload(s.breakout),
         },
     }
     ai_report("morgan_stanley", payload, symbol)
+
+
+def _plan_payload(plan: EntryPlan) -> dict[str, object]:
+    """A structural entry as a JSON-able dict for the optional AI narrative."""
+    return {
+        "entry": round(plan.entry, 2),
+        "stop": round(plan.stop, 2),
+        "risk": round(plan.risk, 2),
+        "targets": [round(x, 2) for x in plan.targets],
+    }

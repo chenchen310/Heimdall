@@ -277,6 +277,14 @@ _ZH: dict[str, str] = {
     "Bull scenario": "多頭情境",
     # --- technical ---
     "Trading Plan Summary": "交易計畫摘要",
+    "Price is what you'd pay right now. The plan frames two ways in instead: "
+    "buy a pullback to support, or a breakout above resistance — each with its "
+    "own ATR stop and R-multiple targets.": (
+        "「股價」是你現在買要付的價。交易計畫改用兩種進場方式：回檔到支撐買，"
+        "或突破壓力買——各自帶自己的 ATR 停損與 R 倍數目標。"
+    ),
+    "⤵ Pullback (buy the dip)": "⤵ 回檔進場（買回檔）",
+    "⤴ Breakout (buy strength)": "⤴ 突破進場（買強勢）",
     "Support / Resistance": "支撐 / 壓力",
     "Fibonacci retracement": "斐波那契回撤",
     # --- risk ---

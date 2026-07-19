@@ -12,7 +12,7 @@ from heimdall.backtest.report import (
     summary_metrics,
     tear_sheet,
 )
-from heimdall.backtest.setup import TradeSetup, trade_setup
+from heimdall.backtest.setup import EntryPlan, TradeSetup, trade_setup
 from heimdall.backtest.strategies import STRATEGIES, Param, Strategy
 from heimdall.backtest.sweep import sweep
 
@@ -29,6 +29,7 @@ __all__ = [
     "PortfolioResult",
     "trade_setup",
     "TradeSetup",
+    "EntryPlan",
     "equity_curve",
     "drawdown_series",
     "quick_metrics",
