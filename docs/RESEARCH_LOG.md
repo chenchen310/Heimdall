@@ -777,3 +777,79 @@ future `tw-bigholder` family card.
   certification and spends no v2 attempt; `tw-flows` keeps its full budget. A future full-universe
   research attempt would need its own pre-stated card + user go/no-go (the 17.12/17.14 TW columns,
   when a rebuild adds them, are the natural trigger to revisit this substrate).
+
+## 018 — us-fundamental-accel + us-earnings-quality + us-value-neutral (2026-07-19, model: Opus 4.8)
+
+- Card: ROADMAP 17.8. Goal: playbook §7 DEV/VAL over the 17.x US free features on the 17.7
+  `panel_us` v2 — quarterly fundamental **acceleration** (the certified TW idea ported), earnings
+  **quality** (Sloan accruals), and a sector-**neutral** re-read of the one US signal with proven OOS
+  ranking information (`fcf_yield`). Family boundaries (binding for the 3-attempt budgets):
+  `us-fundamental-accel` = {rev_accel_q, gross_margin_delta_q}; `us-earnings-quality` = {accruals};
+  `us-value-neutral` = sector-neutralized value.
+- **`us-value-neutral` family ruling (restated verbatim per the phase-intro requirement).** It is the
+  `us-value-quality` *idea* under a different **construction** (within-sector ranking), ruled a **NEW
+  family with a fresh 3/3 budget** because neutralization is not a re-weighting — so this is **not** a
+  re-run of raw `{fcf_yield}` (whose remaining `us-value-quality` attempts stay reserved for genuinely
+  new data). **Sector-map approximation caveat (also required):** `neutralize="sector"` applies the
+  **current** `us_sector.json` map to all history — sector is a grouping label, not a return-bearing
+  feature, and reclassifications are rare, but it is **not point-in-time**.
+- Tool: `heimdall.research.evaluate` (entry 011) — imports the certify gate helpers; refuses any
+  window ≥ `OOS_START` (2023-01, hard assert). No vault row touched. Candidates scored **in-memory**
+  (no spec JSON written — the card writes JSONs only for advancers, of which there are none).
+- Panel: `panel_us` v2 (rebuilt 2026-07-14 by card 17.7, now merged; 3,436-name VTI universe; 199
+  months 2010-01→2026-07; 503,096 rows; `current_universe (optimistic)`). DEV eligible-row coverage:
+  `rev_accel_q` 65%, **`gross_margin_delta_q` 32%** (17.4's flagged cost — the `GrossProfit` XBRL tag
+  is sparse; NaN rows drop from the ranking, never derived from revenue − COGS), `accruals` 62%,
+  `fcf_yield` 67%.
+
+- **Development (2010-01→2019-12, 116–120 months, 115–120 six-month cohorts by feature coverage; no
+  row ≥ 2023 read — evaluate() asserts it).** All 5 pre-stated candidates (weight sign = the feature
+  doc's direction; no additions mid-session). "beat" = portfolio-cohort beat rate vs SPY; "alpha (t)"
+  = G3 selection alpha (EW top-20 book 6m `fwd_6m_rel` − EW eligible-universe 6m) + its NW-t:
+
+  | candidate | IC (t) [G1] | spread/mo [G2] | selection alpha (NW-t) [G3] | beat | turn | advances |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | `{rev_accel_q}` | **+0.0198 (+2.68)** | +0.41% (59%) | −0.80% (−0.69) | 44.4% | 29% | no |
+  | `{gross_margin_delta_q}` | +0.0105 (+1.36) | +0.29% (57%) | −0.81% (−0.69) | 43.3% | 22% | no |
+  | `{rev_accel_q, gross_margin_delta_q}` eq | +0.0067 (+0.74) | +0.06% (56%) | +0.25% (+0.26) | 51.3% | 29% | no |
+  | `{accruals:−1}` | +0.0103 (+1.51) | +0.20% (59%) | +0.89% (+0.56) | 50.8% | 15% | no |
+  | `{fcf_yield}` neutralize=sector | +0.0126 (+1.77) | +0.22% (51%) | +1.45% (+1.74) | 53.3% | 16% | no |
+
+  Advance bar (entry-010/011 precedent): dev IC-t ≥ 2 **and** dev selection-alpha-t ≥ 2 — both gates
+  are law, never the max of the two.
+
+- **Verdict: all three families close at development. No candidate advances to validation; 0 VAL
+  looks; 0 OOS attempts spent; no vault gate reached; no user go/no-go arises (it gates
+  *pre-registration*, which needs a survivor).**
+  - **`us-fundamental-accel`: the certified TW idea does NOT port — ranking ≠ selection, again.**
+    `{rev_accel_q}` has a genuine, significant rank IC (**+0.0198, t +2.68 — clears G1**): US quarterly
+    revenue-acceleration *does* order next-month cross-sectional returns. **But its selection alpha is
+    negative (−0.80%, NW-t −0.69)** — the EW top-20 book does not out-select the EW eligible universe.
+    This is the **same IC-vs-selection split** entry 017 found for TW `rev_mom_accel` on the full
+    universe (IC +0.033 t +4.14, alpha −1.46%): the acceleration ordering is real, the concentrated
+    book is not skilled above equal-weighting. `{gross_margin_delta_q}` is weak on both axes (IC t 1.36,
+    alpha −0.81%) with only 32% DEV coverage; the equal composite dilutes both to ~zero (alpha +0.25%).
+  - **`us-earnings-quality`: `{accruals:−1}` closes flat.** Weak IC (t 1.51) and a small, insignificant
+    positive selection alpha (+0.89%, NW-t +0.56) — the Sloan accruals anomaly appears in *sign* but
+    clears neither gate on this universe/horizon, consistent with its documented post-2000s decay.
+  - **`us-value-neutral`: `{fcf_yield}` neutralize=sector is the closest to alive but clears neither
+    bar** (IC t 1.77, alpha +1.45% NW-t +1.74). **Key finding: sector-neutralization WEAKENED
+    `fcf_yield` on DEV rather than strengthening it** — raw `{fcf_yield}` on this window (entry 011) was
+    IC t +2.87 / alpha +2.99% (t +3.92); removing the sector bet cut both roughly in half. So on
+    2010-2019 a material part of raw `fcf_yield`'s in-sample edge *was* a sector tilt (cheap sectors
+    outperforming), not within-sector selection. **Honest regime prior (required for a value-flavored
+    candidate):** neutralization was motivated by entries 011/012 — raw `fcf_yield`'s in-sample skill
+    *reversed* OOS in the 2023-25 mega-cap regime (a diversified value book shorting the AI-led index);
+    within-sector ranking was the hypothesized fix. That hypothesis is **untested here** — the candidate
+    closes at development before any VAL/OOS look, and the vault stays sealed — so whether neutralization
+    would have salvaged the OOS reversal remains unknown; it simply does not earn the look on DEV.
+- **Looks disclosed:** 5 development evaluations + 0 validation = 5 in-sample reads; **0 OOS.**
+- Registry status change: none (nothing pre-registered — honest closure completes the card per its
+  DoD). Budgets after this card: `us-fundamental-accel`, `us-earnings-quality`, and `us-value-neutral`
+  each keep **3/3** attempts (closing at development spends none). A composite crossing any of these
+  boundaries would be a new `us-composite-…` family, never billed to these three.
+- **Aggregate US picture, now on the corrected metric across 011/012/016/018:** every free US family
+  either lacks ranking IC or — where the IC is real (`fcf_yield`, `rev_accel_q`, `net_issuance_12m`) —
+  lacks *selection skill above equal-weighting* on the in-sample windows. No free US family has cleared
+  both DEV gates since the 12.5 redefinition. Today's Picks stays US-empty; the certified TW
+  `tw-revenue-momentum v1` is unaffected. This continues to arm (not schedule) the 12.3 paid-data memo.
