@@ -77,6 +77,12 @@ def _technicals(ohlcv: pd.DataFrame) -> dict[str, float]:
         else nan
     )
 
+    # Proximity to the 52-week high (George–Hwang 2004 anchoring): today's price ÷ the
+    # highest adjusted close over the last 252 bars (current bar included, so it sits in
+    # (0, 1]; 1.0 = at a new high). Underreaction near this salient reference level
+    # predicts continued outperformance — this is anchoring, NOT return continuation.
+    pct_of_52w_high = _safe_div(price, float(close.tail(252).max())) if len(close) >= 252 else nan
+
     # Realized volatility: std of the last 63 daily returns, annualized.
     rets = close.pct_change().dropna()
     vol_63d = float(rets.tail(63).std() * (252.0**0.5)) if len(rets) >= 63 else nan
@@ -92,6 +98,7 @@ def _technicals(ohlcv: pd.DataFrame) -> dict[str, float]:
         "ret_6m": ret(126),
         "ret_12m": ret(252),
         "ret_12_1": ret_12_1,
+        "pct_of_52w_high": pct_of_52w_high,
         "vol_63d": vol_63d,
         "dollar_vol_21d": dollar_vol_21d,
         "pct_above_sma_200": _safe_div(price, float(s200)) - 1.0,

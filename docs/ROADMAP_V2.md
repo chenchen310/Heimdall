@@ -1570,7 +1570,21 @@ completes the card). Pre-stated candidates:
   (if shipped), equal composite of the two.
 **Don't:** blend across families; no candidates beyond this list without a new card.
 
-### 17.14 52-week-high proximity feature (George–Hwang anchoring)  `[ ]`
+### 17.14 52-week-high proximity feature (George–Hwang anchoring)  `[x]`
+
+> **Outcome (2026-07-19):** `pct_of_52w_high` added to `factors.metrics._technicals` —
+> `adj_close[-1] ÷ max(adj_close over the last 252 bars)` (current bar included ⇒ value in
+> (0, 1], 1.0 = at a new high), NaN under 252 bars (the `ret_12_1` rule); direction **+**, no PIT
+> shift. Documented at the feature's actual home — the inline `_technicals` comment where
+> `ret_12_1`/`vol_63d`/`pct_above_sma_200` are documented — **not** in `dataset.py` (no `_technicals`
+> field is documented there; it flows into the panel automatically via `snapshot_row`, so a doc line
+> there would be inconsistent with every sibling). Since the field enters the live snapshot row, its
+> UI glossary entry (category `technical`, direction `higher`, en/zh label + gloss) was added to
+> `ui/_glossary.py` — required by `test_every_screenable_numeric_field_has_a_glossary_label`, not
+> optional. Known-answer tests (interior-peak exact ratio 0.8, monotonic-rising exactly 1.0, <252-bar
+> NaN) in `tests/test_snapshot.py`. Column reaches panels only via the next rebuild (17.7/13.8) — no
+> rebuild triggered here. Research is a future `us-52wh`/`tw-52wh` card (17.13 protocol). Four gates
+> green; full suite passed.
 
 **Goal:** nearness to the 52-week high predicts continued outperformance (George & Hwang 2004) —
 underreaction near a salient reference price. Price-only, both markets in one stroke, 1 parameter,
