@@ -1493,7 +1493,12 @@ Steps:
 DoD: docs updated with numbers + method; log note committed.
 **Don't:** scrape MOPS beyond polite page requests; never adjust `filed_at` silently.
 
-### 17.10 Rank-buffer membership (turnover hysteresis)  `[ ]`
+### 17.10 Rank-buffer membership (turnover hysteresis)  `[x]`
+
+> **Absorbed by 18.1 + 18.2 (2026-09-30):** `SignalSpec.exit_rank`, `construct.buffered_members`, the
+> stateful threading through certify/evaluate/monitor/today, the ledger-backed `prev`, and every test
+> this card named (buffered < unbuffered turnover, bit-for-bit reproduction, a certify known answer
+> where the buffer flips G6). See those cards' outcome notes.
 
 **Goal:** enter at rank ≤ top_n, hold until rank > exit_rank — the standard churn reducer. At
 G4's 20 bps/side, cutting one-way turnover ~30–50% adds material net CAGR to any future signal
@@ -1787,7 +1792,29 @@ Steps:
 DoD: mirrors + hash regression + gates green.
 **Don't:** thread it into certify/evaluate yet (18.2); no menu values beyond this list.
 
-### 18.2 Thread `construct_book` through evaluate · certify · monitor · today  `[ ]`
+### 18.2 Thread `construct_book` through evaluate · certify · monitor · today  `[x]`
+
+> **Outcome (2026-09-30):** `certify`, `evaluate`, `monitor.realized_cohorts`, `today.todays_picks`
+> and `ledger.freeze` now build the book through `research.construct` (stateful `prev` for the rank
+> buffer: monitor replays from the OOS start; `today`/`freeze` read the latest frozen cohort via the
+> new `ledger.latest_members`, and the Today page notes when none exists). New in `certify`:
+> `cohort_book` (+ `cohort_alpha(prev=…)`), `weight_turnover` (½Σ|Δw|), `traded_fractions` +
+> `apply_costs_traded` (the overlay's cash switches pay both sides), `_book_mean` (plain mean for
+> equal-weight books; else Σw·r renormalized over labelled names, scaled by the invested fraction);
+> `_book_minus_universe` keeps its pre-18.2 path when called without a book. `CertReport` gained a
+> `construction` disclosure field (`{}` for a plain book). `todays_picks` adds a `weight` column;
+> weighted books freeze their weights. **Reproduction gate — bit-for-bit, not just 1e-9:** a
+> read-only replay (scratch script, no report/registry writes) of the pre-18.2 and post-18.2
+> `certify` on `panel_us.v1` and `panel_us` for both US specs differs by **0.0** on every gate and
+> cohort, and the new code matches the committed `us-fcf-yield_v2` report exactly on every gate,
+> G4 included (v1's report predates 12.5, so only its common gates compare — also 0.0). `evaluate
+> {fcf_yield}` reproduces entry 015 exactly (dev IC +0.0220 t 2.84, α +2.99% t 3.92; val IC +0.0576
+> t 2.71, α +7.90% t 2.98). **TW caveat:** the certified TW report cannot be replayed — the shipped
+> `panel_tw.parquet` carries no `rev_mom_*` columns (v1 was certified on a separate reduced
+> substrate, entry 017) — so TW equivalence was checked old-code vs new-code on the full-universe
+> research panel instead (0.0 difference; only the difference was printed, no vault values). 12 new
+> tests in `tests/test_research_construct_referee.py`, incl. the buffer flipping G6 and the overlay
+> moving G4 but never G1–G3.
 
 **Goal:** the referee and the dev lens price exactly the book the factory searched (absorbs
 17.10 steps 3–4).

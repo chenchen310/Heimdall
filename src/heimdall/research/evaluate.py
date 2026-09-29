@@ -28,15 +28,16 @@ import numpy as np
 import pandas as pd
 
 from heimdall.factors.validate import information_coefficient
-from heimdall.research import gates
+from heimdall.research import construct, gates
 from heimdall.research.certify import (
     _SCORE,
     _book_minus_universe,
     _monthly_spread,
     cohort_turnover,
+    weight_turnover,
 )
 from heimdall.research.dataset import load_panel
-from heimdall.research.spec import SignalSpec, load_spec, score
+from heimdall.research.spec import SignalSpec, load_spec
 
 # Development / validation windows mirror docs/RESEARCH_PLAYBOOK.md §4. The OOS vault
 # (2023+, gates.OOS_START) is never a valid evaluate() window — it is certify()'s alone.
@@ -89,9 +90,10 @@ class EvalReport:
 def evaluate(spec: SignalSpec, panel: pd.DataFrame, window: tuple[str, str]) -> EvalReport:
     """Score ``spec`` over the panel rows in ``window`` and return the in-sample gate read.
 
-    Mirrors :func:`certify.certify`'s scoring loop exactly (score → rank → top-N book →
-    book-minus-universe alpha), minus the vault-only cost backtest, so a candidate's dev/val
-    numbers are computed by the identical code that will judge it out-of-sample.
+    Mirrors :func:`certify.certify`'s scoring loop exactly (construct the book via
+    :mod:`heimdall.research.construct` → book-minus-universe alpha), minus the vault-only cost
+    backtest, so a candidate's dev/val numbers are computed by the identical code that will
+    judge it out-of-sample. A rank-buffered spec starts the window with a plain top-N book.
     """
     start, end = pd.Timestamp(window[0]), pd.Timestamp(window[1])
     if end >= pd.Timestamp(gates.OOS_START):
@@ -105,17 +107,28 @@ def evaluate(spec: SignalSpec, panel: pd.DataFrame, window: tuple[str, str]) -> 
     win["date"] = pd.to_datetime(win["date"])
     months = sorted(pd.Timestamp(t) for t in win["date"].unique())
 
+    equal = construct.is_equal_weight(spec)
     frames: list[pd.DataFrame] = []
     cohort_sets: list[set[str]] = []
+    books: list[pd.Series] = []
     selection_alphas: list[float] = []
     portfolio_beats: list[float] = []
+    prev: set[str] | None = None
     for t in months:
         cross = win[win["date"] == t].copy()
-        cross[_SCORE] = score(spec, cross)
+        cross[_SCORE] = construct.pool_scores(spec, cross)
         frames.append(cross)
-        ranked = cross.dropna(subset=[_SCORE]).sort_values(_SCORE, ascending=False)
-        cohort_sets.append(set(ranked.head(spec.top_n)["symbol"]))
-        bu = _book_minus_universe(cross, spec.top_n)  # cross already carries the score column
+        book = construct.select(spec, cross, cross[_SCORE], prev)
+        prev = set(book.index)
+        books.append(book)
+        cohort_sets.append(set(book.index))
+        bu = _book_minus_universe(
+            cross,
+            spec.top_n,
+            book=book,
+            universe=construct.universe_mask(spec, cross),
+            equal=equal,
+        )
         if bu is not None:
             book_ret, univ_ret = bu
             portfolio_beats.append(float(book_ret > 0))
@@ -146,8 +159,8 @@ def evaluate(spec: SignalSpec, panel: pd.DataFrame, window: tuple[str, str]) -> 
         else (float("nan"), float("nan"))
     )
 
-    # G6 — one-way turnover of the top-N set.
-    turnovers = cohort_turnover(cohort_sets)
+    # G6 — one-way turnover of the book (½ Σ|Δw| once weights are not equal).
+    turnovers = cohort_turnover(cohort_sets) if equal else weight_turnover(books)
     mean_turnover = float(np.mean(turnovers)) if turnovers else float("nan")
 
     return EvalReport(

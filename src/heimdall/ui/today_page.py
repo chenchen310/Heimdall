@@ -31,6 +31,7 @@ from heimdall.research.dataset import load_panel
 from heimdall.research.ledger import (
     RealizedCohort,
     UnrealizedMark,
+    latest_members,
     load_cohorts,
     realized_track_record,
     unrealized_mark,
@@ -415,8 +416,13 @@ def render() -> None:
         _evidence_box(region, report)
         _monitoring_line(spec)
 
+        prev = latest_members(spec.name, spec.version) if spec.exit_rank is not None else None
+        if spec.exit_rank is not None and prev is None:
+            st.caption(
+                t("No frozen cohort yet — plain top-N shown; the rank buffer starts next month.")
+            )
         try:
-            picks = todays_picks(spec, snap)
+            picks = todays_picks(spec, snap, prev)
         except ValueError as exc:  # e.g. a snapshot predating the 7.1 fields
             st.error(str(exc))
             continue

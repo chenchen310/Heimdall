@@ -179,6 +179,9 @@ _ZH: dict[str, str] = {
     ),
     "survivorship: current universe (optimistic upper bound)": ("存活者偏差:現今成分股(樂觀上限)"),
     "No eligible names to rank right now.": "目前沒有符合資格可排名的股票。",
+    "No frozen cohort yet — plain top-N shown; the rank buffer starts next month.": (
+        "尚未凍結任何一期持股——目前顯示一般的前 N 名；換股緩衝從下個月開始生效。"
+    ),
     "z = strength vs today's eligible pool; the score is the weighted sum of z columns.": (
         "z = 相對今日合格池的強度;總分為各 z 欄的加權和。"
     ),
