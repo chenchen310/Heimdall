@@ -2,6 +2,9 @@
 
 A spec is a frozen recipe: panel features with fixed weights (direction via
 sign), ranked cross-sectionally within one market, taking the top ``top_n``.
+Optional **construction** fields (roadmap 18.1 — universe tier, filters,
+weighting, sector cap, rank buffer, regime overlay) turn the ranking into a
+weighted book; :mod:`heimdall.research.construct` is their single home.
 Specs serialize to JSON under ``signals/specs/`` and are identified by their
 **canonical hash**, which is what pre-registration commits to
 (``docs/RESEARCH_PLAYBOOK.md`` §4/§8) — the certify CLI refuses a spec whose
@@ -18,10 +21,28 @@ import math
 from pathlib import Path
 
 import pandas as pd
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from heimdall.data.symbols import MARKET_REGION
 from heimdall.factors.scoring import _zscore
+from heimdall.screener.model import Predicate
+
+#: Construction menus (roadmap 18.1). ``""`` is always today's behaviour.
+UNIVERSES: tuple[str, ...] = ("", "us_large")  # us_large = PIT top gates.US_LARGE_N by market cap
+WEIGHTINGS: tuple[str, ...] = ("", "inverse_vol")  # "" = equal weight
+OVERLAYS: tuple[str, ...] = ("", "spy_sma200_cash")  # cash while the benchmark < its 200d SMA
+
+#: Construction fields and their defaults. A field holding its default is popped from the
+#: canonical hash, so every spec written before the field existed keeps its committed hash.
+CONSTRUCTION_DEFAULTS: dict[str, object] = {
+    "neutralize": "",
+    "universe": "",
+    "filters": [],
+    "weighting": "",
+    "max_sector_weight": None,
+    "exit_rank": None,
+    "overlay": "",
+}
 
 
 class SignalSpec(BaseModel):
@@ -35,6 +56,13 @@ class SignalSpec(BaseModel):
     top_n: int = Field(default=20, ge=1)
     description: str = ""  # free text; excluded from the canonical hash
     neutralize: str = ""  # "" = raw cross-section | "sector" = within-sector ranking (17.5)
+    # --- construction (18.1); every default reproduces the pre-18.1 book exactly ---
+    universe: str = ""  # "" = every eligible row | "us_large" = PIT top-N eligible by market cap
+    filters: list[Predicate] = []  # screener predicates; missing data fails, never passes
+    weighting: str = ""  # "" = equal weight | "inverse_vol" = ∝ 1/vol_63d
+    max_sector_weight: float | None = None  # per-sector cap; excess goes pro-rata to the rest
+    exit_rank: int | None = None  # rank buffer: hold a member until its rank exceeds this
+    overlay: str = ""  # book-level regime switch, applied by consumers (never inside the book)
 
     @field_validator("neutralize")
     @classmethod
@@ -42,6 +70,52 @@ class SignalSpec(BaseModel):
         if v not in ("", "sector"):
             raise ValueError(f"neutralize must be '' or 'sector', got {v!r}")
         return v
+
+    @field_validator("universe")
+    @classmethod
+    def _known_universe(cls, v: str) -> str:
+        if v not in UNIVERSES:
+            raise ValueError(f"universe must be one of {UNIVERSES}, got {v!r}")
+        return v
+
+    @field_validator("weighting")
+    @classmethod
+    def _known_weighting(cls, v: str) -> str:
+        if v not in WEIGHTINGS:
+            raise ValueError(f"weighting must be one of {WEIGHTINGS}, got {v!r}")
+        return v
+
+    @field_validator("overlay")
+    @classmethod
+    def _known_overlay(cls, v: str) -> str:
+        if v not in OVERLAYS:
+            raise ValueError(f"overlay must be one of {OVERLAYS}, got {v!r}")
+        return v
+
+    @field_validator("max_sector_weight")
+    @classmethod
+    def _sane_sector_cap(cls, v: float | None) -> float | None:
+        if v is not None and not (math.isfinite(v) and 0.0 < v <= 1.0):
+            raise ValueError(f"max_sector_weight must be in (0, 1], got {v!r}")
+        return v
+
+    @field_validator("filters")
+    @classmethod
+    def _sane_filters(cls, v: list[Predicate]) -> list[Predicate]:
+        for pred in v:
+            if pred.field.startswith("fwd_"):  # a filter on a label is label leakage too
+                raise ValueError(f"label leakage: filter on forward label {pred.field!r}")
+            if not pred.enabled:  # a disabled predicate would change the hash but not the book
+                raise ValueError(f"filter on {pred.field!r} is disabled; drop it from the spec")
+        return v
+
+    @model_validator(mode="after")
+    def _coherent_construction(self) -> SignalSpec:
+        if self.exit_rank is not None and self.exit_rank <= self.top_n:
+            raise ValueError(f"exit_rank ({self.exit_rank}) must exceed top_n ({self.top_n})")
+        if self.universe == "us_large" and self.market != "US":
+            raise ValueError("universe 'us_large' is a US tier; market must be 'US'")
+        return self
 
     @field_validator("market")
     @classmethod
@@ -73,13 +147,31 @@ class SignalSpec(BaseModel):
         spec that does not neutralize hashes exactly as it did before the field
         existed (the field is popped from the payload when it holds its default),
         so every pre-17.5 committed hash — including the certified TW signal — is
-        unchanged. A registry-wide test pins this.
+        unchanged. A registry-wide test pins this. The 18.1 construction fields follow the
+        same rule (``CONSTRUCTION_DEFAULTS``).
         """
         payload = self.model_dump(exclude={"description"})
-        if payload.get("neutralize", "") == "":
-            payload.pop("neutralize", None)
+        for fld, default in CONSTRUCTION_DEFAULTS.items():  # 17.5/18.1: defaults don't hash
+            if payload.get(fld, default) == default:
+                payload.pop(fld, None)
         blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(blob.encode()).hexdigest()
+
+
+def count_free_params(spec: SignalSpec) -> tuple[int, dict[str, object]]:
+    """G5/F5 counting: each nonzero feature weight is one free parameter (``certify``'s G5).
+
+    Returns ``(count, structural)`` — ``structural`` lists every non-default construction
+    field so a log entry or the Lab can disclose it (playbook §12.1 F5: structural menu
+    picks don't count, but are always shown).
+    """
+    dumped = spec.model_dump()
+    structural = {
+        fld: dumped[fld]
+        for fld, default in CONSTRUCTION_DEFAULTS.items()
+        if dumped.get(fld, default) != default
+    }
+    return len(spec.features), structural
 
 
 def load_spec(path: Path) -> SignalSpec:
