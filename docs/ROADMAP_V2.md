@@ -1988,7 +1988,29 @@ DoD: a synthetic panel with one planted signal (found; DSR high; PBO low) and a 
 (nothing passes F1/F2); refusal tests; gates green.
 **Don't:** search feature directions or continuous weights; don't read VAL; don't promote (18.7).
 
-### 18.6 Walk-forward meta-backtest — "was the factory itself any good?"  `[ ]`
+### 18.6 Walk-forward meta-backtest — "was the factory itself any good?"  `[x]`
+
+> **Outcome (2026-09-30):** new `research/walkforward.py` — `trailing_scores` / `choose` /
+> `walk_forward` / `save` + a CLI (`top1` | `top3`, `--include-val`). Three things the card did
+> not spell out, decided here and worth knowing:
+> 1. **PIT cutoffs.** Selecting at the end of Y−1, a month's 1m-label series (F1 net alpha, G1 IC)
+>    is complete only through **Nov** of Y−1 and a 6m cohort alpha only through **Jun** of Y−1;
+>    selection reads the ledger only up to those cutoffs. To re-score any window without
+>    re-evaluating, the 18.5 ledger now also stores per-month `series_ic.parquet` and
+>    `series_alpha6.parquet` beside the net-alpha series (a small 18.5 amendment made here).
+> 2. **The card's "selection lags one year" expectation was wrong** for an expanding window: an
+>    old signal's long history keeps winning for several years after a regime change. The known
+>    answer was therefore replaced by the stronger property that matters — **invariance**: scrambling
+>    every ledger value after the cutoffs never moves a year's choice (tested for every DEV year),
+>    while a change before them can (positive control).
+> 3. **No eligible trial ⇒ hold the benchmark** (flagged) — "the factory found nothing" is a real
+>    outcome, and the curve then equals buy-and-hold SPY after the first fill's cost (tested). The
+>    **VAL extension never re-selects on VAL data**: it refuses until 18.7 writes
+>    `signals/search/<run_id>/val_looks.json`, then holds the last DEV-based choice through 2022.
+> The stitched schedule runs through the 18.3 engine once, so switch costs are charged naturally;
+> `top3` blends the three books' weights equally. Output (curve + JSON summary) goes to the
+> gitignored `data/research/factory/<run_id>/`. No real-data run yet: that needs a declared search
+> (18.15). 11 tests in `tests/test_research_walkforward.py`.
 
 **Goal:** backtest the **selection procedure**, not only its winner: each year the factory
 re-selects using only prior data and holds its choice — the honest estimate of what automatic

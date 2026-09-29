@@ -369,6 +369,8 @@ class TrialMetrics:
     bench_cagr: float
     bench_sharpe: float
     net_alpha: list[float]  # per DEV month (NaN where a leg is missing) — the F1 series
+    ic_by_month: list[float] = field(default_factory=list)  # G1 input per month (NaN = skipped)
+    alpha6_by_month: list[float] = field(default_factory=list)  # G3 cohort per month (NaN = none)
 
     @property
     def sr(self) -> float:
@@ -400,6 +402,8 @@ def evaluate_fast(spec: SignalSpec, dp: DevPanel) -> TrialMetrics:
     spreads: list[float] = []
     alphas: list[float] = []
     net_alpha: list[float] = []
+    ic_by_month = [float("nan")] * len(dp.bounds)
+    alpha6_by_month = [float("nan")] * len(dp.bounds)
     sets: list[set[str]] = []
     books: list[pd.Series] = []
     gross: list[float] = []
@@ -416,6 +420,7 @@ def evaluate_fast(spec: SignalSpec, dp: DevPanel) -> TrialMetrics:
             ic = _spearman(sc[both], f1r[both])
             if math.isfinite(ic):
                 ics.append(ic)
+                ic_by_month[m] = ic
         sp = _spread(sc[both], f1r[both])
         if sp is not None:
             spreads.append(sp)
@@ -452,6 +457,7 @@ def evaluate_fast(spec: SignalSpec, dp: DevPanel) -> TrialMetrics:
             book6 = _weighted(w_book, np.asarray(b6, dtype=np.float64))
         if math.isfinite(book6) and len(u6):
             alphas.append(book6 - float(u6.mean()))
+            alpha6_by_month[m] = alphas[-1]
 
         # F1 series: 1m book − cost on the traded fraction − EW tier universe (all rel).
         if equal:
@@ -518,6 +524,8 @@ def evaluate_fast(spec: SignalSpec, dp: DevPanel) -> TrialMetrics:
         bench_cagr=_cagr(bench),
         bench_sharpe=_sharpe(bench),
         net_alpha=net_alpha,
+        ic_by_month=ic_by_month,
+        alpha6_by_month=alpha6_by_month,
     )
 
 
@@ -556,8 +564,17 @@ def ledger_path(run_id: str, root: Path | None = None) -> Path:
     return run_dir(run_id, root) / "trials.parquet"
 
 
-def series_path(run_id: str, root: Path | None = None) -> Path:
-    return run_dir(run_id, root) / "series.parquet"
+#: Per-month series kept for every trial (months × trial_id), so any window can be re-scored
+#: without re-evaluating: the F1 net alpha, the G1 monthly IC, the G3 6m cohort alpha.
+SERIES_KINDS: dict[str, str] = {
+    "net": "series.parquet",
+    "ic": "series_ic.parquet",
+    "alpha6": "series_alpha6.parquet",
+}
+
+
+def series_path(run_id: str, root: Path | None = None, kind: str = "net") -> Path:
+    return run_dir(run_id, root) / SERIES_KINDS[kind]
 
 
 def load_trials(run_id: str, root: Path | None = None) -> pd.DataFrame:
@@ -565,8 +582,8 @@ def load_trials(run_id: str, root: Path | None = None) -> pd.DataFrame:
     return pd.read_parquet(path) if path.exists() else pd.DataFrame()
 
 
-def load_series(run_id: str, root: Path | None = None) -> pd.DataFrame:
-    path = series_path(run_id, root)
+def load_series(run_id: str, root: Path | None = None, kind: str = "net") -> pd.DataFrame:
+    path = series_path(run_id, root, kind)
     return pd.read_parquet(path) if path.exists() else pd.DataFrame()
 
 
@@ -580,24 +597,27 @@ def _atomic_parquet(frame: pd.DataFrame, path: Path) -> None:
 def _append(
     run_id: str,
     rows: list[dict[str, object]],
-    series: dict[str, list[float]],
+    series: dict[str, dict[str, list[float]]],
     months: list[pd.Timestamp],
     root: Path | None,
 ) -> None:
     """Append-only: existing rows are re-written unchanged, new rows go after them."""
-    old, old_s = load_trials(run_id, root), load_series(run_id, root)
+    old = load_trials(run_id, root)
     new = pd.DataFrame(rows)
     trials = pd.concat([old, new], ignore_index=True) if len(old) else new
-    s_new = pd.DataFrame(series, index=pd.DatetimeIndex(months, name="month"))
-    ser = pd.concat([old_s, s_new], axis=1) if len(old_s) else s_new
     _atomic_parquet(trials, ledger_path(run_id, root))
-    _atomic_parquet(ser, series_path(run_id, root))
+    for kind in SERIES_KINDS:
+        old_s = load_series(run_id, root, kind)
+        s_new = pd.DataFrame(series[kind], index=pd.DatetimeIndex(months, name="month"))
+        ser = pd.concat([old_s, s_new], axis=1) if len(old_s) else s_new
+        _atomic_parquet(ser, series_path(run_id, root, kind))
 
 
 def _row(trial_id: int, stage: int, spec: SignalSpec, met: TrialMetrics) -> dict[str, object]:
     n_params, structural = count_free_params(spec)
     d = asdict(met)
-    d.pop("net_alpha")
+    for key in ("net_alpha", "ic_by_month", "alpha6_by_month"):
+        d.pop(key)
     return {
         "trial_id": trial_id,
         "stage": stage,
@@ -653,12 +673,14 @@ def run_search(
         t0 = time.time()
         for lo in range(0, len(todo), batch):
             rows: list[dict[str, object]] = []
-            series: dict[str, list[float]] = {}
+            series: dict[str, dict[str, list[float]]] = {k: {} for k in SERIES_KINDS}
             for spec in todo[lo : lo + batch]:
                 tid = int(spec.name.rsplit("-t", 1)[1])
                 met = evaluate_fast(spec, dp)
                 rows.append(_row(tid, stage, spec, met))
-                series[str(tid)] = met.net_alpha
+                series["net"][str(tid)] = met.net_alpha
+                series["ic"][str(tid)] = met.ic_by_month
+                series["alpha6"][str(tid)] = met.alpha6_by_month
             _append(config.run_id, rows, series, dp.months, root)
             if progress:
                 n = lo + len(rows)
