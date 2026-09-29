@@ -2078,7 +2078,22 @@ Steps:
 DoD: tests + gates green.
 **Don't:** auto-commit, auto-certify, or render incubating anywhere but the Lab.
 
-### 18.8 Technical-rule factory (single-stock, research-only)  `[ ]`
+### 18.8 Technical-rule factory (single-stock, research-only)  `[x]`
+
+> **Outcome (2026-09-30):** new `backtest/tech_factory.py` (+ `signals/macd_cross.py`,
+> `signals/bollinger_reversion.py`, both registered in `STRATEGIES`, so the Backtest page gains
+> them too). Fixed per-rule `GRIDS` (sma 8, breakout 9, rsi 8, macd 3, bollinger 4 points); per
+> symbol × rule a rolling walk-forward (fit 3 calendar years → trade the next year flat-start,
+> vectorbt next-bar open + costs; signals are causal, computed once and sliced); per-pair
+> walk-forward vs buy-and-hold, DSR with N = symbols × rules × grid points and V = cross-pair Sharpe
+> variance; per-rule aggregate (% beating buy-and-hold, median excess CAGR, % DSR ≥ 0.95). Cache-only
+> prices; universe = the snapshot's current top-N US by market cap (survivorship-biased, labeled).
+> Every output carries 「研究工具・持有期 < 1 個月，不在認證範圍」. **Smoke run, top 10 US names,
+> 2013 →:** 28 s (~2.8 s/symbol ⇒ ~23 min for 500); **no rule beat buy-and-hold on any of the 10**
+> (median excess CAGR −20% to −27%/yr; 0% DSR passes) — unsurprising against today's mega-cap
+> winners, and recorded only as a smoke test, never as input to a factory config. 6 tests in
+> `tests/test_tech_factory.py` (reversion rules beat B&H on an oscillator; nothing beats a smooth
+> trend; PIT parameter choice; trial count; the two new signals' crossing invariants).
 
 **Goal:** the user's fourth strategy type — daily entry/exit rules — evaluated honestly across a
 universe instead of one hand-picked chart.
