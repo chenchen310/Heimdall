@@ -47,9 +47,10 @@ from heimdall.backtest.overfit import dsr_from_moments, moments, pbo_cscv
 from heimdall.data.store import data_root
 from heimdall.factors.scoring import _zscore
 from heimdall.research import construct, gates, registry
-from heimdall.research.certify import _cagr, _sharpe
+from heimdall.research.benchmark import BENCHMARK
+from heimdall.research.certify import _cagr, _sharpe, traded_fractions
 from heimdall.research.dataset import load_panel
-from heimdall.research.evaluate import WINDOWS
+from heimdall.research.evaluate import WINDOWS, evaluate
 from heimdall.research.spec import (
     OVERLAYS,
     UNIVERSES,
@@ -776,6 +777,271 @@ def cache_engine_backtests(
     return out
 
 
+# --- promotion: the single VAL look → incubating → pre-registration draft (18.7) ------------
+
+
+def val_looks_path(run_id: str, root: Path | None = None) -> Path:
+    """The run's VAL-look record. Its existence closes the run's VAL budget (one look per
+    finalist, once) and unlocks 18.6's post-selection VAL extension."""
+    return run_dir(run_id, root) / "val_looks.json"
+
+
+def g4_view(
+    spec: SignalSpec, panel: pd.DataFrame, benchmark_adj: pd.Series | None
+) -> dict[str, float]:
+    """DEV G4-style numbers (label-based, certify's cost model) for a spec **with its overlay
+    applied** — so an overlay twin can be shown beside its base without a new selection trial.
+    Months where the overlay is in cash earn 0 and pay for both switches."""
+    dates = pd.to_datetime(panel["date"])
+    dev = panel.loc[dates <= pd.Timestamp(DEV_END)].assign(
+        date=dates[dates <= pd.Timestamp(DEV_END)]
+    )
+    sched = construct.book_schedule(spec, dev, benchmark_adj)
+    equal = construct.is_equal_weight(spec)
+    gross: list[float] = []
+    bench: list[float] = []
+    held: list[pd.Series] = []
+    for t, book in sorted(sched.targets.items()):
+        cross = dev[dev["date"] == t].set_index("symbol")
+        rows = cross.loc[[s for s in book.index if s in cross.index]]
+        r = rows["fwd_1m"].to_numpy(dtype=float)
+        ok = np.isfinite(r)
+        if not ok.any():
+            continue
+        if equal:
+            g = float(r[ok].mean())
+        else:
+            g = _weighted(np.asarray(book.reindex(rows.index).to_numpy(), dtype=np.float64), r)
+        bm = (cross["fwd_1m"] - cross["fwd_1m_rel"]).dropna()
+        if not len(bm):
+            continue
+        cash = bool(sched.overlay_cash.get(t, False))
+        gross.append(0.0 if cash else g)
+        held.append(pd.Series(dtype=float) if cash else book)
+        bench.append(float(bm.iloc[0]))
+    net = [
+        g - t * gates.G4_COST_BPS / 1e4 for g, t in zip(gross, traded_fractions(held), strict=True)
+    ]
+    return {
+        "cagr": _cagr(net),
+        "sharpe": _sharpe(net),
+        "bench_cagr": _cagr(bench),
+        "bench_sharpe": _sharpe(bench),
+        "cash_months": float(sum(1 for h in held if h.empty)),
+    }
+
+
+@dataclass
+class PromotionReport:
+    run_id: str
+    n_trials: int
+    pbo: float
+    run_passes_f2: bool
+    looks: list[dict[str, object]]  # one per finalist: VAL report, F4 verdict, promotion, overlays
+    promoted: list[str]  # spec names now `incubating`
+    skipped: list[dict[str, object]]  # finalists refused before any look (duplicate hash, …)
+
+
+def promote(
+    run_id: str,
+    panel: pd.DataFrame,
+    *,
+    finalists: list[int] | None = None,
+    benchmark_adj: pd.Series | None = None,
+    root: Path | None = None,
+) -> PromotionReport:
+    """Spend the run's VAL looks (≤ ``FACTORY_MAX_VAL_FINALISTS``, once) and move F4 passers to
+    ``incubating``. Refuses a second call for the same run. An F2-failing run takes no look and
+    promotes nothing, but still closes its VAL budget (the record is written either way)."""
+    if val_looks_path(run_id, root).exists():
+        raise FileExistsError(f"run {run_id!r} has already spent its VAL looks (§12.2)")
+    cfg = load_config(run_dir(run_id, root) / "config.json")
+    board = leaderboard(run_id, root)
+    table = board.table
+    looks: list[dict[str, object]] = []
+    promoted: list[str] = []
+    skipped: list[dict[str, object]] = []
+    if board.run_passes_f2:
+        if finalists is None:
+            chosen = table[table["candidate"]].head(gates.FACTORY_MAX_VAL_FINALISTS)
+        else:
+            if len(finalists) > gates.FACTORY_MAX_VAL_FINALISTS:
+                raise ValueError(
+                    f"at most {gates.FACTORY_MAX_VAL_FINALISTS} finalists per run (F4)"
+                )
+            chosen = table[table["trial_id"].isin(finalists)]
+            bad = chosen.loc[~chosen["candidate"], "trial_id"].tolist()
+            if bad or len(chosen) != len(set(finalists)):
+                raise ValueError(f"finalists must be leaderboard candidates (F1/F3/F5): {bad}")
+        known = _registry_recipes(root)
+        needs_bench = any(o for o in cfg.overlay_menu)
+        if needs_bench and benchmark_adj is None:
+            raise ValueError("the config's overlay menu needs benchmark_adj for the overlay views")
+        for _, row in chosen.iterrows():
+            spec = SignalSpec.model_validate_json(str(row["spec_json"]))
+            if spec.recipe_hash() in known:
+                skipped.append(
+                    {"trial_id": int(row["trial_id"]), "reason": "recipe already in registry"}
+                )
+                continue
+            rep = evaluate(spec, panel, WINDOWS["val"])  # the single VAL look
+            f4 = bool(
+                rep.selection_alpha_mean > 0
+                and rep.ic_mean > 0
+                and rep.mean_turnover <= gates.FACTORY_VAL_MAX_TURNOVER
+            )
+            overlays = {
+                o: g4_view(spec.model_copy(update={"overlay": o}), panel, benchmark_adj)
+                for o in cfg.overlay_menu
+                if o
+            }
+            if overlays:
+                overlays[""] = g4_view(spec, panel, benchmark_adj)
+            look: dict[str, object] = {
+                "trial_id": int(row["trial_id"]),
+                "spec_name": spec.name,
+                "spec_hash": spec.canonical_hash(),
+                "dsr": float(row["dsr"]),
+                "dev_objective": float(row["objective"]),
+                "val": rep.to_dict(),
+                "f4_pass": f4,
+                "overlay_views_dev": overlays,
+                "promoted": False,
+            }
+            if f4:
+                _write_incubating(spec, run_id, board, row, root)
+                look["promoted"] = True
+                promoted.append(spec.name)
+            looks.append(look)
+    record = {
+        "run_id": run_id,
+        "n_trials": board.n_trials,
+        "pbo": board.pbo,
+        "run_passes_f2": board.run_passes_f2,
+        "looks": looks,
+        "skipped": skipped,
+        "written_at": pd.Timestamp.now(tz="UTC").isoformat(),
+    }
+    path = val_looks_path(run_id, root)
+    path.write_text(json.dumps(record, indent=2, default=str) + "\n")
+    return PromotionReport(
+        run_id, board.n_trials, board.pbo, board.run_passes_f2, looks, promoted, skipped
+    )
+
+
+def _registry_recipes(root: Path | None) -> set[str]:
+    """Recipe hashes of every spec the registry knows (§12.3 no-respin check)."""
+    out: set[str] = set()
+    for e in cast_entries(registry.load_registry(root)["signals"]):
+        p = Path(str(e["spec_path"]))
+        path = p if p.is_absolute() else _signals_root(root) / p
+        try:
+            out.add(SignalSpec.model_validate_json(path.read_text()).recipe_hash())
+        except (OSError, ValueError):
+            continue
+    return out
+
+
+def cast_entries(value: object) -> list[dict[str, object]]:
+    return list(value) if isinstance(value, list) else []
+
+
+def cast_dict(value: object) -> dict[str, object]:
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _write_incubating(
+    spec: SignalSpec, run_id: str, board: Leaderboard, row: pd.Series, root: Path | None
+) -> None:
+    described = spec.model_copy(
+        update={
+            "description": (
+                f"Strategy Factory run {run_id}, trial {int(row['trial_id'])}: N = "
+                f"{board.n_trials} trials, run PBO {board.pbo:.3f}, DSR {float(row['dsr']):.3f}. "
+                "Incubating — uncertified (playbook §12.3)."
+            )
+        }
+    )
+    rel = Path("signals") / "specs" / "factory" / f"{spec.name}.json"
+    out = _signals_root(root) / rel
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(described.model_dump_json(indent=2) + "\n")
+    registry.add(described, str(rel), root=root)
+    registry.transition(spec.name, spec.version, "incubating", root=root)
+
+
+def vault_touches(market: str, root: Path | None = None) -> int:
+    """How many specs of ``market`` have ever been evaluated on the vault (certified or
+    rejected) — the §12.3 disclosure every factory pre-registration carries."""
+    return sum(
+        1
+        for e in cast_entries(registry.load_registry(root)["signals"])
+        if e.get("cert_report")
+        and str(e.get("status")) in {"certified", "rejected", "under_review", "retired"}
+        and _entry_market(e, root) == market
+    )
+
+
+def _entry_market(entry: dict[str, object], root: Path | None) -> str:
+    p = Path(str(entry["spec_path"]))
+    path = p if p.is_absolute() else _signals_root(root) / p
+    try:
+        return str(json.loads(path.read_text())["market"])
+    except (OSError, KeyError, ValueError):
+        return ""
+
+
+def draft_preregistration(run_id: str, spec_name: str, root: Path | None = None) -> str:
+    """The RESEARCH_LOG entry text (playbook §8 + §12.3 disclosures) for one incubating finalist.
+
+    Prints; never commits, never certifies — the user's go/no-go and commit come first (§4).
+    Refuses if the run already has a pre-registered spec (≤ 1 per run).
+    """
+    reg = registry.load_registry(root)
+    entries = cast_entries(reg["signals"])
+    cfg = load_config(run_dir(run_id, root) / "config.json")
+    fam = [e for e in entries if e.get("family") == cfg.family]
+    already = [e for e in fam if e.get("status") in {"registered", "certified", "rejected"}]
+    if len(already) >= gates.FACTORY_MAX_PREREG_PER_RUN:
+        raise ValueError(
+            f"run {run_id!r} already pre-registered {already[0]['name']} (≤ 1 per run)"
+        )
+    entry = next((e for e in fam if e.get("name") == spec_name), None)
+    if entry is None or entry.get("status") != "incubating":
+        raise ValueError(f"{spec_name} is not an incubating finalist of run {run_id!r}")
+    record = json.loads(val_looks_path(run_id, root).read_text())
+    look = next(x for x in record["looks"] if x["spec_name"] == spec_name)
+    trials = load_trials(run_id, root).set_index("trial_id")
+    t = trials.loc[int(look["trial_id"])]
+    val = look["val"]
+    wf = engine_dir(run_id) / "walkforward_top1.json"
+    wf_line = "see " + str(wf) if wf.exists() else "<run `walkforward` first and summarize here>"
+    return "\n".join(
+        [
+            f"## <id> — {cfg.family} / {spec_name} v1   "
+            f"({pd.Timestamp.now():%Y-%m-%d}, model: <who>)",
+            "- Hypothesis: <one falsifiable sentence>",
+            f"- Spec: {entry['spec_path']}   sha256: {entry['spec_hash']}",
+            f"- Factory run: {run_id} (config sha256 {cfg.canonical_hash()}), "
+            f"N = {record['n_trials']} trials, run PBO {record['pbo']:.3f}, this trial's DSR "
+            f"{look['dsr']:.3f}",
+            f"- Construction: {t['structural']}",
+            f"- Dev result (2010–2019): IC {t['ic_mean']:+.4f} (t {t['ic_t']:+.2f}), selection "
+            f"alpha {t['alpha_mean']:+.2%} (NW-t {t['alpha_t']:+.2f}), "
+            f"turnover {t['turnover']:.0%}",
+            f"- Validation result (2020–2022, the single look): IC {val['ic_mean']:+.4f} "
+            f"(t {val['ic_t']:+.2f}), selection alpha {val['selection_alpha_mean']:+.2%} "
+            f"(NW-t {val['selection_alpha_t']:+.2f}), turnover {val['mean_turnover']:.0%}",
+            f"- Walk-forward (18.6, descriptive): {wf_line}",
+            f"- OOS attempt: 1 of 3 (family {cfg.family}; ≤ 1 pre-registration per factory run)",
+            f"- Cumulative {cfg.market} vault touches before this one: "
+            f"{vault_touches(cfg.market, root)}",
+            "- OOS verdict: pending",
+            "- Registry status change: incubating → registered (on certify)",
+        ]
+    )
+
+
 # --- CLI -----------------------------------------------------------------------------
 
 
@@ -789,11 +1055,39 @@ def main(argv: list[str] | None = None) -> int:
     lb = sub.add_parser("leaderboard", help="print a run's leaderboard")
     lb.add_argument("run_id")
     lb.add_argument("--top", type=int, default=20)
+    pr = sub.add_parser("promote", help="spend the run's VAL looks; F4 passers → incubating")
+    pr.add_argument("run_id")
+    pr.add_argument("--finalists", type=int, nargs="*", default=None)
+    dr = sub.add_parser("draft", help="print a pre-registration draft for an incubating finalist")
+    dr.add_argument("run_id")
+    dr.add_argument("spec_name")
     en = sub.add_parser("engine", help="cache DEV daily-engine backtests of the top trials")
     en.add_argument("run_id")
     en.add_argument("--top", type=int, default=10)
     args = p.parse_args(argv)
 
+    if args.cmd == "promote":
+        cfg = load_config(run_dir(args.run_id) / "config.json")
+        bench_adj = None
+        if any(cfg.overlay_menu):
+            from heimdall.backtest.matrix import load_matrices
+
+            bench_adj = load_matrices()["adj_close"][BENCHMARK[cfg.market]].dropna()
+        rep = promote(
+            args.run_id, load_panel(cfg.market), finalists=args.finalists, benchmark_adj=bench_adj
+        )
+        print(f"run {rep.run_id}: N {rep.n_trials}, PBO {rep.pbo:.3f}, F2 {rep.run_passes_f2}")
+        for look in rep.looks:
+            val = cast_dict(look["val"])
+            ic_v = float(str(val["ic_mean"]))
+            alpha_v = float(str(val["selection_alpha_mean"]))
+            verdict = "PASS" if look["f4_pass"] else "fail"
+            print(f"  {look['spec_name']}: VAL IC {ic_v:+.4f}, alpha {alpha_v:+.2%} → F4 {verdict}")
+        print(f"incubating: {rep.promoted or 'none'}  → {val_looks_path(rep.run_id)}")
+        return 0
+    if args.cmd == "draft":
+        print(draft_preregistration(args.run_id, args.spec_name))
+        return 0
     if args.cmd == "engine":
         from heimdall.backtest.matrix import load_matrices
 

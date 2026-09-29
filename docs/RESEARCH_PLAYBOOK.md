@@ -258,8 +258,10 @@ Zhu 2016); F6 bounds the run so its N stays interpretable. Changing any of them 
 
 - Each run is its own family `us-factory-<run_id>` with the standard 3-attempt budget, and **at most
   one finalist per run may be pre-registered** — after a recorded user go/no-go, exactly as §4.
-- A finalist whose canonical hash equals any spec already in the registry is ineligible (no respins
-  through the factory).
+- A finalist whose **recipe hash** equals that of any spec already in the registry is ineligible
+  (no respins through the factory). The recipe hash (`SignalSpec.recipe_hash`) is the canonical
+  payload without `name`/`family`/`version` — the canonical hash would change on a mere rename, so
+  it cannot catch a respin (clarified 2026-09-30 by card 18.7).
 - Every certification report of a factory spec states the run's N, DSR and PBO and the market's
   **cumulative vault-touch count** (US: 2 as of 2026-09-30 — `us-fcf-yield` v1 and v2).
 - **Incubating tier.** F1–F5 pass → registry `draft → incubating` via `research.factory` → monthly

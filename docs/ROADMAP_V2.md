@@ -2034,7 +2034,28 @@ DoD: known answer on a synthetic panel whose planted signal switches mid-sample 
 one year, as expected); the ordering refusal tested; gates green.
 **Don't:** turn it into a gate; don't extend past 2022; don't run the VAL extension before 18.7's looks.
 
-### 18.7 Promotion pipeline: VAL look → `incubating` → pre-registration draft  `[ ]`
+### 18.7 Promotion pipeline: VAL look → `incubating` → pre-registration draft  `[x]`
+
+> **Outcome (2026-09-30):** in `research/factory.py` — `promote` (≤ 5 leaderboard candidates of an
+> F2-passing run get the single VAL look via `evaluate(..., "val")`; F4 = alpha > 0 ∧ IC > 0 ∧
+> turnover ≤ 60%; passers are written to `signals/specs/factory/` with an "uncertified" description
+> and moved `draft → incubating`; the whole record — every look, F4 verdict, skip reason — goes to
+> `val_looks.json`, whose existence closes the run's VAL budget, refuses a second `promote`, and
+> unlocks 18.6's VAL extension; an F2-failing run takes no look but still closes its budget),
+> `g4_view` (DEV G4-style numbers with an overlay applied — the overlay twins are *reported* beside
+> each finalist, never counted as trials), `draft_preregistration` (prints the §8 entry with every
+> §12.3 disclosure: spec + config hashes, N, run PBO, DSR, DEV and VAL numbers, the walk-forward
+> pointer, `≤ 1 per run`, and the market's cumulative vault touches via `vault_touches`; refuses a
+> second pre-registration per run; commits nothing), and `promote` / `draft` CLI verbs. The ledger
+> and monitor gained a **tier namespace** (`signals/ledger/incubating/…`,
+> `signals/monitoring/incubating/…`): `freeze_incubating` (floor = the incubation month) and
+> `monitor_incubating` (the §9 rule, armed only after 12 realized forward cohorts ⇒
+> `incubation_retired`); `monitor`'s CLI runs both tiers and the weekly digest names incubating
+> freezes "uncertified" and never lists their holdings. **Governance defect found and fixed:** the
+> §12.3 no-respin check compared canonical hashes, which include `name`/`family`/`version` — a
+> rename alone would have slipped a vault-tested recipe back through the factory. New
+> `SignalSpec.recipe_hash` (canonical payload without identity fields) now drives the check, and
+> playbook §12.3 says so. 11 tests in `tests/test_research_promote.py`.
 
 **Goal:** turn a run's leaderboard into ≤ 5 VAL looks, forward-tracked incubating strategies, and
 (user-gated) one pre-registration draft.
