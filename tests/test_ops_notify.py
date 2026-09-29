@@ -14,10 +14,12 @@ import pytest
 from heimdall.ops.notify import (
     WEEKLY_CHAIN,
     Event,
+    _default_run,
     _tdcc_staleness_event,
     channels_from_env,
     dispatch,
     format_digest,
+    main,
     run_weekly,
 )
 
@@ -140,6 +142,62 @@ def test_run_weekly_reports_failed_tdcc_step_but_continues(
     errs = [e for e in events if e.level == "error"]
     assert len(errs) == 1 and "tdcc_cache" in errs[0].title
     assert any("Froze cohort" in e.title for e in events)  # post-chain work still ran
+
+
+def test_default_run_needs_no_path_lookup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Regression (2026-07-20 → 09-28): launchd's PATH lacks ~/.local/bin, so a bare
+    # ``uv`` child raised FileNotFoundError on every scheduled run. With a PATH that
+    # holds nothing, a step must still launch — on this interpreter, seeing heimdall.
+    monkeypatch.setenv("PATH", str(tmp_path))
+    code, out = _default_run(["heimdall.ops.notify", "--help"])
+    assert code == 0, out
+    assert "run-weekly" in out
+
+
+def test_run_weekly_survives_a_runner_that_cannot_launch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The 2026-07 → 09 failure mode: the runner *raised* instead of returning a code,
+    # which crashed run_weekly before the in-process freeze and before any digest.
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    frozen = [tmp_path / "signals" / "ledger" / "tw-rev_v1" / "2024-03.json"]
+    monkeypatch.setattr("heimdall.research.ledger.freeze_all", lambda **k: frozen)
+    seen: list[list[str]] = []
+
+    def unlaunchable(step: list[str]) -> tuple[int, str]:
+        seen.append(step)
+        raise FileNotFoundError(2, "No such file or directory", "uv")
+
+    events = run_weekly(today=date(2024, 3, 4), root=tmp_path, env={}, run=unlaunchable)
+    assert seen == WEEKLY_CHAIN  # every step still attempted
+    step_errs = [e for e in events if e.title.startswith("Job step failed")]
+    assert len(step_errs) == len(WEEKLY_CHAIN)
+    assert all("FileNotFoundError" in e.detail and "'uv'" in e.detail for e in step_errs)
+    assert any(e.level == "error" and "chain is dead" in e.title for e in events)
+    assert any("Froze cohort" in e.title for e in events)  # the freeze needs no subprocess
+    assert format_digest(events).strip().endswith("Needs attention.")
+
+
+def test_main_exits_nonzero_and_shouts_on_stderr_in_dry_run(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **k: False)  # never read a real .env
+    monkeypatch.setattr("heimdall.ops.notify.channels_from_env", lambda env: [])  # dry run
+    monkeypatch.setattr(
+        "heimdall.ops.notify.run_weekly",
+        lambda: [Event("error", "Job step failed: heimdall.screener.build", "boom")],
+    )
+    assert main([]) == 1
+    captured = capsys.readouterr()
+    assert "Job step failed: heimdall.screener.build" in captured.out  # the digest itself
+    assert "DRY RUN" in captured.err and "heimdall.screener.build" in captured.err
+
+    monkeypatch.setattr(
+        "heimdall.ops.notify.run_weekly",
+        lambda: [Event("info", "Weekly refresh completed cleanly.")],
+    )
+    assert main([]) == 0
+    assert capsys.readouterr().err == ""  # a clean run stays quiet on stderr
 
 
 def _tdcc_history(dates: list[date]) -> pd.DataFrame:
