@@ -37,6 +37,43 @@ Nothing else may be presented as a probability. (Metric redefined 2026-07-08 —
 ROADMAP 12.5 — after the old individual-pick beat rate proved biased below 50% by
 cap-weight-benchmark concentration; see the playbook §5 rationale.)
 
+## Program amendment — US Strategy Factory (user decisions, 2026-09-30)
+
+The user restated the goal as: *「把它打造成一個專業的量化交易選股平台，能夠自動制定交易策略，並有回測數據。（先做在美股上）」*
+— a professional quant stock-selection platform that **formulates strategies automatically** and
+shows **backtest evidence**, US first. This **extends** the goal above; it does not replace it.
+
+**Why the amendment was needed (state of play on 2026-09-30).** Across RESEARCH_LOG 001–018, 8 US
+families and ~30 development evaluations produced **zero** certified US signals (two vault touches,
+both `us-fcf-yield`, both rejected). Every candidate was hand-written by a session, 1–8 per session,
+in one narrow shape (linear composite → EW top-20 → monthly → full VTI universe). The platform itself
+could not search, and its backtests were split across three partial tools. The recurring finding —
+real ranking IC without selection skill above the equal-weight universe — is a property of that
+narrow shape as much as of the features.
+
+**Decisions (AskUserQuestion answers, recorded verbatim):**
+
+| Question | Answer | Meaning |
+| --- | --- | --- |
+| Which strategies may reach a picking screen? | 「雙層制 (Recommended)」 | **Certified** tier = unchanged (vault gates → Today's Picks). New **incubating** tier = factory finalists that pass the playbook §12 over-fitting gates are forward-paper-tracked and shown **only** on the Strategy Lab page, labeled 「未認證・孵化中」. Never on Today's Picks. |
+| Data budget | 「免費優先＋付費評估並行 (Recommended)」 | Build the factory on free data; the 12.3 paid-data memo is **now scheduled** (ROADMAP 18.11). No spend without a separate user decision. |
+| Strategy types the factory generates | 「多因子選股, 大盤擇時濾網, 投組建構變化, 個股技術進出場」 | Multi-factor selection; a market-regime overlay; construction variants (weighting, sector cap, rank buffer); single-stock technical entry/exit rules — the last is **research-only** (the < 1-month horizon non-goal below stands, so technical rules are never tiered). |
+| Universe | 「大型股＋全市場都搜 (Recommended)」 | Universe becomes a search dimension: `us_large` (point-in-time top 500 eligible names by market cap) and `us_all` (today's eligible VTI set). |
+
+**What changes:** candidate generation moves from sessions to the platform (systematic search over
+a pre-declared, hash-committed space, **every trial counted**, multiple-testing-corrected); a
+professional daily backtest engine becomes the single place any strategy's evidence is shown;
+**US-only focus** — Taiwan work is paused (the certified `tw-revenue-momentum v1` keeps its
+monitoring and ledger; no new TW cards unless the user asks).
+
+**What does not change:** G1–G6 and their numbers; the 2023+ vault and its pre-registration
+discipline; 3 OOS attempts per family; no LLM anywhere in a tiered computation; the 6-month
+benchmark-relative definition; monthly rebalance holding 10–20; the `current_universe (optimistic)`
+stamp on every number.
+
+Execution: `docs/ROADMAP_V2.md` **Phase 18**. Process rules for automated search:
+`docs/RESEARCH_PLAYBOOK.md` §12 (written by card 18.0).
+
 ## Non-goals / hard boundaries
 
 - **No LLM in the loop.** The `personas/` reports stay optional commentary; no certified number may
@@ -49,6 +86,12 @@ cap-weight-benchmark concentration; see the playbook §5 rationale.)
   certified claim is "falls less than the index", and the UI must say so.
 - **No black-box weight optimizers** until the plain-weights institution has produced at least two
   certified-or-rejected families. Hand-set weights, ≤ 4 free parameters per signal.
+  *Amended 2026-09-30:* the precondition is met (`us-value-quality` rejected twice,
+  `tw-revenue-momentum` certified). The Strategy Factory may run **systematic grid/random search
+  over pre-declared menus** — feature directions fixed a priori (never searched), equal or
+  menu-listed weights, ≤ 4 free parameters per strategy — under playbook §12's trial counting and
+  over-fitting gates. Continuous weight optimizers and ML models (e.g. gradient-boosted rankers)
+  still require a further amendment.
 
 ## Gap analysis — current state vs the goal
 
@@ -105,7 +148,7 @@ computations into standards. Status as of 2026-07-03 (Phases 0–6 delivered, se
 | `docs/NORTH_STAR.md` | This file — goal, definitions, gaps. Update only when the goal itself changes. |
 | `docs/RESEARCH_PLAYBOOK.md` | The process: signal lifecycle, splits, gates (numbers + code), checklists, anti-patterns. |
 | `docs/RESEARCH_LOG.md` | Append-only experiment registry. Every OOS touch is logged **before** it happens. |
-| `docs/ROADMAP_V2.md` | Executable task cards (one PR each), Phases 7–17. |
+| `docs/ROADMAP_V2.md` | Executable task cards (one PR each), Phases 7–18 (Phase 18 = US Strategy Factory, current). |
 | `.claude/rules/signal-certification.md` | The short hard law binding every session. |
 | `signals/registry.json` | (Phase 8.1) machine-readable signal statuses; Today's Picks reads only `certified`. |
 | `signals/certifications/` | (Phase 8.2) immutable certification reports, committed to git as evidence. |
