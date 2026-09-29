@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import os
 import subprocess
+import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
@@ -138,10 +139,16 @@ def _send_telegram(body: str, env: Mapping[str, str]) -> None:  # pragma: no cov
         raise RuntimeError(f"telegram {resp.status_code}: {resp.text[:200]}")
 
 
-def _default_run(step: list[str]) -> tuple[int, str]:  # pragma: no cover - subprocess
-    """Run one resumable CLI as ``uv run python -m <step>``; return (code, combined output)."""
+def _default_run(step: list[str]) -> tuple[int, str]:
+    """Run one resumable CLI as ``<this interpreter> -m <step>``; return (code, combined output).
+
+    Never a PATH lookup: launchd starts jobs with a minimal PATH (no ``~/.local/bin``),
+    so a bare ``uv`` child failed every scheduled run from 2026-07-20 to 2026-09-28.
+    The job already runs inside the uv-managed venv (the plist invokes ``uv run``), so
+    ``sys.executable`` is that venv's interpreter and each step sees the same packages
+    — the same pattern as ``ui/build_page.py``'s background build."""
     proc = subprocess.run(
-        ["uv", "run", "python", "-m", *step],
+        [sys.executable, "-m", *step],
         capture_output=True,
         text=True,
         check=False,
@@ -221,10 +228,13 @@ def run_weekly(
     """Chain the resumable CLIs, freeze this month's cohorts, and return the events.
 
     The heavy steps run via ``run`` (injectable — a subprocess by default); a
-    non-zero exit becomes an ``error`` event but never aborts the run (later steps
-    and the freeze still attempt). Drift flips are detected by comparing certified
-    status before/after the monitor step; freezes come from the in-process
-    idempotent :func:`heimdall.research.ledger.freeze_all`.
+    non-zero exit **or a runner that raises** (the step could not even launch)
+    becomes an ``error`` event but never aborts the run (later steps, the freeze
+    and the digest still happen). If *every* step fails, one extra ``error`` calls
+    the chain dead — that pattern is the job environment, not the data. Drift flips
+    are detected by comparing certified status before/after the monitor step;
+    freezes come from the in-process idempotent
+    :func:`heimdall.research.ledger.freeze_all`.
     """
     run = run or _default_run
     env = env if env is not None else os.environ
@@ -232,10 +242,24 @@ def run_weekly(
     events: list[Event] = []
 
     before = _certified_status(root)
+    failed = 0
     for step in WEEKLY_CHAIN:
-        code, out = run(step)
+        try:
+            code, out = run(step)
+        except Exception as exc:  # noqa: BLE001 — a step that cannot launch is a failed step
+            code, out = -1, f"{type(exc).__name__}: {exc}"
         if code != 0:
+            failed += 1
             events.append(Event("error", f"Job step failed: {_label(step)}", _tail(out)))
+    if failed == len(WEEKLY_CHAIN):
+        events.append(
+            Event(
+                "error",
+                f"Weekly chain is dead: all {failed} steps failed",
+                "Every step failing at once points at the job environment "
+                "(interpreter, PATH, working directory), not the data.",
+            )
+        )
 
     # Drift: a signal that was certified and is now under_review flipped this run.
     after = _certified_status(root)
@@ -278,10 +302,20 @@ def main(argv: list[str] | None = None) -> int:
         help="chain the resumable CLIs, freeze cohorts, and send one digest",
     )
     p.parse_args(argv)
-    result = dispatch(run_weekly())
+    events = run_weekly()
+    result = dispatch(events)
     if not result.dry_run:
         print(f"notify: delivered on {', '.join(result.channels)}")
-    return 0
+    errors = [e for e in events if e.level == "error"]
+    if not errors:
+        return 0
+    # Loud even as a dry run: stderr lands in data/logs/weekly.err.log and the exit
+    # code is the job's last status in `launchctl list` — a dead chain cannot hide.
+    where = "DRY RUN — nobody was notified" if result.dry_run else "digest delivered"
+    print(f"notify: {len(errors)} error(s) this run ({where}):", file=sys.stderr)
+    for e in errors:
+        print(f"  ❌ {e.title}", file=sys.stderr)
+    return 1
 
 
 if __name__ == "__main__":
