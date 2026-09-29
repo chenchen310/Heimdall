@@ -125,6 +125,11 @@ draft ──(pre-register: log entry + committed hash)──► registered
 registered ──(certify CLI, all gates pass)──► certified ──► shown on Today's Picks
 registered ──(any gate fails)──► rejected  (log the numbers honestly)
 certified ──(drift alarm §9 or data break)──► under_review ──► retired | re-certified as new version
+
+Strategy Factory path (§12):
+draft ──(factory promote: F1–F5 pass)──► incubating ──► shown on the Strategy Lab only
+incubating ──(user go/no-go + committed log entry, certify CLI)──► registered ──► certified | rejected
+incubating ──(§9 drift rule, once ≥ 12 forward cohorts are realized)──► incubation_retired
 ```
 
 Registry statuses live in `signals/registry.json`; transitions happen **only** through
@@ -187,6 +192,13 @@ still tracked and displayed, but the auto-flip guards the certified edge, not th
 - **Uncertified display** — any ranking on Today's Picks not backed by a `certified` registry row.
 - **Survivorship amnesia** — reporting certified numbers without the `current_universe` stamp.
 - **Silent universe drift** — changing hygiene constants (§3) without re-certifying.
+- **Config-shopping** — declaring a factory search run (§12) whose feature pool or menus were chosen
+  after looking at a prior run's VAL numbers, any 2023+ data, or the technical-rule factory's
+  results. A new run's pool is justified from DEV evidence or the literature only.
+- **Trial amnesia** — showing any factory leaderboard row or number without its run's trial count
+  N, DSR and PBO.
+- **Tier leakage** — an `incubating` strategy's holdings rendered anywhere a certified list is
+  expected (Today's Picks, rebalance defaults, a notification's picks section).
 
 ## 11. Working agreement for future (smaller-model) sessions
 
@@ -198,3 +210,76 @@ still tracked and displayed, but the auto-flip guards the certified edge, not th
    first; never invent under time pressure.
 5. When numbers disagree with expectations, report them as they are. The institution's only asset
    is that its numbers mean something.
+
+## 12. Automated search — the Strategy Factory (added 2026-09-30, RESEARCH_LOG 019)
+
+The factory (ROADMAP_V2 Phase 18) lets the platform generate candidates itself instead of a session
+hand-writing 1–8 per card. Searching thousands of candidates makes the best in-sample result look
+good by luck alone, so every factory number is **deflated by how many were tried**. The rules below
+bind the factory code and every session that runs it; §4–§6 still hold unchanged — the factory adds
+a tier *below* certification, it never replaces the vault.
+
+### 12.1 Factory gates (mirror of `research/gates.py` `FACTORY_*`; test-enforced to stay in sync)
+
+A candidate enters the `incubating` tier only if its run passes F2, it passes F1, F3 and F5 on DEV,
+and it then passes F4 on its single VAL look. User-confirmed 2026-09-30.
+
+| # | Factory gate (DEV unless stated) | Threshold |
+| --- | --- | --- |
+| F1 | Deflated Sharpe Ratio of the candidate's monthly **net selection-alpha** series (EW book net of costs − EW tier universe, `fwd_1m_rel` basis), deflated by the run's trial count N and the cross-trial Sharpe variance | DSR ≥ **0.95** |
+| F2 | Run-level Probability of Backtest Overfitting (CSCV, S = **16** blocks of DEV months) | PBO ≤ **0.30**, else **no** candidate of the run is promoted |
+| F3 | G3 selection alpha (6m, certify math) NW-t — the Harvey–Liu–Zhu hurdle for mined signals — plus G1 IC t | alpha NW-t ≥ **3.0** and IC t ≥ **2.0** |
+| F4 | VAL single look (≤ **5** finalists per run) | selection alpha > 0 **and** mean IC > 0; turnover ≤ **60%** |
+| F5 | Free parameters (G5 counting; structural menu picks don't count but are disclosed) | ≤ **4** |
+| F6 | Trials per run | N ≤ **5,000** |
+
+Why these numbers: F1 and F2 are the standard corrections for selection among many backtests
+(Bailey & López de Prado 2014; Bailey, Borwein, López de Prado & Zhu 2017); F3 raises the hand-made
+t ≥ 2 bar to t ≥ 3 because a mined candidate has already been selected for a high t (Harvey, Liu &
+Zhu 2016); F6 bounds the run so its N stays interpretable. Changing any of them follows §4 rule 4
+(its own PR, playbook + `gates.py` in one commit, every incubating strategy re-evaluated).
+
+### 12.2 Declaring and running a search
+
+1. A **search run** is declared by `signals/search/<run_id>/config.json`. Its canonical hash goes into
+   a committed RESEARCH_LOG "search declared" entry **before** the run; the factory refuses to run
+   otherwise.
+2. The config fixes the whole space: the feature pool with **a-priori directions** (from the
+   `research/dataset.py` feature table, the `_technicals` comments, or cited literature — never
+   inferred from data; directions are never searched), the weight menu, the construction menus,
+   the universes, the stages, and the seed. Nothing is added mid-run; a changed config is a new run.
+3. **Every** evaluated candidate is a **trial**, appended to `signals/search/<run_id>/trials.parquet`
+   (append-only: trial id, spec hash, DEV metrics, and the monthly series F1/F2 need). N = its row
+   count. N, DSR and PBO travel with every number the run shows (see *trial amnesia*, §10).
+4. Search reads **DEV rows only**. VAL is one look per finalist (≤ 5 per run, F4). The OOS vault
+   stays `certify`'s alone (§4).
+
+### 12.3 Families, the vault, and the incubating tier
+
+- Each run is its own family `us-factory-<run_id>` with the standard 3-attempt budget, and **at most
+  one finalist per run may be pre-registered** — after a recorded user go/no-go, exactly as §4.
+- A finalist whose canonical hash equals any spec already in the registry is ineligible (no respins
+  through the factory).
+- Every certification report of a factory spec states the run's N, DSR and PBO and the market's
+  **cumulative vault-touch count** (US: 2 as of 2026-09-30 — `us-fcf-yield` v1 and v2).
+- **Incubating tier.** F1–F5 pass → registry `draft → incubating` via `research.factory` → monthly
+  ledger freezes (the 16.1 machinery, append-only, no backfill) → rendered **only** on the Strategy
+  Lab, labeled 「未認證・孵化中」, with its run's N/DSR/PBO. It never feeds Today's Picks, rebalance
+  defaults, or a notification's picks section (*tier leakage*, §10).
+- **Demotion.** Once ≥ **12** forward cohorts are realized, the §9 drift rule applies: trailing-12
+  NW 95% CI upper bound of the selection alpha < 0 → `incubation_retired` (terminal).
+- **Promotion to certified** only through the unchanged path: user go/no-go → committed log entry →
+  `certify` (G1–G6 on the vault) → `certified` | `rejected`.
+
+### 12.4 Overlay (market-timing) strategies
+
+A regime overlay (e.g. cash when the benchmark is below its 200-day SMA) is a book-level switch.
+The **selection** gates — G1–G3, G5, G6 and F1–F4 — score the **un-overlaid** book, so timing
+cannot masquerade as stock-picking; G4 and every displayed equity curve use the **overlaid** book.
+
+### 12.5 Single-stock technical rules
+
+Daily entry/exit rules (the technical-rule factory, ROADMAP 18.8) are **research-only**: their
+horizon is under the NORTH_STAR one-month floor, so they are never tiered, never registered, and
+never read the research panel. They still report their trial count and DSR, and their results may
+not inform any factory config (*config-shopping*, §10).

@@ -9,10 +9,14 @@ graph of ``docs/RESEARCH_PLAYBOOK.md`` §6:
 
     draft → registered → certified | rejected
     certified → under_review → retired
+    draft → incubating → registered | incubation_retired     (Strategy Factory, §12)
 
-``rejected`` and ``retired`` are terminal — resurrection is a **new version**
-with its own pre-registration, never an edit. Today's Picks (9.x) may read
-only entries whose status is ``certified``.
+``rejected``, ``retired`` and ``incubation_retired`` are terminal — resurrection
+is a **new version** with its own pre-registration, never an edit. Today's Picks
+(9.x) may read only entries whose status is ``certified``; ``incubating``
+entries (factory finalists that passed the §12 gates) are rendered only on the
+Strategy Lab. ``draft → incubating`` is the factory's promotion path
+(``research.factory``, roadmap 18.7) — no other caller may use it.
 """
 
 from __future__ import annotations
@@ -29,16 +33,29 @@ from heimdall.research.spec import SignalSpec
 MAX_OOS_ATTEMPTS_PER_FAMILY: int = 3
 
 STATUSES: frozenset[str] = frozenset(
-    {"draft", "registered", "certified", "rejected", "under_review", "retired"}
+    {
+        "draft",
+        "registered",
+        "certified",
+        "rejected",
+        "under_review",
+        "retired",
+        "incubating",
+        "incubation_retired",
+    }
 )
 
 _LEGAL: dict[str, frozenset[str]] = {
-    "draft": frozenset({"registered"}),
+    "draft": frozenset({"registered", "incubating"}),
     "registered": frozenset({"certified", "rejected"}),
     "certified": frozenset({"under_review"}),
     "under_review": frozenset({"retired"}),
+    # A factory finalist forward-tracked on the Strategy Lab: either pre-registered for the vault
+    # (user go/no-go, ≤ 1 per run) or demoted by the §9 drift rule.
+    "incubating": frozenset({"registered", "incubation_retired"}),
     "rejected": frozenset(),  # terminal
     "retired": frozenset(),  # terminal
+    "incubation_retired": frozenset(),  # terminal
 }
 
 
