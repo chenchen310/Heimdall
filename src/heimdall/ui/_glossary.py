@@ -541,6 +541,31 @@ _ENTRIES: dict[str, dict[str, str]] = {
         "en": "Return above an equal-weight eligible book — the certified edge (gate G3).",
         "zh": "相對「等權重合格股票池」多賺的報酬——這才是被認證的選股邊際（G3 關卡）。",
     },
+    # --- Strategy Lab (the factory's over-fitting evidence, playbook §12) ---
+    "trial_count": {
+        "category": "certification",
+        "direction": "neutral",
+        "en": "How many strategies this search tried. More tries raise the bar for luck.",
+        "zh": "這次搜尋試了幾種策略。試得越多，靠運氣跑出好成績的門檻就越高。",
+    },
+    "dsr": {
+        "category": "certification",
+        "direction": "higher",
+        "en": "Deflated Sharpe: chance the edge is real after counting every trial. ≥ 0.95 = F1.",
+        "zh": "折減夏普：把試過的所有策略都算進去後，這個優勢是真的機率。≥ 0.95 才過 F1。",
+    },
+    "pbo": {
+        "category": "certification",
+        "direction": "lower",
+        "en": "Backtest-overfit probability: how often the in-sample winner flops out of sample.",
+        "zh": "回測過擬合機率：樣本內的第一名，在樣本外跌到中位數以下的機率。≤ 0.30 才過 F2。",
+    },
+    "ir": {
+        "category": "certification",
+        "direction": "higher",
+        "en": "Information ratio: yearly excess return over its volatility, net of costs.",
+        "zh": "資訊比率：扣成本後的年化超額報酬，除以超額報酬的波動。",
+    },
     "oos_cohorts": {
         "category": "certification",
         "direction": "higher",
