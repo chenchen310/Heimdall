@@ -577,6 +577,109 @@ _ZH: dict[str, str] = {
     ),
     "buy": "買進",
     "sell": "賣出",
+    "Strategy Lab": "策略實驗室",
+    "🧪 Strategy Lab": "🧪 策略實驗室",
+    "trials": "個試驗",
+    "Research results — uncertified.": "研究結果・未認證。",
+    (
+        "The Strategy Factory searches, backtests and ranks strategies by itself. Nothing"
+        " here is a recommendation: only certified signals appear on Today's Picks."
+    ): (
+        "策略工廠會自動搜尋、回測、排名策略。這裡的內容都不是建議：只有通過認證"
+        "的訊號才會出現在「今日候選」。"
+    ),
+    "Search runs": "搜尋批次",
+    "Leaderboard": "排行榜",
+    "Strategy detail": "策略詳情",
+    "Walk-forward": "走動式驗證",
+    "Incubating": "孵化中",
+    "Technical research": "技術策略研究",
+    "Factory run": "工廠批次",
+    (
+        "No search run yet. Declare one first: write signals/search/<run_id>/config.json,"
+        " commit its hash in a RESEARCH_LOG entry (playbook §12.2), then start it here."
+    ): (
+        "還沒有搜尋批次。請先宣告：寫好 signals/search/<run_id>/config.json，把"
+        "它的雜湊值 commit 到 RESEARCH_LOG（playbook §12.2），再從這裡啟動。"
+    ),
+    "Run": "批次",
+    "Trials": "試驗數",
+    "VAL looks spent": "已用掉驗證期檢視",
+    "Running: ": "執行中：",
+    "Refresh status": "更新狀態",
+    "Start a background job": "啟動背景工作",
+    "Job": "工作",
+    "Run the declared search (DEV only)": "執行已宣告的搜尋（只用 DEV 期）",
+    "Cache daily-engine backtests of the top 10": "替前 10 名建立每日引擎回測",
+    "Walk-forward meta-backtest (top 1)": "走動式驗證（第 1 名）",
+    "RESEARCH_LOG entry id (search only)": "RESEARCH_LOG 條目編號（僅搜尋需要）",
+    "Start": "開始",
+    "A search needs its declared RESEARCH_LOG entry id.": (
+        "執行搜尋需要填入它的 RESEARCH_LOG 宣告條目編號。"
+    ),
+    "No trials yet for this run.": "這個批次還沒有試驗結果。",
+    "Trials (N)": "試驗數（N）",
+    "passes F2": "通過 F2",
+    "fails F2": "未過 F2",
+    "Candidates": "候選策略",
+    "Candidates only (F1 + F2 + F3 + F5)": "只顯示候選策略（F1 + F2 + F3 + F5）",
+    "DEV IR vs EW universe": "DEV 資訊比率（相對等權池）",
+    "Selection alpha (6m)": "選股 alpha（6 個月）",
+    "Turnover": "換手率",
+    (
+        "DEV 2010–2019 only. DSR is deflated by this run's N; PBO is the run's "
+        "probability of backtest overfitting. A candidate still needs its single VAL look"
+        " (F4) to incubate."
+    ): (
+        "只含 DEV 2010–2019。DSR 已依本批次試驗數 N 折減；PBO 是本批次的回測過"
+        "擬合機率。候選策略還要通過一次驗證期檢視（F4）才能進入孵化。"
+    ),
+    "No cached engine backtest yet — run the 'engine' job for this run.": (
+        "還沒有每日引擎回測——請對這個批次執行「engine」工作。"
+    ),
+    "Trial": "試驗",
+    "Max drawdown": "最大回撤",
+    "IR vs EW universe": "資訊比率（相對等權池）",
+    "Beta": "Beta",
+    "Drawdown": "回撤",
+    "Yearly returns": "年度報酬",
+    "Sector exposure over time": "產業曝險變化",
+    "Last DEV book (historical, not today's)": "DEV 期最後一期持股（歷史資料，不是今天的持股）",
+    "Trades": "交易明細",
+    (
+        "Daily engine: fills at the next open, 20 bps per side, drift between fills. DEV "
+        "window only; an optimistic upper bound (current-universe survivorship)."
+    ): (
+        "每日引擎：隔日開盤成交、單邊 20 bps 成本、兩次調倉之間持股自然漂移。只"
+        "含 DEV 期；屬樂觀上限（股票池為現存股票，有存活者偏差）。"
+    ),
+    "Mode": "模式",
+    "No walk-forward yet — run the 'walkforward' job for this run.": (
+        "還沒有走動式驗證——請對這個批次執行「walkforward」工作。"
+    ),
+    "EW universe CAGR": "等權池年化報酬",
+    (
+        "Backtests the factory's own selection procedure: each year re-selects using only"
+        " data knowable at the prior year-end. Descriptive, never a gate."
+    ): (
+        "回測工廠「挑策略的流程」本身：每年只用前一年底已知的資料重新挑選。僅供參考，不是認證門檻。"
+    ),
+    (
+        "Incubating = passed the factory's over-fitting gates and one VAL look; forward-"
+        "tracked, not certified."
+    ): ("孵化中＝已通過工廠的過擬合門檻和一次驗證期檢視；正在做前向追蹤，尚未認證。"),
+    "No incubating strategy yet.": "目前沒有孵化中的策略。",
+    "未認證・孵化中": "未認證・孵化中",
+    "since": "起始",
+    "Frozen forward cohorts": "已凍結的前向期數",
+    "Forward skill (trailing)": "前向選股能力（近期）",
+    "Latest frozen cohort": "最新凍結的一期",
+    "uncertified": "未認證",
+    "never tiered, never a pick.": "永遠不進任何分層，也不是選股建議。",
+    "No technical-factory run yet: `uv run python -m heimdall.backtest.tech_factory`.": (
+        "還沒有技術策略工廠的結果：`uv run python -m heimdall.backtest.tech_factory`。"
+    ),
+    "Per symbol × rule": "每檔 × 每種規則",
 }
 
 

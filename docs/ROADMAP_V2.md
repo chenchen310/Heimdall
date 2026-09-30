@@ -2112,7 +2112,24 @@ DoD: known answer on a synthetic trending / mean-reverting pair; gates green.
 **Don't:** touch the registry, tiers, ledgers, or research panel; don't let its results inform any
 factory config (config-shopping).
 
-### 18.9 Strategy Lab page (`ui/lab_page.py`)  `[ ]`
+### 18.9 Strategy Lab page (`ui/lab_page.py`)  `[x]`
+
+> **Outcome (2026-09-30):** new `ui/lab_page.py` (sidebar "Stock picking" → "Strategy Lab" /
+> 策略實驗室) over a new pure data module `research/lab.py` (runs, leaderboard, cached engine
+> evidence, walk-forward summary/curve, the incubating tier with its own ledger/monitoring
+> namespaces, technical-factory results — read-only, never the certified tier's holdings). Six tabs:
+> 搜尋批次 (runs + background `search` / `engine` / `walkforward` jobs, the build-page Popen pattern;
+> a search refuses to start without its RESEARCH_LOG entry id) · 排行榜 (N, PBO + F2 badge,
+> candidates toggle, DSR / IR columns) · 策略詳情 (engine stats, equity vs SPY and the EW universe,
+> drawdown, yearly table, sector exposure, the **last DEV book — historical, never today's**,
+> trades) · 走動式驗證 · 孵化中 (「未認證・孵化中」, forward cohorts, trailing skill) · 技術策略研究
+> (「研究工具・持有期 < 1 個月，不在認證範圍」). A permanent banner on every tab: research results,
+> uncertified, the run's N, the survivorship stamp. `factory.cache_engine_backtests` now also saves
+> each trial's holdings / trades / sector weights for the detail view. Glossary: `trial_count`,
+> `dsr`, `pbo`, `ir`; ~50 zh strings. 3 AppTest smokes in `tests/test_ui_lab.py` (empty state + 6
+> banners; a fixture run showing N, PBO, CAGR; an incubating strategy labeled in the Lab and absent
+> from Today's Picks); a zh-language AppTest render was also checked by hand (no exception, 6
+> banners).
 
 **Goal:** where the user sees what the factory made.
 **Files:** new `src/heimdall/ui/lab_page.py`, `ui/app.py` (nav "Stock picking" → "Strategy Lab"),

@@ -771,8 +771,16 @@ def cache_engine_backtests(
     for _, row in board.table.head(top_k).iterrows():
         spec = SignalSpec.model_validate_json(str(row["spec_json"]))
         result, _ = backtest_spec(spec, dev, matrices, end=pd.Timestamp(DEV_END))
-        path = engine_dir(run_id, data) / f"engine_t{int(row['trial_id']):05d}.parquet"
+        stem = engine_dir(run_id, data) / f"engine_t{int(row['trial_id']):05d}"
+        path = stem.with_suffix(".parquet")
         _atomic_parquet(result.returns, path)
+        # The Lab's detail view also needs the historical books (DEV only — never today's).
+        _atomic_parquet(result.holdings, stem.parent / f"{stem.name}_holdings.parquet")
+        _atomic_parquet(result.trades, stem.parent / f"{stem.name}_trades.parquet")
+        if result.sector_weights is not None:
+            sw = result.sector_weights.copy()
+            sw.columns = [str(c) for c in sw.columns]
+            _atomic_parquet(sw, stem.parent / f"{stem.name}_sectors.parquet")
         out.append(path)
     return out
 
