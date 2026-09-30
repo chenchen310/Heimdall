@@ -2292,6 +2292,29 @@ entry 015 to ~2 dp), new-column coverage table, RESEARCH_LOG entry. If any US st
 `incubating`, recompute its realized track record on v3 and disclose any change.
 **Don't:** start before 18.12 (and 18.13 if its crawl has finished) — a slipped card forces a v4.
 
+### 18.16 Live-snapshot parity for the panel-only US features (precondition of 18.15)  `[x]`
+
+> **Outcome (2026-09-30, user request 「先把研究特徵移進即時快照」):** the 13.x/17.x US feature
+> functions — PEAD (`sue`, `earn_gap`), issuance/quality (`net_issuance_12m`, `asset_growth`,
+> `gross_profitability`), acceleration (`rev_accel_q`, `gross_margin_delta_q`), `accruals`, and
+> Form 4 insider — moved **verbatim** from `research/dataset.py` into `factors/us_features.py`
+> (one home; `screener` may not import `research`), with a combined `us_fundamental_features` that
+> the panel builder now calls too. `dataset.py` re-exports the old private names, so every
+> existing test and the panel math are unchanged. The snapshot builder gained opt-in
+> `quarterly_fundamentals` / `insider` / `insider_coverage_end` streams (US rows computed, other
+> regions NaN); `live_us_streams()` wires them for the build CLI and the Build page. **Found and
+> fixed while wiring:** the EDGAR provider cached `companyfacts` forever (most files dated
+> 2026-06-26/28), so the live snapshot had silently stopped seeing new 10-Qs/10-Ks. New
+> `SecEdgarProvider(max_age_days=)` re-fetches a stale file atomically (falls back to the stale
+> copy offline) and memoizes one parse for the annual + quarterly reads; the live snapshot passes
+> 7 days via `router.fundamentals_provider(edgar_max_age_days=)`, research builds keep `None` so
+> their inputs never move mid-build. **Real-data smoke (5 names, 2026-09-29):** every ported
+> feature populated (e.g. AAPL `sue` +2.99, NVDA `rev_accel_q` +0.37); MSFT's July 10-K now
+> visible. **Insider stays NaN live** — the bulk Form 4 data sets end 2026-06-30, so a live 90-day
+> window is never fully covered; insider features are therefore not live-usable until a
+> recent-filings source exists (18.B). Glossary labels/entries for all ten fields. 5 tests in
+> `tests/test_live_parity.py`, incl. **panel row == snapshot row for the same symbol and date**.
+
 ### 18.15 Factory run #1 (research; user-gated vault)  `[ ]`
 
 **Goal:** the first platform-generated US strategy search, on `panel_us` v2 (don't wait for
@@ -2299,8 +2322,9 @@ entry 015 to ~2 dp), new-column coverage table, RESEARCH_LOG entry. If any US st
 
 Steps:
 0. **Precondition (found in 18.12):** every pool feature must also exist in the live snapshot, or
-   an incubated strategy cannot be frozen monthly — port the panel-only features first or exclude
-   them from the pool.
+   an incubated strategy cannot be frozen monthly. **Satisfied by 18.16** for every ported feature
+   except insider (NaN live past the bulk Form 4 coverage) — exclude the two insider features from
+   the pool until a recent-filings source exists.
 1. Write `signals/search/us-f1/config.json`. Pool = every `panel_us` v2 feature with a documented
    a-priori direction (list each with its source); exclude, don't guess, anything undocumented;
    exclude ratios whose negative values rank ambiguously (`pe`, `peg`, `ev_ebitda`, `ev_fcf`) unless
@@ -2329,6 +2353,8 @@ declared entry.
 - **Long-short / market-neutral books; weekly cadence** — check the horizon non-goal first.
 - **PIT S&P 500 membership universe** — depends on 18.11's outcome.
 - **Strategy combiner** — a blend of ≥ 2 incubating/certified strategies as its own family (16.B).
+- **Live Form 4 delta** — recent Form 4 filings since the bulk data sets' coverage end (EDGAR daily
+  index → per-filing XML, `raw_xml_doc`), so the insider features become live-usable (18.16).
 
 ---
 

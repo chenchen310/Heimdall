@@ -109,11 +109,23 @@ class SecEdgarProvider(DataProvider):
 
     markets = frozenset({"US"})
 
-    def __init__(self, root: Path | None = None, min_interval_s: float = 0.12) -> None:
+    def __init__(
+        self,
+        root: Path | None = None,
+        min_interval_s: float = 0.12,
+        max_age_days: float | None = None,
+    ) -> None:
         self._root = root if root is not None else data_root()
         self._min_interval_s = min_interval_s  # SEC allows ~10 req/s
         self._last_call = 0.0
         self._cik: dict[str, int] | None = None
+        # 18.16: a cached companyfacts file older than this is re-fetched (None = never, the
+        # research default: a panel rebuild must not change its inputs mid-build). The live
+        # snapshot passes 7 days so new 10-Qs/10-Ks reach Today's Picks. companyfacts keeps
+        # every as-filed fact with its filing date, so a refresh adds filings — PIT reads on
+        # ``filed_at`` never see a later filing early.
+        self._max_age_days = max_age_days
+        self._memo: tuple[int, dict[str, Any]] | None = None  # annual + quarterly share one parse
 
     # -- ABC: prices not served here -----------------------------------------
     def get_ohlcv(self, symbol: str, start: object, end: object) -> pd.DataFrame:
@@ -167,13 +179,29 @@ class SecEdgarProvider(DataProvider):
 
     def _companyfacts(self, sym: Symbol) -> dict[str, Any]:
         cik = self._cik_for(sym.ticker)
+        if self._memo is not None and self._memo[0] == cik:
+            return self._memo[1]
         cache = self._root / "edgar" / f"companyfacts_{cik:010d}.json"
-        if cache.exists():
-            return json.loads(cache.read_text())  # type: ignore[no-any-return]
-        facts = self._get_json(_FACTS_URL.format(cik=cik))
-        cache.parent.mkdir(parents=True, exist_ok=True)
-        cache.write_text(json.dumps(facts))
-        return facts  # type: ignore[no-any-return]
+        fresh = cache.exists() and (
+            self._max_age_days is None
+            or (time.time() - cache.stat().st_mtime) / 86400.0 < self._max_age_days
+        )
+        if fresh:
+            facts: dict[str, Any] = json.loads(cache.read_text())
+        else:
+            try:
+                facts = self._get_json(_FACTS_URL.format(cik=cik))
+            except (ProviderError, requests.RequestException):
+                if not cache.exists():
+                    raise
+                facts = json.loads(cache.read_text())  # stale beats nothing; retried next run
+            else:
+                cache.parent.mkdir(parents=True, exist_ok=True)
+                tmp = cache.with_name(f"{cache.name}.{os.getpid()}.tmp")
+                tmp.write_text(json.dumps(facts))
+                os.replace(tmp, cache)
+        self._memo = (cik, facts)
+        return facts
 
 
 def _is_discrete_duration(period: str, start: str | None, end: str) -> bool:

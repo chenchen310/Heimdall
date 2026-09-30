@@ -56,14 +56,20 @@ def price_provider() -> DataProvider:
     return RoutingProvider({"US": yf, "TW": yf, "TWO": yf})
 
 
-def fundamentals_provider() -> DataProvider:
+def fundamentals_provider(edgar_max_age_days: float | None = None) -> DataProvider:
     """Default fundamentals routing: US → FMP if ``FMP_API_KEY`` is set (faster for
-    large universes), else free EDGAR; Taiwan → FinMind."""
+    large universes), else free EDGAR; Taiwan → FinMind. ``edgar_max_age_days`` re-fetches
+    a cached EDGAR companyfacts file older than that (the live snapshot passes 7; research
+    builds keep the default ``None`` so their inputs never move mid-build)."""
     import os
 
     from heimdall.data.providers import FinMindProvider, FmpProvider, SecEdgarProvider
 
-    us: DataProvider = FmpProvider() if os.environ.get("FMP_API_KEY") else SecEdgarProvider()
+    us: DataProvider = (
+        FmpProvider()
+        if os.environ.get("FMP_API_KEY")
+        else SecEdgarProvider(max_age_days=edgar_max_age_days)
+    )
     finmind = FinMindProvider()
     return RoutingProvider({"US": us, "TW": finmind, "TWO": finmind})
 
