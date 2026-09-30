@@ -989,6 +989,21 @@ DoD: freeze-idempotency test; known-answer curve math incl. costs; AppTest smoke
 > + what each notification means). Tests (`test_ops_notify.py`, 8): formatting worst-first,
 > channel-selection, dry-run print, chained-run order + failure reporting + frozen-cohort events, plist
 > lint — **no network, fake runner**. **12.1 marked `[x]` in the same PR.** Gates green; suite 400.
+>
+> **Follow-up (2026-09-30, incident):** every scheduled run from 2026-07-20 to 2026-09-28 (11 Mondays)
+> died with `FileNotFoundError: 'uv'`. The plist calls `uv` by absolute path, but `_default_run`
+> shelled out to a bare `uv`, and launchd's `PATH` lacks `~/.local/bin`. Because the runner *raised*
+> (not a non-zero exit), `run_weekly` crashed before the in-process freeze and before any digest.
+> The dry-run default meant nobody saw it. **Lost for good (no backfill, by design):** ledger cohorts
+> `tw-revenue-momentum_v1/2026-08` and `2026-09`. The TDCC cache is also empty (`data/tdcc/` absent),
+> but its endpoint was already blocked by an anti-bot redirect loop on 2026-07-19, so this outage is
+> not its root cause. The panels and the drift monitor were not refreshed in that window either;
+> both are resumable. Fix: steps run as `[sys.executable, "-m", *step]` (no `PATH` lookup, the same
+> pattern as `ui/build_page.py`). A runner exception becomes a failed-step `error` and the run goes
+> on. All steps failing adds a "Weekly chain is dead" `error`. Any `error` ⇒ `main` exits 1 and
+> writes an error list to stderr, marked DRY RUN when undelivered. `docs/OPERATIONS.md` install `sed`
+> now fills the `uv` path. Tests (+3): `_default_run` with an empty `PATH`, a raising runner still
+> freezes and reports, `main` exit code + stderr in dry run. Gates green; suite 428.
 
 **Goal:** the weekly chore runs itself and pings the user only when something needs them.
 **Files:** `docs/OPERATIONS.md`, a launchd plist template (checked in), new
