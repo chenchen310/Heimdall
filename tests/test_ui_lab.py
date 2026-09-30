@@ -141,6 +141,10 @@ def test_lab_incubating_tier_is_labeled_and_isolated(
     at = _open_lab(tmp_path)
     assert not at.exception
     assert any("lab1-t00000" in s.value and "未認證・孵化中" in s.value for s in at.subheader)
+    # 18.10: the order plan comes from the latest *frozen* cohort, never a live ranking.
+    plans = [df.value for df in at.dataframe if "side" in list(df.value.columns)]
+    assert plans
+    assert list(plans[0]["symbol"]) == ["A.US"] and list(plans[0]["side"]) == ["buy"]
     # Today's Picks must not render it: incubating is not certified.
     at2 = AppTest.from_file(APP).run(timeout=60)
     assert not any("lab1-t00000" in s.value for s in at2.subheader)

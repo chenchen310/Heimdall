@@ -577,6 +577,12 @@ _ZH: dict[str, str] = {
     ),
     "buy": "買進",
     "sell": "賣出",
+    "Fractional shares (US)": "零股／碎股（美股）",
+    "Order plan (target weights)": "下單計畫（依目標權重）",
+    "Previous book estimated from the last frozen cohort's weights at today's closes.": (
+        "前一期持股以最近凍結那期的權重、按今天收盤價估算。"
+    ),
+    "Order plan from the latest frozen cohort (uncertified)": "依最新凍結一期的下單計畫（未認證）",
     "Strategy Lab": "策略實驗室",
     "🧪 Strategy Lab": "🧪 策略實驗室",
     "trials": "個試驗",

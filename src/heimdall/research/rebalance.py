@@ -10,6 +10,12 @@ Taiwan frictions are asymmetric: a 0.1425% brokerage fee on **each** side plus a
 0.3% securities-transaction **tax on sells only** — so a sell costs materially
 more than a buy, which the cost function encodes. Taiwan trades in 1,000-share
 board lots (an odd-lot toggle relaxes that); US trades whole shares.
+
+:func:`weighted_plan` (roadmap 18.10) is the general form: it sizes every name to the
+spec's **own target weights** (``research.construct`` — never assumed equal), estimates
+the previous book from the last frozen cohort's weights (equal weight when a cohort
+predates weights), and trades the difference — including a kept name whose weight
+changed. US: whole shares by default, an optional fractional mode (4 dp), no sell tax.
 """
 
 from __future__ import annotations
@@ -32,11 +38,15 @@ class PickDiff:
     kept: list[str]  # in both → held, no order
 
 
+#: Fractional-share precision for brokers that support it (US).
+FRACTIONAL_DP: int = 4
+
+
 @dataclass
 class Order:
     symbol: str
     side: str  # "buy" | "sell"
-    shares: int
+    shares: float  # whole shares, or fractional (US) when requested
     ref_close: float
     est_cost: float
 
@@ -129,11 +139,79 @@ def rebalance_plan(
     return orders
 
 
+def frozen_weights(picks: list[dict[str, object]]) -> dict[str, float]:
+    """A frozen cohort's book as weights: its stored ``weight`` per pick (weighted specs
+    freeze them, 18.2), else equal weight."""
+    if not picks:
+        return {}
+    if all("weight" in p for p in picks):
+        return {str(p["symbol"]): float(str(p["weight"])) for p in picks}
+    return {str(p["symbol"]): 1.0 / len(picks) for p in picks}
+
+
+def shares_for(
+    target_value: float,
+    ref_close: float,
+    market: str,
+    *,
+    odd_lot: bool = False,
+    fractional: bool = False,
+) -> float:
+    """Shares for a target value: :func:`target_shares`, or floored to ``FRACTIONAL_DP``
+    decimals when ``fractional`` (US only — Taiwan has no fractional shares)."""
+    if fractional and market != "Taiwan":
+        if ref_close <= 0 or target_value <= 0:
+            return 0.0
+        scale = 10**FRACTIONAL_DP
+        return float(int(target_value / ref_close * scale) / scale)
+    return float(target_shares(target_value, ref_close, market, odd_lot=odd_lot))
+
+
+def weighted_plan(
+    targets: dict[str, float],
+    previous: dict[str, float],
+    ref_closes: dict[str, float],
+    budget: float,
+    market: str,
+    *,
+    fractional: bool = False,
+    odd_lot: bool = False,
+    us_bps: float = US_DEFAULT_BPS,
+) -> list[Order]:
+    """Orders moving the book from ``previous`` weights to ``targets`` at ``budget``.
+
+    Every name in either book is sized ``weight × budget`` at its reference close (floored,
+    never overspending) and the share difference becomes one order; a kept name whose weight
+    changed is re-traded, an unchanged one is not. A name without a positive close is skipped
+    rather than guessed. The previous book is an *estimate* (its frozen weights at today's
+    budget and closes) — the UI states that assumption.
+    """
+    orders: list[Order] = []
+    for sym in sorted(set(targets) | set(previous)):
+        close = ref_closes.get(sym, float("nan"))
+        if not close > 0:
+            continue
+        kw = {"odd_lot": odd_lot, "fractional": fractional}
+        want = shares_for(targets.get(sym, 0.0) * budget, close, market, **kw)
+        have = shares_for(previous.get(sym, 0.0) * budget, close, market, **kw)
+        delta = round(want - have, FRACTIONAL_DP)
+        if delta == 0:
+            continue
+        side = "buy" if delta > 0 else "sell"
+        value = abs(delta) * close
+        orders.append(
+            Order(sym, side, abs(delta), close, trade_cost(value, side, market, us_bps=us_bps))
+        )
+    return orders
+
+
 def orders_to_csv(orders: list[Order]) -> str:
     """CSV export: ``symbol, side, shares, reference_close, est_cost``."""
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(["symbol", "side", "shares", "reference_close", "est_cost"])
     for o in orders:
-        writer.writerow([o.symbol, o.side, o.shares, f"{o.ref_close:.4f}", f"{o.est_cost:.2f}"])
+        writer.writerow(
+            [o.symbol, o.side, f"{o.shares:g}", f"{o.ref_close:.4f}", f"{o.est_cost:.2f}"]
+        )
     return buf.getvalue()

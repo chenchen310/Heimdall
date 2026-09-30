@@ -18,6 +18,7 @@ import streamlit as st
 from heimdall.backtest.portfolio_stats import drawdown, portfolio_stats, yearly_returns
 from heimdall.data.store import data_root
 from heimdall.research import lab
+from heimdall.research.rebalance import frozen_weights, orders_to_csv, weighted_plan
 from heimdall.ui import _glossary as glossary
 from heimdall.ui.i18n import t
 
@@ -285,6 +286,41 @@ def _incubating_tab() -> None:
                 f"{t('Latest frozen cohort')} {latest.get('month')} ({t('uncertified')})"
             ):
                 st.dataframe(picks, hide_index=True, width="stretch")
+                _incubating_orders(item)
+
+
+def _incubating_orders(item: lab.IncubatingInfo) -> None:
+    """18.10: an order plan from the latest *frozen* cohort (never a live re-ranking), labeled."""
+    st.caption(t("Order plan from the latest frozen cohort (uncertified)"))
+    try:
+        from heimdall.ui._data import snapshot
+
+        snap = snapshot()
+    except FileNotFoundError:
+        st.info(t("No snapshot yet — build one on the Build data page."))
+        return
+    closes = dict(zip(snap["symbol"].astype(str), snap["price"].astype(float), strict=False))
+    targets = frozen_weights(list(item.cohorts[-1].get("picks", [])))  # type: ignore[arg-type]
+    previous = (
+        frozen_weights(list(item.cohorts[-2].get("picks", [])))  # type: ignore[arg-type]
+        if len(item.cohorts) > 1
+        else {}
+    )
+    budget = st.number_input(
+        t("Budget"), min_value=0.0, value=100_000.0, step=1000.0, key=f"lab_budget_{item.name}"
+    )
+    frac = st.checkbox(t("Fractional shares (US)"), key=f"lab_frac_{item.name}")
+    orders = weighted_plan(targets, previous, closes, float(budget), "US", fractional=frac)
+    if not orders:
+        return
+    st.dataframe(pd.DataFrame([o.__dict__ for o in orders]), hide_index=True, width="stretch")
+    st.download_button(
+        t("Download order plan (CSV)"),
+        orders_to_csv(orders),
+        file_name=f"{item.name}_incubating_orders.csv",
+        mime="text/csv",
+        key=f"lab_csv_{item.name}",
+    )
 
 
 # --- technical research ------------------------------------------------------------------
