@@ -25,8 +25,8 @@ import pandas as pd
 
 from heimdall.data.symbols import parse_symbol
 from heimdall.factors.scoring import _zscore
-from heimdall.research import gates
-from heimdall.research.spec import SignalSpec, _sector_zscore, score
+from heimdall.research import construct, gates
+from heimdall.research.spec import SignalSpec, _sector_zscore
 
 _REQUIRED = {"symbol", "as_of", "price", "dollar_vol_21d", "ret_12_1"}
 
@@ -54,19 +54,34 @@ def eligibility(snapshot: pd.DataFrame, market: str) -> pd.DataFrame:
     )
 
 
-def todays_picks(spec: SignalSpec, snapshot: pd.DataFrame) -> pd.DataFrame:
-    """The spec's top-N for today, with per-feature z-scores explaining each rank.
+def _construction_columns(spec: SignalSpec) -> set[str]:
+    """Snapshot columns a spec's construction needs beyond its features (18.1)."""
+    cols = {pred.field for pred in spec.filters}
+    if spec.neutralize == "sector" or spec.max_sector_weight is not None:
+        cols.add("sector")
+    if spec.universe == "us_large":
+        cols.add("market_cap")
+    if spec.weighting == "inverse_vol":
+        cols.add("vol_63d")
+    return cols
+
+
+def todays_picks(
+    spec: SignalSpec, snapshot: pd.DataFrame, prev: set[str] | None = None
+) -> pd.DataFrame:
+    """The spec's book for today, with per-feature z-scores explaining each rank.
 
     Filters the snapshot to the spec's market (a snapshot holds every market),
-    applies hygiene, scores the eligible pool, and returns the ranked head —
-    columns: ``symbol``, ``signal_score``, ``z_<feature>`` …, then the rest of
-    the row. Rows missing any feature value score NaN and never rank (missing
-    data excludes). Raises ``ValueError`` when the snapshot lacks required
-    columns (e.g. built before the 7.1 fields) — rebuild it rather than guess.
+    applies hygiene, builds the book through :mod:`heimdall.research.construct`
+    (universe tier, filters, weighting, sector cap, rank buffer — 18.2), and returns
+    it in rank order — columns: ``symbol``, ``signal_score``, ``weight``,
+    ``z_<feature>`` …, then the rest of the row. ``prev`` = the members of the
+    signal's latest frozen cohort, for a rank-buffered spec (absent ⇒ plain top-N).
+    Rows missing any feature value score NaN and never rank (missing data
+    excludes). Raises ``ValueError`` when the snapshot lacks required columns
+    (e.g. built before the 7.1 fields) — rebuild it rather than guess.
     """
-    required = _REQUIRED | set(spec.features)
-    if spec.neutralize == "sector":  # 17.5: within-sector ranking needs the group label
-        required = required | {"sector"}
+    required = _REQUIRED | set(spec.features) | _construction_columns(spec)
     missing = sorted(required - set(snapshot.columns))
     if missing:
         raise ValueError(
@@ -77,12 +92,12 @@ def todays_picks(spec: SignalSpec, snapshot: pd.DataFrame) -> pd.DataFrame:
     region = snapshot["symbol"].map(lambda s: parse_symbol(str(s)).region)
     df = snapshot[region == spec.market].copy()
     if df.empty:
-        return df.assign(signal_score=pd.Series(dtype=float))
+        return df.assign(signal_score=pd.Series(dtype=float), weight=pd.Series(dtype=float))
 
     df["eligible"] = eligibility(df, spec.market)["eligible"]
-    df["signal_score"] = score(spec, df)
+    df["signal_score"] = construct.pool_scores(spec, df)
 
-    pool = df[df["eligible"]]
+    pool = df[construct.pool_mask(spec, df)]
     for feat in spec.features:
         z = (
             _sector_zscore(pool[feat], pool["sector"])
@@ -91,13 +106,16 @@ def todays_picks(spec: SignalSpec, snapshot: pd.DataFrame) -> pd.DataFrame:
         )
         df.loc[pool.index, f"z_{feat}"] = z
 
-    picks = (
-        df[df["signal_score"].notna()]
-        .sort_values("signal_score", ascending=False)
-        .head(spec.top_n)
-        .reset_index(drop=True)
-    )
-    lead = ["symbol", "signal_score", *[f"z_{f}" for f in spec.features], *spec.features]
+    book = construct.select(spec, df, df["signal_score"], prev)
+    picks = df.set_index("symbol").loc[list(book.index)].reset_index()
+    picks.insert(2, "weight", book.to_numpy())
+    lead = [
+        "symbol",
+        "signal_score",
+        "weight",
+        *[f"z_{f}" for f in spec.features],
+        *spec.features,
+    ]
     rest = [c for c in picks.columns if c not in lead]
     return picks[lead + rest]
 

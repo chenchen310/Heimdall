@@ -22,7 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -30,10 +30,10 @@ import numpy as np
 import pandas as pd
 
 from heimdall.factors.validate import information_coefficient
-from heimdall.research import gates, registry
+from heimdall.research import construct, gates, registry
 from heimdall.research.benchmark import BENCHMARK, window_return
 from heimdall.research.dataset import load_panel
-from heimdall.research.spec import SignalSpec, load_spec, score
+from heimdall.research.spec import SignalSpec, count_free_params, load_spec
 
 SURVIVORSHIP = "current_universe (optimistic)"
 _SCORE = "signal_score"
@@ -69,6 +69,8 @@ class CertReport:
     mean_turnover: float
     survivorship: str = SURVIVORSHIP
     generated_at: str = ""
+    # Non-default construction choices (18.1), disclosed on every report; {} = the plain book.
+    construction: dict[str, object] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -83,6 +85,42 @@ def cohort_turnover(cohorts: list[set[str]]) -> list[float]:
     for prev, cur in zip(cohorts, cohorts[1:], strict=False):
         out.append(1.0 - len(cur & prev) / max(len(cur), 1))
     return out
+
+
+def weight_turnover(books: list[pd.Series]) -> list[float]:
+    """One-way turnover between consecutive weighted books: ½ Σ|Δw| (18.2).
+
+    For two equal-weight books of the same size this equals :func:`cohort_turnover`;
+    weighted books (inverse-vol, sector-capped) need it because a reweight is a trade.
+    """
+    out: list[float] = []
+    for prev, cur in zip(books, books[1:], strict=False):
+        both = prev.index.union(cur.index)
+        diff = cur.reindex(both, fill_value=0.0) - prev.reindex(both, fill_value=0.0)
+        out.append(0.5 * float(diff.abs().sum()))
+    return out
+
+
+def traded_fractions(held: list[pd.Series]) -> list[float]:
+    """Σ|Δw| per period of a held-weights sequence, starting from cash (both trade sides).
+
+    The overlay's cost basis (18.2): a switch to cash sells the whole book (1.0), the switch
+    back buys it (1.0), and an ordinary rebalance trades 2 × its one-way turnover.
+    """
+    out: list[float] = []
+    prev = pd.Series(dtype=float)
+    for cur in held:
+        both = prev.index.union(cur.index)
+        diff = cur.reindex(both, fill_value=0.0) - prev.reindex(both, fill_value=0.0)
+        out.append(float(diff.abs().sum()))
+        prev = cur
+    return out
+
+
+def apply_costs_traded(gross: list[float], traded: list[float], cost_bps: float) -> list[float]:
+    """Net returns given the traded fraction (Σ|Δw|) of each period."""
+    rate = cost_bps / 1e4
+    return [g - t * rate for g, t in zip(gross, traded, strict=True)]
 
 
 def apply_costs(gross: list[float], turnovers: list[float], cost_bps: float) -> list[float]:
@@ -125,29 +163,97 @@ def _monthly_spread(df: pd.DataFrame, q: int = 5) -> list[float]:
     return out
 
 
-def _book_minus_universe(scored: pd.DataFrame, top_n: int) -> tuple[float, float] | None:
-    """From a scored cross-section: (EW top-N book 6m `fwd_6m_rel` mean, EW eligible-universe mean).
+def _book_rows(scored: pd.DataFrame, book: pd.Series) -> pd.DataFrame:
+    """The book's rows, in the book's (rank) order — the order the legacy ``head`` used."""
+    by_sym = scored.set_index("symbol")
+    return by_sym.loc[[s for s in book.index if s in by_sym.index]]
 
-    The shared G3 selection unit — used by :func:`certify` and :mod:`heimdall.research.monitor`
-    (12.2) so the certified metric has exactly one home. Returns None if either leg is empty.
+
+def _book_mean(scored: pd.DataFrame, book: pd.Series, col: str, equal: bool) -> float:
+    """The book's return on ``col``: a plain mean for equal-weight books (bit-for-bit the
+    legacy ``head(top_n)[col].dropna().mean()``), else Σ w·r renormalized over names with a
+    label, scaled by the invested fraction (an infeasible sector cap leaves cash at 0).
+    NaN when no member has a label."""
+    vals = _book_rows(scored, book)[col]
+    if equal:
+        present = vals.dropna()
+        return float(present.mean()) if len(present) else float("nan")
+    ok = vals.notna().to_numpy()
+    if not ok.any():
+        return float("nan")
+    w = book.reindex(vals.index).to_numpy()[ok]
+    r = vals.to_numpy()[ok]
+    invested = float(book.sum())
+    ret = float((w * r).sum() / w.sum())
+    return ret * invested if invested < 1.0 - 1e-9 else ret
+
+
+def _book_minus_universe(
+    scored: pd.DataFrame,
+    top_n: int,
+    *,
+    book: pd.Series | None = None,
+    universe: pd.Series | None = None,
+    equal: bool = True,
+) -> tuple[float, float] | None:
+    """From a scored cross-section: (book 6m `fwd_6m_rel`, EW universe 6m `fwd_6m_rel`).
+
+    The shared G3 selection unit — used by :func:`certify`, :mod:`heimdall.research.evaluate`
+    and :mod:`heimdall.research.monitor` so the certified metric has exactly one home. With no
+    ``book`` it is the pre-18.2 computation (EW top-N of the score column vs the EW eligible
+    universe); with a constructed ``book`` (18.2) the book leg is that book and the universe leg
+    is ``universe`` (the spec's tier — eligible rows when omitted). None if either leg is empty.
     """
-    ranked = scored.dropna(subset=[_SCORE]).sort_values(_SCORE, ascending=False)
-    book6 = ranked.head(top_n)["fwd_6m_rel"].dropna()
-    pool = scored[scored["eligible"].astype(bool)] if "eligible" in scored.columns else scored
+    if book is None:
+        ranked = scored.dropna(subset=[_SCORE]).sort_values(_SCORE, ascending=False)
+        book6 = ranked.head(top_n)["fwd_6m_rel"].dropna()
+        pool = scored[scored["eligible"].astype(bool)] if "eligible" in scored.columns else scored
+        univ6 = pool["fwd_6m_rel"].dropna()
+        if not len(book6) or not len(univ6):
+            return None
+        return float(book6.mean()), float(univ6.mean())
+    book_ret = _book_mean(scored, book, "fwd_6m_rel", equal)
+    if universe is not None:
+        pool = scored[universe]
+    elif "eligible" in scored.columns:
+        pool = scored[scored["eligible"].astype(bool)]
+    else:
+        pool = scored
     univ6 = pool["fwd_6m_rel"].dropna()
-    if not len(book6) or not len(univ6):
+    if np.isnan(book_ret) or not len(univ6):
         return None
-    return float(book6.mean()), float(univ6.mean())
+    return book_ret, float(univ6.mean())
 
 
-def cohort_alpha(spec: SignalSpec, cross: pd.DataFrame) -> tuple[float, float] | None:
+def cohort_book(
+    spec: SignalSpec, cross: pd.DataFrame, prev: set[str] | None = None
+) -> tuple[pd.Series, tuple[float, float] | None]:
+    """Construct one cross-section's book (18.1) and its (book 6m, EW-universe 6m) returns.
+
+    ``prev`` = last month's members, for a rank-buffered spec; callers replaying a sequence
+    thread the returned book's index forward.
+    """
+    scored = cross.assign(**{_SCORE: construct.pool_scores(spec, cross)})
+    book = construct.select(spec, scored, scored[_SCORE], prev)
+    bu = _book_minus_universe(
+        scored,
+        spec.top_n,
+        book=book,
+        universe=construct.universe_mask(spec, scored),
+        equal=construct.is_equal_weight(spec),
+    )
+    return book, bu
+
+
+def cohort_alpha(
+    spec: SignalSpec, cross: pd.DataFrame, prev: set[str] | None = None
+) -> tuple[float, float] | None:
     """Score one cross-section and return its (book 6m, equal-weight-universe 6m) relative returns.
 
     The drift monitor's input (12.2): both legs are benchmark-relative, so the benchmark cancels
     in ``book − universe``, leaving the selection skill G3 certifies — no benchmark fetch needed.
     """
-    scored = cross.assign(**{_SCORE: score(spec, cross)})
-    return _book_minus_universe(scored, spec.top_n)
+    return cohort_book(spec, cross, prev)[1]
 
 
 # --- the referee ----------------------------------------------------------------
@@ -173,9 +279,13 @@ def certify(spec: SignalSpec, panel: pd.DataFrame, benchmark_adj: pd.Series) -> 
     if not oos:
         raise ValueError(f"panel has no OOS months (≥ {gates.OOS_START}) with complete 6m labels")
 
-    # Score each OOS cross-section with the spec (eligibility handled inside score()).
+    # Score each OOS cross-section and construct its book (18.1/18.2: universe tier, filters,
+    # weighting, sector cap, rank buffer — a default spec is the pre-18.2 EW top-N exactly).
+    equal = construct.is_equal_weight(spec)
     frames: list[pd.DataFrame] = []
     cohorts_sets: list[set[str]] = []
+    books: list[pd.Series] = []
+    held: list[pd.Series] = []  # the overlaid book behind each G4 month (empty = cash)
     cohort_rows: list[dict[str, object]] = []
     portfolio_beats: list[
         float
@@ -183,16 +293,25 @@ def certify(spec: SignalSpec, panel: pd.DataFrame, benchmark_adj: pd.Series) -> 
     selection_alphas: list[float] = []  # per cohort: book 6m − equal-weight-universe 6m (skill)
     gross_returns: list[float] = []
     bench_returns: list[float] = []
+    prev: set[str] | None = None
     for t in oos:
         cross = panel[panel["date"] == t].copy()
-        cross[_SCORE] = score(spec, cross)
+        cross[_SCORE] = construct.pool_scores(spec, cross)
         frames.append(cross)
-        ranked = cross.dropna(subset=[_SCORE]).sort_values(_SCORE, ascending=False)
-        picks = ranked.head(spec.top_n)
-        cohorts_sets.append(set(picks["symbol"]))
-        # Selection skill: EW top-N book vs the equal-weight eligible universe (a real alternative,
-        # ~an equal-weight ETF). The benchmark cancels in book − universe, isolating stock-picking.
-        bu = _book_minus_universe(cross, spec.top_n)  # cross already carries the score column
+        book = construct.select(spec, cross, cross[_SCORE], prev)
+        prev = set(book.index)
+        books.append(book)
+        cohorts_sets.append(set(book.index))
+        # Selection skill: the book vs the equal-weight universe of the spec's tier (a real
+        # alternative, ~an equal-weight ETF). The benchmark cancels in book − universe. The
+        # overlay never touches this leg (playbook §12.4: timing is not stock-picking).
+        bu = _book_minus_universe(
+            cross,
+            spec.top_n,
+            book=book,
+            universe=construct.universe_mask(spec, cross),
+            equal=equal,
+        )
         if bu is not None:
             book_ret, univ_ret = bu
             portfolio_beats.append(float(book_ret > 0))
@@ -202,15 +321,17 @@ def certify(spec: SignalSpec, panel: pd.DataFrame, benchmark_adj: pd.Series) -> 
                     "date": t.date().isoformat(),
                     "book_rel_6m": book_ret,
                     "alpha_6m": book_ret - univ_ret,
-                    "n_picks": int(picks["fwd_6m_rel"].notna().sum()),
+                    "n_picks": int(_book_rows(cross, book)["fwd_6m_rel"].notna().sum()),
                 }
             )
         nxt = next_of.get(t)
-        gross = picks["fwd_1m"].dropna()
-        if nxt is not None and len(gross):
+        gross = _book_mean(cross, book, "fwd_1m", equal)
+        if nxt is not None and not np.isnan(gross):
             bench = window_return(benchmark_adj, t, nxt)
             if pd.notna(bench):
-                gross_returns.append(float(gross.mean()))
+                cash = construct.overlay_cash(spec, benchmark_adj, t)
+                gross_returns.append(0.0 if cash else gross)
+                held.append(pd.Series(dtype=float) if cash else book)
                 bench_returns.append(float(bench))
     scored = pd.concat(frames, ignore_index=True)
 
@@ -268,12 +389,19 @@ def certify(spec: SignalSpec, panel: pd.DataFrame, benchmark_adj: pd.Series) -> 
         else (float("nan"), float("nan"))
     )
 
-    # G6 turnover (computed before G4 so the cost branch is known).
-    turnovers = cohort_turnover(cohorts_sets)
+    # G6 turnover (computed before G4 so the cost branch is known) — of the un-overlaid book.
+    turnovers = cohort_turnover(cohorts_sets) if equal else weight_turnover(books)
     mean_turnover = float(np.mean(turnovers)) if turnovers else float("nan")
 
-    # G4 — cost-aware top-N vs the benchmark, on the panel's own fwd_1m windows.
-    net = apply_costs(gross_returns, turnovers, gates.G4_COST_BPS)
+    def _net(cost_bps: float) -> list[float]:
+        # An overlaid book pays for its cash switches (Σ|Δw| of the held sequence); otherwise
+        # the pre-18.2 cost path, bit-for-bit.
+        if spec.overlay:
+            return apply_costs_traded(gross_returns, traded_fractions(held), cost_bps)
+        return apply_costs(gross_returns, turnovers, cost_bps)
+
+    # G4 — cost-aware book vs the benchmark, on the panel's own fwd_1m windows (overlaid).
+    net = _net(gates.G4_COST_BPS)
     port_cagr, port_sharpe = _cagr(net), _sharpe(net)
     bench_cagr, bench_sharpe = _cagr(bench_returns), _sharpe(bench_returns)
     results.append(GateResult("G4_cagr", port_cagr, bench_cagr, bool(port_cagr > bench_cagr)))
@@ -308,7 +436,7 @@ def certify(spec: SignalSpec, panel: pd.DataFrame, benchmark_adj: pd.Series) -> 
     if mean_turnover <= gates.G6_MAX_TURNOVER + eps:
         results.append(GateResult("G6_turnover", mean_turnover, gates.G6_MAX_TURNOVER, True))
     elif mean_turnover <= gates.G6_STRESS_TURNOVER + eps:
-        stress_net = apply_costs(gross_returns, turnovers, gates.G6_STRESS_COST_BPS)
+        stress_net = _net(gates.G6_STRESS_COST_BPS)
         s_cagr, s_sharpe = _cagr(stress_net), _sharpe(stress_net)
         stress_ok = bool(s_cagr > bench_cagr and s_sharpe > bench_sharpe)
         results.append(
@@ -353,6 +481,7 @@ def certify(spec: SignalSpec, panel: pd.DataFrame, benchmark_adj: pd.Series) -> 
         cohorts=cohort_rows,
         mean_turnover=mean_turnover,
         generated_at=datetime.now(UTC).isoformat(),
+        construction=count_free_params(spec)[1],
     )
 
 

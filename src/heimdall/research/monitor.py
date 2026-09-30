@@ -3,7 +3,7 @@
 Recomputes a certified signal's realized OOS cohorts from the current panel and
 watches **the certified edge** — the G3 selection alpha (EW top-N book 6m minus
 EW eligible-universe 6m), shared with :mod:`heimdall.research.certify` via
-``cohort_alpha`` so the metric has one home. When the **trailing-12-cohort NW 95%
+``cohort_book`` so the metric has one home. When the **trailing-12-cohort NW 95%
 CI upper bound falls below 0** — the skill has gone significantly negative — the
 signal auto-flips ``certified → under_review`` and Today's Picks shows a warning
 banner instead of its ranking. No silent decay; no network (the alpha is
@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 
 from heimdall.research import gates, registry
-from heimdall.research.certify import cohort_alpha
+from heimdall.research.certify import cohort_book
 from heimdall.research.dataset import load_panel
 from heimdall.research.spec import SignalSpec, load_spec
 
@@ -60,15 +60,21 @@ class MonitorResult:
 
 
 def realized_cohorts(spec: SignalSpec, panel: pd.DataFrame) -> list[CohortPoint]:
-    """Every OOS cohort (≥ ``OOS_START``) with complete 6m labels: selection alpha + book beat."""
+    """Every OOS cohort (≥ ``OOS_START``) with complete 6m labels: selection alpha + book beat.
+
+    A rank-buffered spec (18.2) is replayed deterministically from the OOS start — the same
+    month sequence ``certify`` walks — so the monitored book is the certified book.
+    """
     out: list[CohortPoint] = []
+    prev: set[str] | None = None
     for t in sorted(pd.Timestamp(x) for x in panel["date"].unique()):
         if t < pd.Timestamp(gates.OOS_START):
             continue
         cross = panel[panel["date"] == t]
         if not bool(cross["fwd_6m"].notna().any()):
             continue  # the 6m forward window is still open — not yet realized
-        ca = cohort_alpha(spec, cross)
+        book, ca = cohort_book(spec, cross, prev)
+        prev = set(book.index)
         if ca is None:
             continue
         book_ret, univ_ret = ca

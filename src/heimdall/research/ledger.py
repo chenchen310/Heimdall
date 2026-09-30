@@ -33,7 +33,7 @@ from typing import cast
 import numpy as np
 import pandas as pd
 
-from heimdall.research import gates
+from heimdall.research import construct, gates
 from heimdall.research.certify import apply_costs, cohort_turnover
 from heimdall.research.spec import SignalSpec
 from heimdall.research.today import todays_picks
@@ -93,10 +93,20 @@ def freeze(
             f"{path} already exists — a frozen cohort is immutable (16.1); one freeze per month"
         )
 
-    picks = todays_picks(spec, snapshot)
+    # A rank-buffered spec (18.2) holds last month's frozen members until they fall past
+    # exit_rank — the frozen cohort is the buffer's only memory, so it is read back here.
+    prev = latest_members(spec.name, spec.version, root) if spec.exit_rank is not None else None
+    picks = todays_picks(spec, snapshot, prev)
     as_of = ""
     if "as_of" in snapshot.columns and snapshot["as_of"].notna().any():
         as_of = pd.to_datetime(snapshot["as_of"]).max().date().isoformat()
+    rows: list[dict[str, object]] = [
+        {"symbol": str(s), "signal_score": float(v)}
+        for s, v in zip(picks["symbol"], picks["signal_score"], strict=True)
+    ]
+    if not construct.is_equal_weight(spec):  # weighted books freeze their weights too
+        for row, w in zip(rows, picks["weight"], strict=True):
+            row["weight"] = float(w)
     payload = {
         "name": spec.name,
         "version": spec.version,
@@ -105,16 +115,22 @@ def freeze(
         "as_of": as_of,
         "frozen_at": datetime.now(UTC).isoformat(),
         "spec_hash": spec.canonical_hash(),
-        "picks": [
-            {"symbol": str(s), "signal_score": float(v)}
-            for s, v in zip(picks["symbol"], picks["signal_score"], strict=True)
-        ],
+        "picks": rows,
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     tmp.write_text(json.dumps(payload, indent=2) + "\n")
     os.replace(tmp, path)
     return path
+
+
+def latest_members(name: str, version: int, root: Path | None = None) -> set[str] | None:
+    """Members of the latest frozen cohort — the rank buffer's ``prev`` (None if none frozen)."""
+    cohorts = load_cohorts(name, version, root)
+    if not cohorts:
+        return None
+    picks = cast("list[dict[str, object]]", cohorts[-1]["picks"])
+    return {str(p["symbol"]) for p in picks}
 
 
 def load_cohorts(name: str, version: int, root: Path | None = None) -> list[dict[str, object]]:
