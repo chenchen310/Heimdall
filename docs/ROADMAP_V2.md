@@ -1898,7 +1898,16 @@ DoD: known-answer + canary + reconciliation green; gates green.
 **Don't:** use this engine inside `certify` (G4 stays on panel labels — one pricing path for the
 referee); no intramonth stops.
 
-### 18.4 Over-fitting statistics (`backtest/overfit.py`)  `[ ]`
+### 18.4 Over-fitting statistics (`backtest/overfit.py`)  `[x]`
+
+> **Outcome (2026-09-30):** `moments`, `psr` / `psr_from_moments`, `expected_max_sharpe`, `dsr` /
+> `dsr_from_moments`, `hlz_threshold` (Bonferroni), `pbo_cscv` → `PBOResult` (PBO, logits, splits,
+> degradation slope, P(OOS loss)); NaN-aware block sums, chunked over splits, optional seeded
+> subsample. **Published worked example reproduced:** Bailey & López de Prado (2014) — SR 2.5
+> (annualized), T = 1250, skew −3, kurtosis 10, N = 100, V = 0.5 → E[max SR] 1.7894, **DSR 0.9004**.
+> Properties: PBO ∈ [0.35, 0.65] on pure noise, < 0.05 with one planted signal; DSR strictly falls
+> in N. Speed at factory scale: 5,000 trials × 120 months × all 12,870 splits in 0.9 s. 9 tests in
+> `tests/test_overfit.py`.
 
 **Goal:** the multiple-testing math the factory gates on — pure functions, known-answer tested, no
 new dependency (numpy + stdlib `statistics.NormalDist` for Φ/Φ⁻¹; scipy is only a transitive lock
