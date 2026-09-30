@@ -43,8 +43,8 @@ VAL_YEARS: tuple[int, ...] = (2020, 2021, 2022)
 
 
 def val_looks_path(run_id: str, root: Path | None = None) -> Path:
-    """Written by 18.7's promotion step once the run's (≤ 5) VAL looks are recorded."""
-    return factory.run_dir(run_id, root) / "val_looks.json"
+    """Written by 18.7's promotion step (``factory.promote``) once the run's VAL looks are spent."""
+    return factory.val_looks_path(run_id, root)
 
 
 @dataclass

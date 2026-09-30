@@ -59,8 +59,11 @@ class MonitorResult:
         return asdict(self)
 
 
-def realized_cohorts(spec: SignalSpec, panel: pd.DataFrame) -> list[CohortPoint]:
-    """Every OOS cohort (≥ ``OOS_START``) with complete 6m labels: selection alpha + book beat.
+def realized_cohorts(
+    spec: SignalSpec, panel: pd.DataFrame, start: str = gates.OOS_START
+) -> list[CohortPoint]:
+    """Every cohort on/after ``start`` (default the OOS start) with complete 6m labels:
+    selection alpha + book beat. An incubating strategy passes its incubation month.
 
     A rank-buffered spec (18.2) is replayed deterministically from the OOS start — the same
     month sequence ``certify`` walks — so the monitored book is the certified book.
@@ -68,7 +71,7 @@ def realized_cohorts(spec: SignalSpec, panel: pd.DataFrame) -> list[CohortPoint]
     out: list[CohortPoint] = []
     prev: set[str] | None = None
     for t in sorted(pd.Timestamp(x) for x in panel["date"].unique()):
-        if t < pd.Timestamp(gates.OOS_START):
+        if t < pd.Timestamp(start):
             continue
         cross = panel[panel["date"] == t]
         if not bool(cross["fwd_6m"].notna().any()):
@@ -82,18 +85,25 @@ def realized_cohorts(spec: SignalSpec, panel: pd.DataFrame) -> list[CohortPoint]
     return out
 
 
-def monitoring_path(name: str, version: int, root: Path | None = None) -> Path:
-    base = root if root is not None else registry.registry_path().parent.parent
-    return base / "signals" / "monitoring" / f"{name}_v{version}.json"
+def monitoring_path(
+    name: str, version: int, root: Path | None = None, tier: str = "certified"
+) -> Path:
+    base = (root if root is not None else registry.registry_path().parent.parent) / "signals"
+    sub = base / "monitoring" / ("incubating" if tier == "incubating" else "")
+    return sub / f"{name}_v{version}.json"
 
 
-def load_monitoring(name: str, version: int, root: Path | None = None) -> dict[str, object] | None:
-    path = monitoring_path(name, version, root)
+def load_monitoring(
+    name: str, version: int, root: Path | None = None, tier: str = "certified"
+) -> dict[str, object] | None:
+    path = monitoring_path(name, version, root, tier)
     return json.loads(path.read_text()) if path.exists() else None
 
 
-def _save(result: MonitorResult, cohorts: list[CohortPoint], root: Path | None) -> None:
-    path = monitoring_path(result.name, result.version, root)
+def _save(
+    result: MonitorResult, cohorts: list[CohortPoint], root: Path | None, tier: str = "certified"
+) -> None:
+    path = monitoring_path(result.name, result.version, root, tier)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {**result.to_dict(), "cohorts": [asdict(c) for c in cohorts]}
     tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
@@ -143,6 +153,68 @@ def monitor_signal(
     return result
 
 
+def monitor_incubating_signal(
+    spec: SignalSpec,
+    panel: pd.DataFrame,
+    start_month: str,
+    *,
+    root: Path | None = None,
+    apply: bool = False,
+) -> MonitorResult:
+    """Playbook §12.3 demotion for an ``incubating`` strategy: its forward cohorts (from the
+    incubation month) under the §9 rule, armed only once ≥ ``FACTORY_INCUBATION_MIN_COHORTS``
+    are realized; drift ⇒ ``incubation_retired`` (terminal) when ``apply``."""
+    cohorts = realized_cohorts(spec, panel, start=f"{start_month}-01")
+    trailing = cohorts[-TRAILING:]
+    alphas = np.asarray([c.alpha for c in trailing], dtype=float)
+    mean = float(alphas.mean()) if len(alphas) else float("nan")
+    lo, hi = (
+        gates.nw_ci95(alphas, lag=gates.NW_LAG) if len(alphas) > 1 else (float("nan"), float("nan"))
+    )
+    armed = len(cohorts) >= gates.FACTORY_INCUBATION_MIN_COHORTS
+    drift = bool(armed and len(trailing) >= TRAILING and hi < 0.0)
+    status = str(registry.get(spec.name, spec.version, root=root)["status"])
+    flipped = False
+    if drift and status == "incubating" and apply:
+        registry.transition(spec.name, spec.version, "incubation_retired", root=root)
+        status, flipped = "incubation_retired", True
+    result = MonitorResult(
+        name=spec.name,
+        version=spec.version,
+        status=status,
+        n_cohorts=len(cohorts),
+        trailing_n=len(trailing),
+        trailing_alpha_mean=mean,
+        trailing_alpha_ci95=(lo, hi),
+        trailing_beat_rate=float(np.mean([c.beat for c in trailing])) if trailing else float("nan"),
+        drift=drift,
+        flipped=flipped,
+        generated_at=datetime.now(UTC).isoformat(),
+    )
+    _save(result, cohorts, root, tier="incubating")
+    return result
+
+
+def monitor_incubating(*, root: Path | None = None, apply: bool = False) -> list[MonitorResult]:
+    """Monitor every incubating factory strategy against its market's current panel."""
+    base = root if root is not None else registry.registry_path().parent.parent
+    reg = registry.load_registry(root)
+    panels: dict[str, pd.DataFrame] = {}
+    out: list[MonitorResult] = []
+    for entry in cast("list[dict[str, object]]", reg["signals"]):
+        if entry["status"] != "incubating":
+            continue
+        p = Path(str(entry["spec_path"]))
+        spec = load_spec(p if p.is_absolute() else base / p)
+        if spec.market not in panels:
+            panels[spec.market] = load_panel(spec.market)
+        start = str(entry.get("updated_at", ""))[:7]
+        out.append(
+            monitor_incubating_signal(spec, panels[spec.market], start, root=root, apply=apply)
+        )
+    return out
+
+
 def monitor_all(*, root: Path | None = None, apply: bool = False) -> list[MonitorResult]:
     """Monitor every certified signal against its market's current panel."""
     base = root if root is not None else registry.registry_path().parent.parent
@@ -167,6 +239,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
     results = monitor_all(apply=args.apply)
+    for r in monitor_incubating(apply=args.apply):  # uncertified tier, labeled as such
+        lo, hi = r.trailing_alpha_ci95
+        tail = "  → retired from incubation" if r.flipped else ""
+        print(
+            f"[incubating, uncertified] {r.name} v{r.version}: {r.n_cohorts} forward cohorts, "
+            f"trailing skill {r.trailing_alpha_mean:+.2%} (95% CI {lo:+.2%}..{hi:+.2%}){tail}"
+        )
     if not results:
         print("No certified signals to monitor.")
         return 0

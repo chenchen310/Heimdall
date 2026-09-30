@@ -157,6 +157,18 @@ class SignalSpec(BaseModel):
         blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(blob.encode()).hexdigest()
 
+    def recipe_hash(self) -> str:
+        """SHA-256 of the **recipe** only — the canonical payload without the identity fields
+        (``name``, ``family``, ``version``). Two specs that would build the same book share it
+        whatever they are called: the §12.3 no-respin check compares this, never the
+        canonical hash (which a rename alone would change)."""
+        payload = self.model_dump(exclude={"description", "name", "family", "version"})
+        for fld, default in CONSTRUCTION_DEFAULTS.items():
+            if payload.get(fld, default) == default:
+                payload.pop(fld, None)
+        blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(blob.encode()).hexdigest()
+
 
 def count_free_params(spec: SignalSpec) -> tuple[int, dict[str, object]]:
     """G5/F5 counting: each nonzero feature weight is one free parameter (``certify``'s G5).

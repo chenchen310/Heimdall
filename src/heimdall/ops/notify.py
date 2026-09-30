@@ -251,6 +251,22 @@ def run_weekly(
             events.append(Event("info", f"Froze cohort {path.parent.name}/{path.stem}"))
     except Exception as exc:  # noqa: BLE001 — a freeze problem is reportable, not fatal
         events.append(Event("error", "Cohort freeze failed", str(exc)[:200]))
+    # Incubating factory strategies (playbook §12.3) freeze into their own ledger. The digest
+    # names them as uncertified and never lists their holdings (no tier leakage).
+    try:
+        from heimdall.research.ledger import freeze_incubating
+
+        for path in freeze_incubating(root=root, today=today):
+            events.append(
+                Event(
+                    "info", f"Froze incubating (uncertified) cohort {path.parent.name}/{path.stem}"
+                )
+            )
+    except Exception as exc:  # noqa: BLE001
+        events.append(Event("error", "Incubating cohort freeze failed", str(exc)[:200]))
+    for key, status in after.items():
+        if status == "incubation_retired" and before.get(key) == "incubating":
+            events.append(Event("info", f"{key[0]} v{key[1]} retired from incubation (drift)"))
 
     ev = _staleness_event(today)
     if ev is not None:

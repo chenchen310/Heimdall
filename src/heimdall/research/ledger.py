@@ -38,14 +38,24 @@ from heimdall.research.certify import apply_costs, cohort_turnover
 from heimdall.research.spec import SignalSpec
 from heimdall.research.today import todays_picks
 
+#: Ledger namespaces (playbook §12.3): certified cohorts and incubating (uncertified) ones never
+#: share a directory, so nothing that reads the certified ledger can see an incubating book.
+TIERS: tuple[str, ...] = ("certified", "incubating")
 
-def ledger_dir(name: str, version: int, root: Path | None = None) -> Path:
-    base = root if root is not None else _repo_root()
-    return base / "signals" / "ledger" / f"{name}_v{version}"
+
+def ledger_dir(name: str, version: int, root: Path | None = None, tier: str = "certified") -> Path:
+    if tier not in TIERS:
+        raise ValueError(f"tier must be one of {TIERS}, got {tier!r}")
+    base = (root if root is not None else _repo_root()) / "signals" / "ledger"
+    if tier == "incubating":
+        base = base / "incubating"
+    return base / f"{name}_v{version}"
 
 
-def cohort_path(name: str, version: int, month: str, root: Path | None = None) -> Path:
-    return ledger_dir(name, version, root) / f"{month}.json"
+def cohort_path(
+    name: str, version: int, month: str, root: Path | None = None, tier: str = "certified"
+) -> Path:
+    return ledger_dir(name, version, root, tier) / f"{month}.json"
 
 
 def _repo_root() -> Path:
@@ -70,8 +80,9 @@ def freeze(
     *,
     root: Path | None = None,
     today: date | None = None,
+    tier: str = "certified",
 ) -> Path:
-    """Freeze this month's picks for a certified spec; return the written path.
+    """Freeze this month's picks for a certified (or ``tier="incubating"``) spec.
 
     ``cert_month`` (``YYYY-MM``) is the signal's certification month — the caller
     reads it from the immutable certification report. The freeze month is
@@ -87,7 +98,7 @@ def freeze(
             f"refusing to freeze {month} for {spec.name} v{spec.version}: before its "
             f"certification month {cert_month} (no backfill — the OOS report covers pre-cert)"
         )
-    path = cohort_path(spec.name, spec.version, month, root)
+    path = cohort_path(spec.name, spec.version, month, root, tier)
     if path.exists():
         raise FileExistsError(
             f"{path} already exists — a frozen cohort is immutable (16.1); one freeze per month"
@@ -95,7 +106,9 @@ def freeze(
 
     # A rank-buffered spec (18.2) holds last month's frozen members until they fall past
     # exit_rank — the frozen cohort is the buffer's only memory, so it is read back here.
-    prev = latest_members(spec.name, spec.version, root) if spec.exit_rank is not None else None
+    prev = (
+        latest_members(spec.name, spec.version, root, tier) if spec.exit_rank is not None else None
+    )
     picks = todays_picks(spec, snapshot, prev)
     as_of = ""
     if "as_of" in snapshot.columns and snapshot["as_of"].notna().any():
@@ -115,6 +128,7 @@ def freeze(
         "as_of": as_of,
         "frozen_at": datetime.now(UTC).isoformat(),
         "spec_hash": spec.canonical_hash(),
+        "tier": tier,
         "picks": rows,
     }
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -124,18 +138,22 @@ def freeze(
     return path
 
 
-def latest_members(name: str, version: int, root: Path | None = None) -> set[str] | None:
+def latest_members(
+    name: str, version: int, root: Path | None = None, tier: str = "certified"
+) -> set[str] | None:
     """Members of the latest frozen cohort — the rank buffer's ``prev`` (None if none frozen)."""
-    cohorts = load_cohorts(name, version, root)
+    cohorts = load_cohorts(name, version, root, tier)
     if not cohorts:
         return None
     picks = cast("list[dict[str, object]]", cohorts[-1]["picks"])
     return {str(p["symbol"]) for p in picks}
 
 
-def load_cohorts(name: str, version: int, root: Path | None = None) -> list[dict[str, object]]:
+def load_cohorts(
+    name: str, version: int, root: Path | None = None, tier: str = "certified"
+) -> list[dict[str, object]]:
     """Every frozen cohort for a signal, oldest month first."""
-    d = ledger_dir(name, version, root)
+    d = ledger_dir(name, version, root, tier)
     if not d.exists():
         return []
     out = [json.loads(p.read_text()) for p in sorted(d.glob("*.json"))]
@@ -193,6 +211,7 @@ def realized_track_record(
     *,
     survivorship: str = "current_universe (optimistic)",
     root: Path | None = None,
+    tier: str = "certified",
 ) -> TrackRecord:
     """Recompute every frozen cohort's realized return from the current panel.
 
@@ -204,7 +223,7 @@ def realized_track_record(
     stopping at the first month whose forward window has not completed.
     """
     tr = TrackRecord(spec.name, spec.version, spec.market, cert_month, survivorship)
-    cohorts = load_cohorts(spec.name, spec.version, root)
+    cohorts = load_cohorts(spec.name, spec.version, root, tier)
     panel_dates = sorted(pd.Timestamp(x) for x in panel["date"].unique()) if not panel.empty else []
 
     ordered_sets: list[set[str]] = []
@@ -391,13 +410,53 @@ def freeze_all(*, root: Path | None = None, today: date | None = None) -> list[P
     return written
 
 
+def freeze_incubating(*, root: Path | None = None, today: date | None = None) -> list[Path]:
+    """Freeze the current month for every ``incubating`` factory strategy (playbook §12.3),
+    into the separate ``signals/ledger/incubating/`` namespace. The no-backfill floor is the
+    incubation month (the registry entry's last update, i.e. its ``draft → incubating``
+    transition — an incubating entry has no later transition until it leaves the tier)."""
+    from heimdall.research import registry
+    from heimdall.research.spec import load_spec
+    from heimdall.screener.snapshot import load_snapshot
+
+    base = root if root is not None else registry.registry_path().parent.parent
+    reg = registry.load_registry(root)
+    entries = [
+        e
+        for e in cast("list[dict[str, object]]", reg["signals"])
+        if e.get("status") == "incubating"
+    ]
+    if not entries:
+        return []
+    snap = load_snapshot()
+    written: list[Path] = []
+    for entry in entries:
+        p = Path(str(entry["spec_path"]))
+        spec = load_spec(p if p.is_absolute() else base / p)
+        start_month = str(entry.get("updated_at", ""))[:7]
+        try:
+            written.append(
+                freeze(spec, snap, start_month, root=root, today=today, tier="incubating")
+            )
+        except (FileExistsError, BackfillRefused):
+            continue
+    return written
+
+
 def main(argv: list[str] | None = None) -> int:
     import argparse
 
     p = argparse.ArgumentParser(description="Freeze this month's certified picks (roadmap 16.1)")
     p.add_argument("command", choices=["freeze"], help="freeze every certified signal's picks")
-    p.parse_args(argv)
+    p.add_argument(
+        "--incubating",
+        action="store_true",
+        help="also freeze incubating (uncertified) factory strategies into their own ledger",
+    )
+    args = p.parse_args(argv)
     written = freeze_all()
+    if args.incubating:
+        written += freeze_incubating()
     if not written:
         print("Nothing frozen (no certified signal, or already frozen this month).")
         return 0
