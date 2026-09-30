@@ -23,6 +23,8 @@ by consumers at book level (playbook §12.4) via :func:`overlay_cash`.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import pandas as pd
 
 from heimdall.research import gates
@@ -185,3 +187,69 @@ def overlay_cash(spec: SignalSpec, benchmark_adj: pd.Series, t: pd.Timestamp) ->
         return False
     window = hist.iloc[-OVERLAY_SMA_BARS:]
     return bool(float(window.iloc[-1]) < float(window.mean()))
+
+
+@dataclass
+class BookSchedule:
+    """A spec's decisions over a panel window — the input the daily engine needs (18.3)."""
+
+    targets: dict[pd.Timestamp, pd.Series]  # decision date → the book's weights
+    universe_targets: dict[pd.Timestamp, pd.Series]  # decision date → EW over the spec's tier
+    overlay_cash: pd.Series  # bool by decision date (all False without an overlay)
+    details: pd.DataFrame  # date, symbol, weight, score, rank, sector (the book's rows)
+
+
+def book_schedule(
+    spec: SignalSpec,
+    panel: pd.DataFrame,
+    benchmark_adj: pd.Series | None = None,
+    start: pd.Timestamp | None = None,
+    end: pd.Timestamp | None = None,
+) -> BookSchedule:
+    """Walk the panel's months in order (threading the rank buffer) and record every decision.
+
+    ``benchmark_adj`` is needed only for a spec with an overlay (it decides the cash months).
+    Pure: no engine, no network — ``heimdall.research.spec_backtest`` runs the result.
+    """
+    if spec.overlay and benchmark_adj is None:
+        raise ValueError("an overlay spec needs benchmark_adj to decide its cash months")
+    dates = pd.to_datetime(panel["date"])
+    keep = pd.Series(True, index=panel.index)
+    if start is not None:
+        keep &= dates >= pd.Timestamp(start)
+    if end is not None:
+        keep &= dates <= pd.Timestamp(end)
+    win = panel.loc[keep].assign(date=dates[keep])
+    targets: dict[pd.Timestamp, pd.Series] = {}
+    universe: dict[pd.Timestamp, pd.Series] = {}
+    cash: dict[pd.Timestamp, bool] = {}
+    rows: list[pd.DataFrame] = []
+    prev: set[str] | None = None
+    for t, cross in win.groupby("date", sort=True):
+        ts = pd.Timestamp(str(t))
+        scores = pool_scores(spec, cross)
+        book = select(spec, cross, scores, prev)
+        prev = set(book.index)
+        targets[ts] = book
+        tier = cross.loc[universe_mask(spec, cross), "symbol"].astype(str)
+        universe[ts] = (
+            pd.Series(1.0 / len(tier), index=list(tier)) if len(tier) else pd.Series(dtype=float)
+        )
+        cash[ts] = overlay_cash(spec, benchmark_adj, ts) if benchmark_adj is not None else False
+        if len(book):
+            by_sym = cross.assign(_score=scores).set_index("symbol")
+            ranks = {s: i + 1 for i, s in enumerate(ranked_symbols(cross, scores))}
+            detail = pd.DataFrame(
+                {
+                    "date": ts,
+                    "symbol": list(book.index),
+                    "weight": book.to_numpy(),
+                    "score": by_sym.loc[list(book.index), "_score"].to_numpy(),
+                    "rank": [ranks[s] for s in book.index],
+                }
+            )
+            if "sector" in cross.columns:
+                detail["sector"] = by_sym.loc[list(book.index), "sector"].to_numpy()
+            rows.append(detail)
+    details = pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
+    return BookSchedule(targets, universe, pd.Series(cash, dtype=bool), details)

@@ -1839,7 +1839,27 @@ Steps:
 DoD: reproduction gate + mirrors + gates green.
 **Don't:** re-certify anything; don't retrofit the certified TW spec.
 
-### 18.3 Daily portfolio backtest engine + tear sheet  `[ ]`
+### 18.3 Daily portfolio backtest engine + tear sheet  `[x]`
+
+> **Outcome (2026-09-30):** `backtest/matrix.py` (wide `adj_open`/`adj_close`/`volume` from the
+> local cache only; delta-append + `rebuild`; a `MatrixReport` of missing caches and interior gaps),
+> `backtest/panel_engine.py` (`simulate` = one book, `run` = strategy + buy-and-hold benchmark + EW
+> universe at the same cost; next-open fills, per-side costs on Σ|Δvalue|, daily drift, cash for
+> untradable names / overlay months / infeasible caps, delisted names liquidated at their last close
+> and flagged), `backtest/portfolio_stats.py` (pure pandas: CAGR, vol, Sharpe, Sortino, max DD +
+> duration, Calmar, beta/alpha, TE, IR vs benchmark and vs universe, % months beating, yearly
+> table, rolling excess), `report.returns_tear_sheet` (quantstats). The spec bridge is
+> `construct.book_schedule` (pure) + a new `research/spec_backtest.py` — kept out of `construct`
+> because `heimdall.backtest` imports vectorbt/bt at package level and the referee must stay light.
+> **Real data (DEV only):** the US matrix (3,430 symbols × 4,556 days) builds from the cache in
+> ~17 s; `{fcf_yield}` 2010–2019 runs in 1.6 s with no flags; engine minus label-based book return
+> averages −0.067%/month (sd 0.16%), which *includes* 20 bps/side costs and drift rebalancing — the
+> one-day entry-timing gap itself is small. **Correction to step 6:** inspection showed the Factors
+> page does **not** fill on the signal bar — `bt`'s `RunMonthly` fires on the first trading day of
+> the next month and the hold-mask carries the month-end selection forward, so it fills at the next
+> day's close. The plan's "standing rule breach" claim was wrong; the docstring (which said "that
+> date's close") was the actual defect and is corrected, and a canary pins the behaviour (proven to
+> fire when `bt` is forced to rebalance on the month-end). 11 tests in `tests/test_panel_engine.py`.
 
 **Goal:** the one professional backtest for any spec — daily equity with next-open fills, costs,
 holdings, trades, exposures, two benchmarks and a full stats table. It is the evidence view of
@@ -1871,7 +1891,7 @@ Steps:
    on a synthetic panel with open ≡ previous close, the monthly-compounded engine returns equal
    certify's G4 series to 1e-9 (on real data the gap is the one-day entry timing; report it, don't
    hide it).
-6. Fix the standing rule breach: `backtest/portfolio.py` (Factors page) fills on the **signal**
+6. *(Corrected on execution — see the outcome note: no breach existed.)* Fix the standing rule breach: `backtest/portfolio.py` (Factors page) fills on the **signal**
    bar's close (bt `SelectWhere` on an unshifted hold-mask) — shift the mask one bar; add the canary.
 
 DoD: known-answer + canary + reconciliation green; gates green.

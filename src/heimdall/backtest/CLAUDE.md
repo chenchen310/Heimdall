@@ -6,6 +6,11 @@ Two engines for two genuinely different jobs. Do not force one to do the other's
   mean-reversion). Numba-vectorized, fast for sweeps.
 - **`bt`** — multi-factor **portfolio** backtests with periodic rebalancing (compose select/weigh/
   rebalance algos). Used for RenTech factor sleeves, Citadel rotation, Vanguard baskets.
+- **`panel_engine`** (roadmap 18.3) — the daily portfolio engine for research specs: dated target
+  weights in → daily equity out, next-open fills, per-side costs, drift, cash, delisting flags,
+  beside a buy-and-hold benchmark and the EW universe. Spec-agnostic: `research.spec_backtest` is
+  its one bridge from a `SignalSpec`. Prices come from `matrix.py` (wide adj open/close built from
+  the local cache only); stats from `portfolio_stats.py` (pure pandas).
 - `Zipline-Reloaded` is deferred until true Pipeline point-in-time factor selection is needed.
 
 ## Planned files

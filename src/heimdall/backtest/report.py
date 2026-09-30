@@ -84,3 +84,16 @@ def tear_sheet(pf: vbt.Portfolio, output: str | Path, title: str = "Heimdall str
     out.parent.mkdir(parents=True, exist_ok=True)
     qs.reports.html(daily_returns(pf), output=str(out), title=title)
     return out
+
+
+def returns_tear_sheet(
+    returns: pd.Series,
+    output: str | Path,
+    benchmark: pd.Series | None = None,
+    title: str = "Heimdall strategy",
+) -> Path:
+    """quantstats HTML tear sheet for any daily return series (the 18.3 panel engine)."""
+    out = Path(output)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    qs.reports.html(returns, benchmark=benchmark, output=str(out), title=title)
+    return out

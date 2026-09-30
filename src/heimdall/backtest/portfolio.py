@@ -1,9 +1,13 @@
 """Factor portfolio backtest (bt) — hold the top-N by composite, rebalanced.
 
-Selection at each rebalance date uses only point-in-time factor scores (data
-filed/observed on/before that date); execution is at that date's close with
-commissions. An equal-weight basket of the whole universe is run as a benchmark
-so you can see whether the factor actually adds value.
+Selection at each rebalance date (a period's last trading day) uses only
+point-in-time factor scores (data filed/observed on/before that date). ``bt``'s
+``RunMonthly``/``RunQuarterly`` fire on the **first trading day of the next
+period**, and the hold-mask carries the selection forward, so execution is at
+that next day's close with commissions — one bar after the signal, never on it
+(``tests/test_panel_engine.py`` pins this with a canary). An equal-weight basket of
+the whole universe is run as a benchmark so you can see whether the factor
+actually adds value.
 
 Results carry **survivorship bias** over a current universe — an optimistic upper
 bound, not a promise. See ``.claude/rules/backtest-honesty.md``.
