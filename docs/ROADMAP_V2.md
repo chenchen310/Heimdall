@@ -1735,7 +1735,22 @@ Steps:
 DoD: confirmed numbers mirrored in playbook + `gates.py` (test green); registry tests green; gates green.
 **Don't:** change G1–G6 or §4; write factory code here.
 
-### 18.1 StrategySpec construction as data (`research/construct.py`)  `[ ]`
+### 18.1 StrategySpec construction as data (`research/construct.py`)  `[x]`
+
+> **Outcome (2026-09-30):** `SignalSpec` gained `universe`, `filters`, `weighting`,
+> `max_sector_weight`, `exit_rank`, `overlay` (menus `spec.UNIVERSES/WEIGHTINGS/OVERLAYS`); every
+> default is popped from the hash via `spec.CONSTRUCTION_DEFAULTS`, so the registry-wide hash test
+> stays green. Validators also reject a filter on a `fwd_*` label (label leakage) and a disabled
+> filter (it would change the hash but not the book). New `research/construct.py` exposes the
+> pipeline in pieces so consumers can reuse scores: `universe_mask` (the G3 comparison set) →
+> `pool_mask` → `pool_scores` → `ranked_symbols` (the exact legacy `dropna → sort_values`) →
+> `members` / `buffered_members` → `weights_for` / `cap_sectors`; `construct_book` composes them
+> and `overlay_cash` is the consumer-side overlay test (bars ≤ t only; < 200 bars ⇒ invested).
+> Interpretations worth knowing: filters are scored-pool restrictions, **not** G5 parameters
+> (`count_free_params` discloses them as structural); an infeasible sector cap leaves cash rather
+> than breaching the cap; a missing sector counts as `Unknown`; an inverse-vol name without a vol
+> gets the mean raw weight. 33 tests in `tests/test_research_construct.py`, incl. legacy
+> equivalence and the buffered-turnover property.
 
 **Goal:** one pure function turns (spec, one month's cross-section, previous holdings) into a
 weighted book — the single home of every construction choice the factory searches, so certify,
