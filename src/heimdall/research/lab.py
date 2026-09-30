@@ -158,8 +158,10 @@ def incubating() -> list[IncubatingInfo]:
                 family=str(e.get("family", "")),
                 since=str(e.get("updated_at", ""))[:7],
                 description=description,
-                cohorts=ledger.load_cohorts(name, version, tier="incubating"),
-                monitoring=monitor.load_monitoring(name, version, tier="incubating"),
+                cohorts=ledger.load_cohorts(name, version, _signals_root(), tier="incubating"),
+                monitoring=monitor.load_monitoring(
+                    name, version, _signals_root(), tier="incubating"
+                ),
             )
         )
     return out

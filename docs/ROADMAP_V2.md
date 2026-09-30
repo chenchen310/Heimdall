@@ -2147,7 +2147,21 @@ Steps:
 DoD: AppTest smokes (empty state, a fixture run, an incubating entry); gates green.
 **Don't:** render factory holdings on Today's Picks; no "buy" wording outside the certified tier.
 
-### 18.10 US rebalance / order helper  `[ ]`
+### 18.10 US rebalance / order helper  `[x]`
+
+> **Outcome (2026-09-30):** `research/rebalance.py` gained `weighted_plan` (size every name in
+> either book to `weight × budget`, trade the share difference — a kept name whose weight changed is
+> re-traded, an unchanged one is not; missing close ⇒ skipped, never guessed), `frozen_weights` (a
+> cohort's stored weights, else equal), `shares_for` (whole shares, or a US fractional mode floored
+> to 4 dp); `Order.shares` became a float and the CSV prints `3.3333` / `10`. Today's Picks: **US**
+> specs use target weights + a fractional toggle, with a caption that the previous book is estimated
+> from the last frozen cohort's weights at today's closes; Taiwan keeps the 16.3 equal-weight
+> board-lot path unchanged. Strategy Lab → 孵化中: an order plan built from the **latest frozen
+> cohort** (never a live re-ranking), labeled uncertified, with CSV export. Two small fixes found
+> while testing: `research/lab.py` read the incubating ledger/monitoring without the signals root
+> (fine in production, wrong under an isolated registry — the 18.9 smoke only checked the header),
+> and the Today page's rank-buffer read now passes its root too. 4 unit tests + the Lab AppTest now
+> asserts the incubating order plan.
 
 **Goal:** turn a certified (or, labeled, an incubating) book into an order list for an account size.
 **Files:** `research/rebalance.py`, `ui/today_page.py` + `ui/lab_page.py` (helper panel), tests.

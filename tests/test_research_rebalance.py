@@ -89,3 +89,49 @@ def test_orders_to_csv_shape() -> None:
     lines = csv_text.strip().splitlines()
     assert lines[0] == "symbol,side,shares,reference_close,est_cost"
     assert lines[1] == "A.US,buy,10,100.0000,5.00"
+
+
+# --- 18.10: weighted plans (US) ------------------------------------------------------
+
+
+def test_weighted_plan_sizes_to_target_weights_and_retrades_kept_names() -> None:
+    from heimdall.research.rebalance import weighted_plan
+
+    closes = {"A.US": 100.0, "B.US": 50.0, "C.US": 10.0}
+    targets = {"A.US": 0.5, "B.US": 0.3, "C.US": 0.2}  # inverse-vol style, not equal
+    previous = {"A.US": 0.5, "B.US": 0.5}
+    orders = {o.symbol: o for o in weighted_plan(targets, previous, closes, 10_000, "US")}
+    assert "A.US" not in orders  # same weight ⇒ no trade
+    assert orders["B.US"].side == "sell" and orders["B.US"].shares == 100 - 60
+    assert orders["C.US"].side == "buy" and orders["C.US"].shares == 200
+    assert orders["C.US"].est_cost == pytest.approx(2_000 * 5 / 1e4)  # symmetric bps, no tax
+
+
+def test_weighted_plan_fractional_and_missing_close() -> None:
+    from heimdall.research.rebalance import weighted_plan
+
+    orders = weighted_plan(
+        {"A.US": 1.0, "Z.US": 0.0}, {"Z.US": 1.0}, {"A.US": 300.0}, 1_000, "US", fractional=True
+    )
+    assert [(o.symbol, o.shares) for o in orders] == [("A.US", 3.3333)]  # Z has no close: skipped
+    whole = weighted_plan({"A.US": 1.0}, {}, {"A.US": 300.0}, 1_000, "US")
+    assert whole[0].shares == 3  # floored, never overspends
+
+
+def test_frozen_weights_uses_stored_weights_else_equal() -> None:
+    from heimdall.research.rebalance import frozen_weights
+
+    assert frozen_weights([{"symbol": "A", "weight": 0.7}, {"symbol": "B", "weight": 0.3}]) == {
+        "A": 0.7,
+        "B": 0.3,
+    }
+    assert frozen_weights([{"symbol": "A"}, {"symbol": "B"}]) == {"A": 0.5, "B": 0.5}
+    assert frozen_weights([]) == {}
+
+
+def test_orders_csv_formats_fractional_and_whole_shares() -> None:
+    text = orders_to_csv(
+        [Order("A.US", "buy", 3.3333, 300.0, 0.5), Order("B.US", "sell", 10, 5.0, 0.1)]
+    )
+    rows = text.strip().splitlines()[1:]
+    assert rows == ["A.US,buy,3.3333,300.0000,0.50", "B.US,sell,10,5.0000,0.10"]

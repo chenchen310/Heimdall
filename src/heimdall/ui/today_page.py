@@ -37,7 +37,13 @@ from heimdall.research.ledger import (
     unrealized_mark,
 )
 from heimdall.research.monitor import TRAILING, load_monitoring
-from heimdall.research.rebalance import diff_picks, orders_to_csv, rebalance_plan
+from heimdall.research.rebalance import (
+    diff_picks,
+    frozen_weights,
+    orders_to_csv,
+    rebalance_plan,
+    weighted_plan,
+)
 from heimdall.research.spec import SignalSpec, load_spec
 from heimdall.research.today import freshness, todays_picks
 from heimdall.screener.snapshot import MONETARY_FIELDS
@@ -272,11 +278,27 @@ def _rebalance(spec: SignalSpec, snap: pd.DataFrame, picks: pd.DataFrame) -> Non
         else False
     )
     closes = dict(zip(snap["symbol"].astype(str), snap["price"].astype(float), strict=False))
-    orders = rebalance_plan(current, previous, closes, float(budget), spec.market, odd_lot=odd_lot)
+    if spec.market == "US":
+        # 18.10: size to the spec's own target weights (construct), trade the difference.
+        fractional = st.checkbox(
+            t("Fractional shares (US)"), value=False, key=f"reb_frac_{spec.name}"
+        )
+        targets = dict(zip(picks["symbol"].astype(str), picks["weight"].astype(float), strict=True))
+        prev_w = frozen_weights(cast("list[dict[str, object]]", cohorts[-1]["picks"]))
+        orders = weighted_plan(targets, prev_w, closes, float(budget), "US", fractional=fractional)
+        title = t("Order plan (target weights)")
+        st.caption(
+            t("Previous book estimated from the last frozen cohort's weights at today's closes.")
+        )
+    else:
+        orders = rebalance_plan(
+            current, previous, closes, float(budget), spec.market, odd_lot=odd_lot
+        )
+        title = t("Order plan (equal-weight)")
     if not orders:
         return
 
-    st.subheader(t("Order plan (equal-weight)"))
+    st.subheader(title)
     table = pd.DataFrame(
         [
             {
@@ -416,7 +438,9 @@ def render() -> None:
         _evidence_box(region, report)
         _monitoring_line(spec)
 
-        prev = latest_members(spec.name, spec.version) if spec.exit_rank is not None else None
+        prev = (
+            latest_members(spec.name, spec.version, _root()) if spec.exit_rank is not None else None
+        )
         if spec.exit_rank is not None and prev is None:
             st.caption(
                 t("No frozen cohort yet — plain top-N shown; the rank buffer starts next month.")
