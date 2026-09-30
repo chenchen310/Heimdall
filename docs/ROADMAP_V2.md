@@ -1932,7 +1932,33 @@ Steps:
 DoD: tests + gates green.
 **Don't:** add statistics beyond this list without the user.
 
-### 18.5 The factory: search engine + trial ledger (`research/factory.py`)  `[ ]`
+### 18.5 The factory: search engine + trial ledger (`research/factory.py`)  `[x]`
+
+> **Outcome (2026-09-30):** `SearchConfig` (hash excludes prose; menus validated against the
+> NORTH_STAR usage/`gates` caps; `trial_budget()` refuses a config over F6 before anything runs),
+> `check_declared` (the certify pre-registration pattern), `prepare` → `DevPanel` (DEV rows only —
+> ineligible rows dropped, the panel's within-month row order kept so tie-breaks match, z-scores
+> precomputed per universe × neutralization × feature with the real `_zscore`/`_sector_zscore`),
+> `evaluate_fast` (numpy G1/G2/G3/G6 + the F1 net-selection-alpha series + a G4-style view),
+> append-only `trials.parquet` + `series.parquet` under `signals/search/<run_id>/` (resumable by
+> spec hash; a different config under the same run id is refused), `leaderboard` (DSR per trial
+> with N = ledger rows and V = cross-trial per-period Sharpe variance; run PBO over S = 16; F1/F3/F5
+> flags; `candidate` = all + run passes F2), `cache_engine_backtests` (18.3 engine, DEV only, into
+> the gitignored `data/research/factory/<run_id>/`), and a `run | leaderboard | engine` CLI.
+> **Overlay is not searched:** §12.4 scores selection un-overlaid, so an overlay twin has identical
+> F1–F3 numbers — counting it would only inflate N; overlays are reported for finalists (18.7).
+> **Equivalence:** `evaluate_fast` ≡ `evaluate()` to 1e-10 on 18 spec × construction combinations
+> (plain, `us_large`, sector-neutral, inverse-vol, rank buffer, all four; single, tied and sparse
+> features). **Speed on real `panel_us` DEV** (timing only, no metric looked at): `prepare` 22 s;
+> plain candidates 25.7/s (target ≥ 20 met); stage-2 mixes (buffer / inverse-vol / sector) 10.2/s;
+> a 1,562-trial space ≈ 2 minutes. **Finding for the user (F1 behaviour):** with V taken across all
+> trials, a strong signal *raises its own bar* — its variants inflate V and hence E[max SR]. On the
+> synthetic panel a persistent planted signal at monthly SR ≈ 1.0–1.3 clears DSR ≥ 0.95 on every
+> seed, but one at SR ≈ 0.5–0.75 (annualized ≈ 2) only sometimes; with 1,500 trials E[max SR] under
+> realistic V is well above a `fcf_yield`-grade monthly SR ≈ 0.25. This is the rule working as
+> written (big searches need big edges), and it makes **search size a first-order design choice for
+> 18.15**; any change to how V/N are estimated (e.g. effective-N clustering) is a §4-rule-4 proposal
+> for the user, not something to adjust here. 28 tests in `tests/test_research_factory.py`.
 
 **Goal:** the platform generates candidates itself — a declared space, searched on DEV, every
 trial logged, a leaderboard carrying DSR/PBO.
