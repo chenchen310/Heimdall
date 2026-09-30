@@ -2241,7 +2241,27 @@ field also needs its glossary entry — `test_every_screenable_numeric_field_has
 DoD: tests + gates green. Columns reach `panel_us` via 18.14.
 **Don't:** trigger a rebuild; no variants.
 
-### 18.13 Form 4 insider crawl (runs 13.3's deferred crawl)  `[ ]`
+### 18.13 Form 4 insider crawl (runs 13.3's deferred crawl)  `[x]`
+
+> **Outcome (2026-09-30) — done via SEC's bulk data sets instead of a crawl.** A probe found the
+> 13.3 per-filing crawl was broken (EDGAR's `primaryDocument` for a Form 4 is the XSL-rendered
+> `xslF345X06/form4.xml`, so it fetched HTML, failed to parse, and silently skipped every filing)
+> and structurally limited (the "recent" submissions page reaches back only to ~2015 for active
+> filers). With the user's explicit download approval (70 zips, ~721 MB, sec.gov), `form4.py` gained
+> `download_bulk` (quarterly *Insider Transactions Data Sets*, idempotent), `normalize_bulk_quarter`
+> (same canonical rows as the XML path: Form 4 originals only, non-derivative trades with code and
+> shares, first reporting owner's flags, `filed_at` = filing date; issuers keyed by **CIK → every
+> current ticker**, so FB-era filings land on META and both share classes carry insider data;
+> unmapped issuers keep a cleaned filing-time ticker), `ingest_bulk` (per-symbol caches + a
+> `_bulk.json` coverage marker), and a CLI. Once the marker exists a symbol without a cache returns
+> empty — never a per-filing crawl. The crawl's XSL bug is also fixed (`raw_xml_doc`). **Result:**
+> 70 quarters (2009Q1–2026Q2), 6,095,090 transactions over 16,953 symbols, coverage through
+> 2026-06-30, ingest ≈ 90 s; **3,416 / 3,429** `panel_us` names have filings (AAPL/JPM from 2009,
+> META from its 2012 IPO). Panel months after the coverage end get **NaN** insider features
+> (`_insider_features(coverage_end=)` wired through `build_dataset`), never a false 0. Quarterly
+> refresh documented in `docs/OPERATIONS.md` — deliberately *not* added to the weekly chain (a
+> standing automatic download is the user's call). 7 tests in `tests/test_form4.py` (bulk golden
+> from a synthetic zip, ticker cleaning, XSL path, ingest + marker + no-crawl, coverage NaN).
 
 **Goal:** populate the insider stream so `insider_net_buy_90d` / `insider_cluster_buy` join the pool.
 **Files:** a resumable crawler under `research/` (reuse the 13.7 ledger pattern), `docs/OPERATIONS.md`.

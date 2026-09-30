@@ -133,6 +133,7 @@ def main(argv: list[str] | None = None) -> int:
     daily_lending = None
     tdcc_weeks = None
     insider = None
+    insider_coverage_end = None
     quarterly_fundamentals = None
     # Static symbol→sector map (roadmap 14.1) for within-sector scoring (17.5). Both
     # maps are incrementally disk-cached, so a resume with a warm cache is instant;
@@ -160,7 +161,11 @@ def main(argv: list[str] | None = None) -> int:
         # issuance + acceleration + accruals) until a real Form 4 crawl exists — the
         # 13.6 note; a later insider crawl+rebuild re-runs 17.7's reproduction gate.
         if not args.no_insider:
-            insider = Form4Provider().get_insider_transactions
+            # 18.13: served from the bulk SEC data sets (ingest them first); months after
+            # their coverage end get NaN insider features, never a false "no trades" 0.
+            form4 = Form4Provider()
+            insider = form4.get_insider_transactions
+            insider_coverage_end = form4.coverage_end()
         # Quarterly income rows (re-normalized from the same cached companyfacts
         # JSON as the annual fetch — no extra network) power 13.4's PEAD ``sue``;
         # its presence also switches on 13.5's annual issuance/quality features.
@@ -183,6 +188,7 @@ def main(argv: list[str] | None = None) -> int:
         daily_lending=daily_lending,
         tdcc_weeks=tdcc_weeks,
         insider=insider,
+        insider_coverage_end=insider_coverage_end,
         quarterly_fundamentals=quarterly_fundamentals,
         sector_map=sector_map,
     )

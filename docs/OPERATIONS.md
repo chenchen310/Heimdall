@@ -97,3 +97,22 @@ tail -f data/logs/weekly.err.log data/logs/weekly.out.log
 launchctl unload ~/Library/LaunchAgents/com.heimdall.weekly.plist
 rm ~/Library/LaunchAgents/com.heimdall.weekly.plist
 ```
+
+## Quarterly: SEC Form 4 insider data (roadmap 18.13)
+
+The insider features (`insider_net_buy_90d`, `insider_cluster_buy`) read SEC's quarterly
+**Insider Transactions Data Sets**, not a per-filing crawl. SEC publishes each quarter's zip a few
+weeks after the quarter ends. Once it is out, fetch the new zip(s) and re-ingest:
+
+```bash
+uv run python -m heimdall.data.providers.form4 --download
+```
+
+- Only zips not already under `data/form4/raw/` are downloaded (~10 MB each).
+- The per-symbol caches in `data/form4/` and the `data/form4/_bulk.json` marker are rebuilt from
+  the raw zips, which takes about 1–2 minutes.
+- Panel months after the marker's `coverage_end` get **NaN** insider features, never a false "no
+  trades" 0, until the next quarter is ingested.
+
+This step is manual on purpose. Adding it to the weekly chain would create a standing automatic
+download, and that is the user's call.
