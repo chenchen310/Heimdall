@@ -28,8 +28,12 @@ from typing import cast
 # Each step is the ``python -m`` target + args; the runner prepends the interpreter.
 # ``tdcc_cache`` is appended **last** (roadmap 16.4) — its own exit-1 on an empty
 # fetch surfaces as an ``error`` digest event via the shared failure path below.
+# The SEC Form 4 bulk refresh (roadmap 18.13) runs before the US panel extension so new
+# months read the newest quarter; the user asked for it to run automatically (2026-09-30).
+# It only downloads a quarter not yet on disk and re-ingests only when something is new.
 WEEKLY_CHAIN: list[list[str]] = [
     ["heimdall.screener.build"],
+    ["heimdall.data.providers.form4", "--download"],
     ["heimdall.research.build_dataset", "--market", "us"],
     ["heimdall.research.build_dataset", "--market", "tw"],
     ["heimdall.research.monitor", "--apply"],

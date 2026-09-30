@@ -74,6 +74,11 @@ list, from public datasets on GitHub.
 > - **Whatever Sharadar's non-professional bundle costs**: check it while logged in. This is the most complete survivorship fix.
 > - **Plus Zacks ZEEH**: adds an estimate-revisions family.
 
+## Decision (user, 2026-09-30)
+
+「先不要付費資料的預算」 — **no paid data for now.** The program continues on free data. The memo
+stays on file for a later decision; no fallback was scheduled with it.
+
 ## Sources (accessed 2026-09-30)
 
 - Norgate packages and prices: https://norgatedata.com/stockmarketpackages.php
