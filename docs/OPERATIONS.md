@@ -10,24 +10,26 @@ be running.
 `heimdall.ops.notify run-weekly` chains, in order:
 
 1. **Snapshot refresh** — `python -m heimdall.screener.build`
-2. **Panel extension** — `python -m heimdall.research.build_dataset --market us` then `--market tw`
-3. **Drift monitor** — `python -m heimdall.research.monitor --apply` (auto-flips a
+2. **Form 4 bulk refresh** — `python -m heimdall.data.providers.form4 --download` (a no-op
+   until SEC posts a new quarter; see "Quarterly: SEC Form 4 insider data" below)
+3. **Panel extension** — `python -m heimdall.research.build_dataset --market us` then `--market tw`
+4. **Drift monitor** — `python -m heimdall.research.monitor --apply` (auto-flips a
    drifted signal to `under_review`; playbook §9)
-4. **TDCC big-holder cache** — `python -m heimdall.research.tdcc_cache` fetches this
+5. **TDCC big-holder cache** — `python -m heimdall.research.tdcc_cache` fetches this
    week's 集保 shareholding-dispersion file (roadmap 13.9/16.4). **Missed weeks are
    unrecoverable**: the open-data endpoint serves only the current week with no
    backfill, so every skipped run is `tw-bigholder`/15.3 history lost forever, and
    `big_holder_ratio_delta_4w` stays NaN until four real weeks sit on disk. Note that
    `--rebuild` only re-fetches the *current* week's file — it cannot recover a past
    one.
-5. **Cohort freeze** — the certified picks for the current month are frozen in place
+6. **Cohort freeze** — the certified picks for the current month are frozen in place
    (roadmap 16.1). This is **idempotent**: on a weekly cadence only the first run of
    each month actually writes a cohort; later runs are no-ops.
 
 Every step is resumable and safe to re-run, so a failed or interrupted week simply
 picks up where it left off on the next run.
 
-Steps 1–4 run as subprocesses on **the job's own interpreter** (`sys.executable -m …`,
+Steps 1–5 run as subprocesses on **the job's own interpreter** (`sys.executable -m …`,
 i.e. the venv that the plist's `uv run` resolved) — never via a `PATH` lookup. launchd
 starts jobs with a minimal `PATH` (`/usr/bin:/bin:/usr/sbin:/sbin`, no `~/.local/bin`
 or `/opt/homebrew/bin`); from 2026-07-20 to 2026-09-28 the steps shelled out to a bare
