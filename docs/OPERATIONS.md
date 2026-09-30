@@ -27,6 +27,14 @@ be running.
 Every step is resumable and safe to re-run, so a failed or interrupted week simply
 picks up where it left off on the next run.
 
+Steps 1–4 run as subprocesses on **the job's own interpreter** (`sys.executable -m …`,
+i.e. the venv that the plist's `uv run` resolved) — never via a `PATH` lookup. launchd
+starts jobs with a minimal `PATH` (`/usr/bin:/bin:/usr/sbin:/sbin`, no `~/.local/bin`
+or `/opt/homebrew/bin`); from 2026-07-20 to 2026-09-28 the steps shelled out to a bare
+`uv`, which launchd could not find, and every run died before the freeze and digest. A
+step that cannot even launch is now reported like any other failed step, and the run
+carries on.
+
 ## Notifications
 
 Delivery channels are read from `.env`. **With none configured the job is a
@@ -40,7 +48,11 @@ supported.)
 
 The digest reports only what needs you:
 
-- **Job step failed** — a refresh/monitor step exited non-zero (the tail of its output is included).
+- **Job step failed** — a refresh/monitor step exited non-zero or could not be launched (the tail
+  of its output, or the launch error, is included).
+- **Weekly chain is dead: all N steps failed** — every step failed in the same run. That is almost
+  always the job environment (interpreter, `PATH`, working directory), not the data — check
+  `data/logs/weekly.err.log` and the plist paths first.
 - **… flipped to under_review (drift)** — a certified signal's trailing-12 selection skill went
   significantly negative; Today's Picks now withholds its ranking until it re-certifies or retires.
 - **Froze cohort …** — this month's picks were recorded to the live track record.
@@ -52,18 +64,27 @@ The digest reports only what needs you:
 
 If nothing needs attention the digest says so in one line.
 
+**Errors are loud even in a dry run.** Any `error` event makes the job exit **1** (shown as
+the last-exit column of `launchctl list`) and prints a short error list to stderr
+(`data/logs/weekly.err.log`), marked `DRY RUN — nobody was notified` when no channel is
+configured. The full digest always goes to stdout (`data/logs/weekly.out.log`). A clean run
+exits 0 and writes nothing to stderr.
+
 ## Install (macOS, launchd)
 
-1. Copy the template and fill in your absolute paths:
+1. Copy the template and fill in your absolute paths (repo and `uv`):
 
    ```bash
    mkdir -p ~/Library/LaunchAgents data/logs
-   sed "s#__REPLACE_WITH_ABSOLUTE_REPO_PATH__#$(pwd)#g" \
+   sed -e "s#__REPLACE_WITH_ABSOLUTE_REPO_PATH__#$(pwd)#g" \
+       -e "s#/opt/homebrew/bin/uv#$(command -v uv)#" \
      src/heimdall/ops/com.heimdall.weekly.plist \
      > ~/Library/LaunchAgents/com.heimdall.weekly.plist
    ```
 
-   If `which uv` is not `/opt/homebrew/bin/uv`, edit that path in the copied plist too.
+   Check that the first `ProgramArguments` entry is an **absolute** path to `uv`
+   (e.g. `~/.local/bin/uv` expanded, or `/opt/homebrew/bin/uv`). It is the only
+   executable launchd has to find; the chained steps reuse its interpreter.
 
 2. Load it (runs Mondays 08:00 local):
 
@@ -84,12 +105,18 @@ If nothing needs attention the digest says so in one line.
 # Run the whole flow once, right now (dry run unless a channel is configured):
 uv run python -m heimdall.ops.notify run-weekly
 
-# Confirm launchd registered the job:
+# Confirm launchd registered the job; the middle column is the last exit status
+# (0 = clean, 1 = the run had error events or crashed, "-" = never run yet):
 launchctl list | grep com.heimdall.weekly
 
 # Watch the logs after a scheduled run:
 tail -f data/logs/weekly.err.log data/logs/weekly.out.log
 ```
+
+To rehearse under launchd's own environment without waiting for Monday, prefix the
+run-weekly command with `env -i HOME="$HOME" PATH=/usr/bin:/bin:/usr/sbin:/sbin` and
+call `uv` by the absolute path from your plist. This runs the real chain, and it freezes
+this month's cohort if that has not happened yet.
 
 ## Uninstall
 
