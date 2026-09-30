@@ -30,6 +30,7 @@ from heimdall.data.symbols import parse_symbol
 from heimdall.screener.snapshot import (
     UNIVERSES,
     build_snapshot_iter,
+    fetch_benchmarks,
     load_snapshot,
     snapshot_path,
 )
@@ -103,6 +104,7 @@ def main(argv: list[str] | None = None) -> int:
         checkpoint_every=args.checkpoint_every,
         monthly_revenue=monthly_revenue,
         sector_map=sector_map,
+        benchmarks=fetch_benchmarks(prices, symbols, as_of),  # beta_252d (roadmap 18.12)
     )
     last = next(progress)  # initial plan (done == 0)
     print(

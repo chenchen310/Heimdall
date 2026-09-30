@@ -41,7 +41,7 @@ from heimdall.data.providers.form4 import BUY_CODE, SELL_CODE
 from heimdall.data.providers.tdcc import BIG_HOLDER_LEVELS
 from heimdall.data.schema import FUNDAMENTALS_COLUMNS
 from heimdall.data.store import data_root
-from heimdall.factors.metrics import snapshot_row
+from heimdall.factors.metrics import add_industry_momentum, snapshot_row
 from heimdall.factors.panel import _prices_wide, _rebalance_dates
 from heimdall.research import gates
 from heimdall.research.benchmark import BENCHMARK, forward_return, window_return
@@ -790,7 +790,9 @@ def build_dataset_iter(
             if hist.empty:
                 continue
             monthly = rev_hist.get(sym, pd.DataFrame()) if monthly_revenue is not None else None
-            row = snapshot_row(sym, hist, fund_data[sym], t.date(), monthly=monthly)
+            row = snapshot_row(
+                sym, hist, fund_data[sym], t.date(), monthly=monthly, benchmark=bench_adj
+            )
             row.update(_labels(adj_by_sym[sym], bench_adj, t, next_of[t]))
             if sector_map is not None:  # static current-map label (14.1/17.5), not point-in-time
                 row["sector"] = sector_map.get(sym, "Unknown")
@@ -831,7 +833,8 @@ def build_dataset_iter(
             prog.dropped.append(t.date().isoformat())  # dropped and reported, never kept
             yield prog
             continue
-        frames.append(pd.DataFrame(rows))
+        # Industry momentum (18.12) is cross-sectional: the month's sector means of ret_6m.
+        frames.append(add_industry_momentum(pd.DataFrame(rows)))
         if i % checkpoint_every == 0 and frames:
             _save_atomic(pd.concat(frames, ignore_index=True), panel_path(market, root))
         yield prog

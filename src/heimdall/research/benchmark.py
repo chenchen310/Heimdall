@@ -13,13 +13,12 @@ from __future__ import annotations
 
 import pandas as pd
 
+from heimdall.data.symbols import REGION_BENCHMARK
+
 # Region (``Symbol.region``) → benchmark symbol, per the frozen decisions in
 # docs/NORTH_STAR.md: success is measured against the market you could have
 # bought instead. Extend only alongside MARKET_REGION in data/symbols.py.
-BENCHMARK: dict[str, str] = {
-    "US": "SPY.US",
-    "Taiwan": "0050.TW",
-}
+BENCHMARK: dict[str, str] = REGION_BENCHMARK  # one map, defined in data/symbols.py
 
 
 def forward_return(adj: pd.Series, start: pd.Timestamp, bars: int) -> float:

@@ -2201,7 +2201,27 @@ Steps:
 
 DoD: memo committed. **Don't:** sign up, pay, or add keys.
 
-### 18.12 US free feature batch (breadth for the factory pool)  `[ ]`
+### 18.12 US free feature batch (breadth for the factory pool)  `[x]`
+
+> **Outcome (2026-09-30):** four features, each with its direction + rationale documented inline
+> (the 17.14 precedent) and a glossary label/entry: `max_ret_21d` (−, `_technicals`), `beta_252d`
+> (−, new opt-in `snapshot_row(..., benchmark=)`, benchmark sliced to ≤ as_of inside; 252
+> overlapping returns), `f_score` (+) with `f_score_n` (`piotroski_f_score`: 9 checks from two
+> annual years each sharing one `fiscal_end`, prior = 300–430 d earlier, end-of-year assets for ROA,
+> missing inputs score 0, none evaluable ⇒ NaN), `ind_mom_6m` (+, `add_industry_momentum`:
+> region × sector EW mean `ret_6m`, groups < 5 or `Unknown` ⇒ NaN; static sector map caveat).
+> `edgar.METRIC_SPECS` gained `current_assets`/`current_liabilities` (cached companyfacts
+> re-normalize offline). Wiring: the snapshot builder takes `benchmarks=` (`fetch_benchmarks`, used
+> by the build CLI and page) and recomputes industry momentum on the whole table at each save; the
+> panel builder passes `benchmark=bench_adj` and applies industry momentum per month. The
+> benchmark map moved to `data/symbols.REGION_BENCHMARK` (`research.benchmark.BENCHMARK` is the
+> same dict) so the screener layer can use it. 10 tests in `tests/test_features_1812.py`.
+> **Found while wiring — a live-scoring gap for 18.15:** the 13.x/17.x panel-only features (`sue`,
+> `earn_gap`, `net_issuance_12m`, `asset_growth`, `gross_profitability`, `rev_accel_q`,
+> `gross_margin_delta_q`, `accruals`, insider) are computed in `research/dataset.py` only, so they
+> never reach the live snapshot; `todays_picks` (and therefore an incubating strategy's monthly
+> freeze) raises on a spec that uses them. Before 18.15 either restrict the pool to
+> snapshot-available features or port those features into the snapshot builder (spawned as a task).
 
 **Goal:** add documented, orthogonal free axes the pool lacks.
 **Files:** `factors/metrics.py`, `data/providers/edgar.py` (two tags), `research/dataset.py`,
@@ -2246,6 +2266,9 @@ entry 015 to ~2 dp), new-column coverage table, RESEARCH_LOG entry. If any US st
 18.14 — a v3 run is a new config, a new family, and its own future card).
 
 Steps:
+0. **Precondition (found in 18.12):** every pool feature must also exist in the live snapshot, or
+   an incubated strategy cannot be frozen monthly — port the panel-only features first or exclude
+   them from the pool.
 1. Write `signals/search/us-f1/config.json`. Pool = every `panel_us` v2 feature with a documented
    a-priori direction (list each with its source); exclude, don't guess, anything undocumented;
    exclude ratios whose negative values rank ambiguously (`pe`, `peg`, `ev_ebitda`, `ev_fcf`) unless

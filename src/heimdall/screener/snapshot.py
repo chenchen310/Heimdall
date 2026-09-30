@@ -20,8 +20,8 @@ import pandas as pd
 from heimdall.data.base import DataProvider, NotSupported, ProviderError
 from heimdall.data.schema import FUNDAMENTALS_COLUMNS
 from heimdall.data.store import data_root
-from heimdall.data.symbols import MARKET_REGION, parse_symbol
-from heimdall.factors.metrics import snapshot_row
+from heimdall.data.symbols import MARKET_REGION, REGION_BENCHMARK, parse_symbol
+from heimdall.factors.metrics import add_industry_momentum, snapshot_row
 
 #: Warm-up for TW revenue-momentum: rev_mom_accel needs ~19 known months (mirrors
 #: research.dataset's build warm-up so a snapshot row and a panel row agree).
@@ -145,6 +145,7 @@ def build_row(
     *,
     monthly_revenue: Callable[[str, date, date], pd.DataFrame] | None = None,
     sector_map: dict[str, str] | None = None,
+    benchmarks: dict[str, pd.Series] | None = None,
 ) -> dict[str, object] | None:
     """One snapshot row, or ``None`` if the symbol has no price data.
 
@@ -169,6 +170,9 @@ def build_row(
     ``sector`` string, "Unknown" for a symbol missing from the map (never a
     dropped row); when omitted entirely, the column is omitted entirely — the
     same opt-in-or-absent convention as ``monthly_revenue``'s ``rev_mom_*``.
+
+    ``benchmarks`` (roadmap 18.12) maps a region to its benchmark's adjusted close
+    (:func:`fetch_benchmarks`); when given, rows of that region carry ``beta_252d``.
     """
     price_start = as_of - timedelta(days=500)  # enough history for SMA-200
     ohlcv = prices.get_ohlcv(symbol, price_start, as_of)
@@ -184,10 +188,27 @@ def build_row(
             monthly = monthly_revenue(symbol, as_of - _MONTHLY_REVENUE_LOOKBACK, as_of)
         except (ProviderError, NotSupported):
             monthly = pd.DataFrame()
-    row = snapshot_row(symbol, ohlcv, fund, as_of, monthly=monthly)
+    bench = benchmarks.get(parse_symbol(symbol).region) if benchmarks is not None else None
+    row = snapshot_row(symbol, ohlcv, fund, as_of, monthly=monthly, benchmark=bench)
     if sector_map is not None:
         row["sector"] = sector_map.get(symbol, "Unknown")
     return row
+
+
+def fetch_benchmarks(prices: DataProvider, symbols: list[str], as_of: date) -> dict[str, pd.Series]:
+    """The benchmark adjusted-close series for every region among ``symbols`` (for
+    ``beta_252d``). A region whose benchmark cannot be fetched is simply omitted."""
+    out: dict[str, pd.Series] = {}
+    for region in sorted({parse_symbol(s).region for s in symbols}):
+        try:
+            df = prices.get_ohlcv(REGION_BENCHMARK[region], as_of - timedelta(days=500), as_of)
+        except (ProviderError, NotSupported, KeyError):
+            continue
+        if not df.empty:
+            out[region] = pd.Series(
+                df["adj_close"].to_numpy(dtype=float), index=pd.DatetimeIndex(df["date"])
+            )
+    return out
 
 
 def build_snapshot(
@@ -198,6 +219,7 @@ def build_snapshot(
     *,
     monthly_revenue: Callable[[str, date, date], pd.DataFrame] | None = None,
     sector_map: dict[str, str] | None = None,
+    benchmarks: dict[str, pd.Series] | None = None,
 ) -> pd.DataFrame:
     """Build the snapshot table for ``symbols`` as known on ``as_of`` (default today)."""
     as_of = as_of or date.today()
@@ -212,11 +234,12 @@ def build_snapshot(
                 as_of,
                 monthly_revenue=monthly_revenue,
                 sector_map=sector_map,
+                benchmarks=benchmarks,
             )
         )
         is not None
     ]
-    return pd.DataFrame(rows)
+    return add_industry_momentum(pd.DataFrame(rows))
 
 
 @dataclass
@@ -242,6 +265,7 @@ def build_snapshot_iter(
     root: Path | None = None,
     monthly_revenue: Callable[[str, date, date], pd.DataFrame] | None = None,
     sector_map: dict[str, str] | None = None,
+    benchmarks: dict[str, pd.Series] | None = None,
 ) -> Iterator[BuildProgress]:
     """Resumable, checkpointed build that yields progress after each symbol.
 
@@ -281,6 +305,7 @@ def build_snapshot_iter(
                 as_of,
                 monthly_revenue=monthly_revenue,
                 sector_map=sector_map,
+                benchmarks=benchmarks,
             )
         except Exception as exc:  # network/provider hiccup — skip, don't abort the crawl
             prog.failures[type(exc).__name__] = prog.failures.get(type(exc).__name__, 0) + 1
@@ -290,10 +315,12 @@ def build_snapshot_iter(
             prog.built += 1
         prog.done, prog.last_symbol = i, symbol
         if i % checkpoint_every == 0:
-            save_snapshot(pd.DataFrame(rows), root)
+            save_snapshot(add_industry_momentum(pd.DataFrame(rows)), root)
         yield prog
 
-    save_snapshot(pd.DataFrame(rows), root)
+    # Industry momentum is cross-sectional (every row's sector mean), so it is recomputed on
+    # the whole table at each save rather than per row.
+    save_snapshot(add_industry_momentum(pd.DataFrame(rows)), root)
     prog.finished = True
     yield prog
 
