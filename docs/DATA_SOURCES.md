@@ -75,6 +75,13 @@ for both markets (it returns **adjusted** TW closes, which matters for honest ba
   "next-day" claim — `available_at` uses a conservative `data_date + 14 days` (user decision
   2026-07-12; full writeup in `docs/RESEARCH_LOG.md` entry 014).
 
+## Paid data — the decision memo
+
+`docs/PAID_DATA_MEMO.md` (roadmap 18.11, 2026-09-30) compares the paid options for the two gaps free
+data cannot close — survivorship-free US prices and PIT analyst-estimate history — with prices as
+listed that day, integration cost, and one budget question for the user. Nothing is bought without
+that decision.
+
 ## Caveats baked into the design
 
 - yfinance can break/ban without notice → it is wrapped, cached, and replaceable, never assumed.

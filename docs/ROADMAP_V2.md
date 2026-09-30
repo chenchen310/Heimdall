@@ -306,7 +306,7 @@ healthy ones. CLI `python -m heimdall.research.monitor [--apply]`. Synthetic-dri
 banner test. First real run: `tw-revenue-momentum v1` healthy — trailing-12 skill +16.4% (CI +2.0%
 to +30.9%), no drift.
 
-### 12.3 Paid-data decision memo  `[ ]`
+### 12.3 Paid-data decision memo  `[x]` (executed by 18.11 — see `docs/PAID_DATA_MEMO.md`)
 Only after ≥ 2 Phase-10 families are certified-or-rejected: write `docs/DATA_DECISION.md` — what
 free signals achieved, what FMP estimates/revisions would add, cost vs measured gap. A memo, not
 an integration; the user decides.
@@ -2169,7 +2169,20 @@ Steps: US rules — whole shares by default, fractional toggle, no sell tax, per
 `construct_book` (never assumed equal); diff vs the last frozen cohort; CSV export. Pure + tested.
 **Don't:** connect to any broker (18.B).
 
-### 18.11 Paid-data decision memo (executes 12.3)  `[ ]`
+### 18.11 Paid-data decision memo (executes 12.3)  `[x]`
+
+> **Outcome (2026-09-30):** `docs/PAID_DATA_MEMO.md` + a `DATA_SOURCES.md` pointer. Checked on vendor
+> sites that day: **Sharadar Core US Equities Bundle** (Jan 1998→, 21,000+ companies incl. delisted,
+> PIT-ready fundamentals + prices + insiders; **price behind a Nasdaq Data Link login**), **Norgate
+> Platinum** (US$630/yr, delisted + historical index constituents to 1990, but fundamentals are
+> current-only and its updater is Windows-only), **EODHD** (Historian US$199/yr EOD incl. delisted;
+> ALL-IN-ONE US$999.90/yr; delisted fundamentals only post-2018), **Tiingo** (Power US$300/yr +
+> fundamentals add-on, partial delisted), **FMP** (Premium/Ultimate; estimates endpoint without a
+> documented as-of history). For revisions: **Zacks ZEEH** (consensus revision history 1979→,
+> 23,000+ companies, daily, 1-day lag; price behind login). Recommendation: look up Sharadar + ZEEH
+> non-professional prices while logged in; cheapest survivorship fix = EODHD Historian + free EDGAR;
+> free fallback = S&P 500 membership CSV (a measured bound, not a cure). Ends with the budget question.
+> 12.3 is therefore also done.
 
 **Goal:** the user decides with facts. Two gaps free data cannot close: (a) **survivorship-free**
 US prices + PIT fundamentals (delisted names), (b) **analyst estimates / revisions** history.
