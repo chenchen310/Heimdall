@@ -28,6 +28,7 @@ from heimdall.data.symbols import SymbolError, parse_symbol
 from heimdall.screener.snapshot import (
     UNIVERSES,
     build_snapshot_iter,
+    fetch_benchmarks,
     load_snapshot,
     snapshot_path,
     split_by_region,
@@ -137,7 +138,13 @@ def _run_in_process(symbols: list[str], *, resume: bool) -> None:
     done = built = total = 0
     failures: dict[str, int] = {}
     for p in build_snapshot_iter(
-        symbols, prices, funds, date.today(), resume=resume, monthly_revenue=monthly_revenue
+        symbols,
+        prices,
+        funds,
+        date.today(),
+        resume=resume,
+        monthly_revenue=monthly_revenue,
+        benchmarks=fetch_benchmarks(prices, symbols, date.today()),
     ):
         done, built, total, failures = p.done, p.built, p.total, p.failures
         if total:

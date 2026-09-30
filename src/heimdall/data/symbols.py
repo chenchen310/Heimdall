@@ -25,6 +25,14 @@ MARKET_REGION: dict[str, str] = {
     "TWO": "Taiwan",
 }
 
+# Region → the market benchmark (docs/NORTH_STAR.md: success is measured against the market you
+# could have bought instead). ``research.benchmark.BENCHMARK`` is this same map; it lives here so
+# the snapshot builder (below ``research`` in the layer order) can compute beta against it.
+REGION_BENCHMARK: dict[str, str] = {
+    "US": "SPY.US",
+    "Taiwan": "0050.TW",
+}
+
 # Reporting currency per UI region (every market in a region shares one currency).
 # Lets a universe-driven page label its currency without a sample symbol in hand.
 REGION_CURRENCY: dict[str, str] = {

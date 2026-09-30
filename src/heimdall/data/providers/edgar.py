@@ -49,6 +49,9 @@ METRIC_SPECS: list[MetricSpec] = [
     ),
     ("assets", "balance", ["Assets"], "USD"),
     ("liabilities", "balance", ["Liabilities"], "USD"),
+    # Current assets / liabilities feed the Piotroski current-ratio check (roadmap 18.12).
+    ("current_assets", "balance", ["AssetsCurrent"], "USD"),
+    ("current_liabilities", "balance", ["LiabilitiesCurrent"], "USD"),
     (
         "equity",
         "balance",

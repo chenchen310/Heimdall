@@ -87,6 +87,11 @@ def _technicals(ohlcv: pd.DataFrame) -> dict[str, float]:
     rets = close.pct_change().dropna()
     vol_63d = float(rets.tail(63).std() * (252.0**0.5)) if len(rets) >= 63 else nan
 
+    # Lottery demand (Bali–Cakici–Whitelaw 2011, roadmap 18.12): the largest single-day return
+    # over the last 21 bars. Stocks with extreme recent up-days are overpriced by lottery-seeking
+    # demand and subsequently underperform — direction **−**. NaN under 21 returns.
+    max_ret_21d = float(rets.tail(21).max()) if len(rets) >= 21 else nan
+
     s200 = sma(close, 200).iloc[-1]
     return {
         "price": price,
@@ -100,9 +105,143 @@ def _technicals(ohlcv: pd.DataFrame) -> dict[str, float]:
         "ret_12_1": ret_12_1,
         "pct_of_52w_high": pct_of_52w_high,
         "vol_63d": vol_63d,
+        "max_ret_21d": max_ret_21d,
         "dollar_vol_21d": dollar_vol_21d,
         "pct_above_sma_200": _safe_div(price, float(s200)) - 1.0,
     }
+
+
+def beta_252d(ohlcv: pd.DataFrame, benchmark: pd.Series, as_of: date) -> float:
+    """Market beta over the last 252 overlapping daily returns (roadmap 18.12).
+
+    Betting-against-beta (Frazzini–Pedersen 2014): low-beta stocks earn higher risk-adjusted
+    returns — direction **−**. Both legs use adjusted closes on/before ``as_of`` only (the
+    benchmark is sliced here, so a caller passing a longer series cannot leak the future).
+    NaN under 252 overlapping returns or a flat benchmark.
+    """
+    cutoff = pd.Timestamp(as_of)
+    stock = pd.Series(
+        ohlcv["adj_close"].to_numpy(dtype=float), index=pd.DatetimeIndex(ohlcv["date"])
+    )
+    stock = stock[stock.index <= cutoff].tail(300)  # 252 returns + slack; keeps panels fast
+    if stock.empty:
+        return float("nan")
+    bench = benchmark[(benchmark.index <= cutoff) & (benchmark.index >= stock.index.min())]
+    bench = bench.astype(float)
+    both = pd.concat([stock.pct_change(), bench.pct_change()], axis=1, join="inner").dropna()
+    if len(both) < 252:
+        return float("nan")
+    tail = both.tail(252)
+    var = float(tail.iloc[:, 1].var())
+    return float(tail.iloc[:, 0].cov(tail.iloc[:, 1]) / var) if var > 0 else float("nan")
+
+
+_FSCORE_METRICS = (
+    "net_income",
+    "cfo",
+    "assets",
+    "long_term_debt",
+    "current_assets",
+    "current_liabilities",
+    "shares_outstanding",
+    "gross_profit",
+    "revenue",
+)
+
+
+def _annual_years(fund: pd.DataFrame, as_of: date) -> dict[pd.Timestamp, dict[str, float]]:
+    """Point-in-time annual values grouped by ``fiscal_end`` (latest filing per metric-year)."""
+    known = fund[(fund["filed_at"] <= pd.Timestamp(as_of)) & fund["metric"].isin(_FSCORE_METRICS)]
+    if known.empty:
+        return {}
+    latest = known.sort_values("filed_at").groupby(["fiscal_end", "metric"]).tail(1)
+    out: dict[pd.Timestamp, dict[str, float]] = {}
+    for fe, grp in latest.groupby("fiscal_end"):
+        out[pd.Timestamp(str(fe))] = {
+            str(m): float(v) for m, v in zip(grp["metric"], grp["value"], strict=True)
+        }
+    return out
+
+
+def piotroski_f_score(fund: pd.DataFrame, as_of: date) -> dict[str, float]:
+    """Piotroski (2000) F-score from the two latest annual years known at ``as_of`` (18.12).
+
+    Nine binary checks — profitability (ROA > 0, CFO > 0, ΔROA > 0, CFO > NI), leverage and
+    liquidity (Δ long-term-debt/assets < 0, Δ current ratio > 0, no share issuance), and
+    operating efficiency (Δ gross margin > 0, Δ asset turnover > 0). Each year's values come
+    from rows sharing one ``fiscal_end`` (the 17.6 rule); the prior year is the fiscal end
+    300–430 days earlier. ROA uses end-of-year assets (a common simplification). A check with
+    missing inputs scores 0 and ``f_score_n`` counts the evaluable ones; with none evaluable
+    ``f_score`` is NaN. A missing long-term-debt tag means no debt (the ``_or0`` rule).
+    Direction **+**.
+    """
+    nan = float("nan")
+    years = _annual_years(fund, as_of)
+    if not years:
+        return {"f_score": nan, "f_score_n": 0.0}
+    t = max(years)
+    prior = [fe for fe in years if 300 <= (t - fe).days <= 430]
+    cur = years[t]
+    prev = years[max(prior)] if prior else {}
+
+    def v(d: dict[str, float], k: str) -> float:
+        return d.get(k, nan)
+
+    def ratio(d: dict[str, float], a: str, b: str) -> float:
+        return _safe_div(v(d, a), v(d, b))
+
+    def lev(d: dict[str, float]) -> float:
+        return _safe_div(_or0(v(d, "long_term_debt")), v(d, "assets"))
+
+    roa_t, roa_p = ratio(cur, "net_income", "assets"), ratio(prev, "net_income", "assets")
+    checks = [
+        (roa_t, 0.0, "gt"),
+        (v(cur, "cfo"), 0.0, "gt"),
+        (roa_t, roa_p, "gt"),
+        (v(cur, "cfo"), v(cur, "net_income"), "gt"),
+        (lev(cur), lev(prev), "lt"),
+        (
+            ratio(cur, "current_assets", "current_liabilities"),
+            ratio(prev, "current_assets", "current_liabilities"),
+            "gt",
+        ),
+        (v(cur, "shares_outstanding"), v(prev, "shares_outstanding"), "le"),
+        (ratio(cur, "gross_profit", "revenue"), ratio(prev, "gross_profit", "revenue"), "gt"),
+        (ratio(cur, "revenue", "assets"), ratio(prev, "revenue", "assets"), "gt"),
+    ]
+    score = n = 0
+    for a, b, op in checks:
+        if pd.isna(a) or pd.isna(b):
+            continue
+        n += 1
+        score += int(a > b if op == "gt" else a < b if op == "lt" else a <= b)
+    return {"f_score": float(score) if n else nan, "f_score_n": float(n)}
+
+
+#: Sector groups smaller than this give no industry-momentum value (a 1–4 name mean is noise).
+IND_MOM_MIN_MEMBERS = 5
+
+
+def add_industry_momentum(frame: pd.DataFrame) -> pd.DataFrame:
+    """Industry momentum (Moskowitz–Grinblatt 1999, roadmap 18.12): each row's ``ind_mom_6m`` is
+    the equal-weight mean ``ret_6m`` of its sector in the same cross-section — direction **+**.
+
+    Groups by market region *and* sector (US and Taiwan sector names never mix); an ``Unknown``
+    or missing sector, or a group under ``IND_MOM_MIN_MEMBERS`` names, gets NaN. Uses the
+    static current sector map (the 17.5 non-point-in-time caveat). No ``sector`` column ⇒ the
+    frame is returned unchanged (the opt-in-or-absent convention).
+    """
+    if "sector" not in frame.columns or "ret_6m" not in frame.columns or frame.empty:
+        return frame
+    out = frame.copy()
+    region = out["symbol"].map(lambda s: parse_symbol(str(s)).region)
+    sector = out["sector"].where(out["sector"].notna() & (out["sector"] != "Unknown"))
+    keys = region + "|" + sector.astype(str)
+    grp = out.groupby(keys.where(sector.notna()), dropna=True)["ret_6m"]
+    mean = grp.transform("mean")
+    count = grp.transform("count")
+    out["ind_mom_6m"] = mean.where(count >= IND_MOM_MIN_MEMBERS)
+    return out
 
 
 def revenue_momentum_features(monthly: pd.DataFrame, as_of: pd.Timestamp) -> dict[str, float]:
@@ -150,6 +289,7 @@ def snapshot_row(
     as_of: date,
     *,
     monthly: pd.DataFrame | None = None,
+    benchmark: pd.Series | None = None,
 ) -> dict[str, object]:
     """One snapshot row: technicals (from ``ohlcv``) + point-in-time fundamentals.
 
@@ -159,7 +299,8 @@ def snapshot_row(
     market-neutral — omit for US or when unavailable): when provided,
     ``revenue_momentum_features`` is merged in; when ``None`` the
     ``rev_mom_*`` keys are absent entirely, not NaN-filled, so a US-only
-    snapshot never carries a TW-only column.
+    snapshot never carries a TW-only column. ``benchmark`` (the market benchmark's adjusted
+    close, date-indexed) opts into ``beta_252d`` the same way — absent when omitted.
     """
     nan = float("nan")
     f = _latest_annual(fund, as_of)
@@ -232,6 +373,9 @@ def snapshot_row(
         if not fund.empty
         else pd.NaT,
     }
+    row.update(piotroski_f_score(fund, as_of))
+    if benchmark is not None:
+        row["beta_252d"] = beta_252d(ohlcv, benchmark, as_of)
     if monthly is not None:
         row.update(revenue_momentum_features(monthly, pd.Timestamp(as_of)))
     return row
