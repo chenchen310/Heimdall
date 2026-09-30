@@ -882,3 +882,50 @@ and the numbers it runs under, so every later factory entry can cite them.
 - **Disclosure baseline for future factory certifications:** cumulative US vault touches = **2**
   (`us-fcf-yield` v1, v2).
 - Registry status change: none. OOS attempts spent: 0.
+
+## 020 — panel_us v3 rebuild (2026-09-30, model: Opus 5.5)
+
+- Card: ROADMAP 18.14. Not a research card — no OOS row read, no spec registered, 0 OOS. The 17.7
+  procedure verbatim: governance guard, archive, rebuild, reproduction gate, coverage table.
+- **Governance (printed):** no US signal is `certified` (only the rejected `us-fcf-yield` v1/v2), so
+  the in-place rebuild was sanctioned. **Archive:** the 2026-07-14 panel was copied to
+  `panel_us.v2.parquet` (+ meta) before being overwritten (`panel_us.v1` untouched).
+- **Build:** `python -m heimdall.research.build_dataset --market us --start 2010-01 --end 2026-09-29
+  --rebuild`. It ran **with** the Form 4 insider stream, now served by the 18.13 SEC bulk data sets
+  (coverage through 2026-06-30). Also included: the quarterly fundamentals stream, the static sector
+  map, and the benchmark (for `beta_252d`). Universe: VTI current constituents (3,436;
+  `current_universe (optimistic)`); 2 symbols skipped (SchemaError, the same as 17.7). **509,954 rows,
+  201 months, 2010-01-29 → 2026-09-29, 0 dropped months.** It took ≈ 3.7 h: the first ≈ 25 min was
+  the builder's known head-gap yfinance probe for 1,743 post-2008 listings (all fail harmlessly).
+  Everything else was read from local caches.
+- **Reproduction gate — exact.** `evaluate {fcf_yield}` on v3 vs entry 015:
+
+  | window | v3 IC (t) | 015 | v3 selection alpha (NW-t) | 015 |
+  | --- | --- | --- | --- | --- |
+  | dev 2010–2019 | +0.0220 (+2.84) | +0.0220 (+2.84) | +2.99% (+3.92) | +2.99% (+3.92) |
+  | val 2020–2022 | +0.0576 (+2.71) | +0.0576 (+2.71) | +7.90% (+2.98) | +7.90% (+2.98) |
+
+  Structural check on the 198 months v2 and v3 share: identical row keys (499,667). Differences on
+  `fcf_yield`, `ret_12_1`, `fwd_6m_rel`: 0.0. `eligible`: 100% identical. So the new columns are
+  purely additive, and 2010–2026 history was read from unchanged caches.
+- **New columns** (all point-in-time; DEV 2010–2019 eligible-row coverage):
+
+  | column | coverage | source |
+  | --- | --- | --- |
+  | `beta_252d` | 100% | 18.12 |
+  | `max_ret_21d` | 100% | 18.12 |
+  | `pct_of_52w_high` | 100% | 17.14 |
+  | `ind_mom_6m` | 99.9% | 18.12 |
+  | `f_score_n` | 100% | 18.12 |
+  | `f_score` | 89.0% | 18.12 |
+  | `insider_cluster_buy` | 99.8% | 13.3 / 18.13 |
+  | `insider_net_buy_90d` | 81.7% | 13.3 / 18.13 |
+
+  - `f_score_n` shows that only **18.9%** of rows have all 9 F-score checks. The current-ratio and
+    gross-margin inputs are sparse; a partial score is reported, never imputed.
+  - `insider_net_buy_90d` is NaN where market cap is unusable.
+  - The insider features are **NaN** for the three months after the Form 4 coverage end (2026-07/08/09),
+    never a false 0. A cluster buy happens in 2.5% of DEV rows.
+- **Not included:** 17.11 FINRA short interest (not built). The 13.x/17.x panel-only features still
+  do not reach the live snapshot (the 18.12 finding), which remains a precondition for 18.15.
+- Registry status change: none. OOS attempts spent: 0.

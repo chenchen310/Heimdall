@@ -2270,7 +2270,19 @@ fair-access pacing (≤ 10 req/s, declared `SEC_EDGAR_USER_AGENT`); resumable le
 and filing counts in the PR. Running across several sessions is fine.
 **Don't:** rebuild the panel here.
 
-### 18.14 `panel_us` v3 rebuild (+ extend to the latest month)  `[ ]`
+### 18.14 `panel_us` v3 rebuild (+ extend to the latest month)  `[x]`
+
+> **Outcome (2026-09-30, RESEARCH_LOG 020):** the 17.7 procedure verbatim. Governance passed (no US
+> `certified`), v2 archived to `panel_us.v2.parquet`, rebuilt **with** the 18.13 bulk Form 4 stream
+> + quarterly fundamentals + sector + benchmark: **509,954 rows, 201 months (2010-01 → 2026-09-29),
+> 0 dropped**, 2 SchemaError skips (as in 17.7), ≈ 3.7 h. **Reproduction gate exact** (`{fcf_yield}`
+> DEV +0.0220 / t 2.84 / α +2.99% t 3.92; VAL +0.0576 / t 2.71 / α +7.90% t 2.98 — identical to
+> entry 015) and the 198 shared months have identical row keys with 0.0 difference on `fcf_yield`,
+> `ret_12_1`, `fwd_6m_rel` and eligibility — the new columns are purely additive. New:
+> `beta_252d`, `max_ret_21d`, `pct_of_52w_high`, `ind_mom_6m`, `f_score` (+`f_score_n`; all 9
+> checks for only 18.9% of rows), `insider_net_buy_90d`, `insider_cluster_buy` (NaN after the Form 4
+> coverage end 2026-06-30). 17.11 short interest not included (not built). No incubating strategy
+> existed, so no track record needed recomputing.
 
 **Goal:** one rebuild carrying 17.14 `pct_of_52w_high`, 18.12, insider (18.13), and 17.11 short
 interest if merged.
