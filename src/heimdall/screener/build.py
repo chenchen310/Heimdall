@@ -28,9 +28,11 @@ from heimdall.data import router
 from heimdall.data.cache import CachedProvider
 from heimdall.data.symbols import parse_symbol
 from heimdall.screener.snapshot import (
+    LIVE_EDGAR_MAX_AGE_DAYS,
     UNIVERSES,
     build_snapshot_iter,
     fetch_benchmarks,
+    live_us_streams,
     load_snapshot,
     snapshot_path,
 )
@@ -74,7 +76,9 @@ def main(argv: list[str] | None = None) -> int:
     as_of = date.fromisoformat(args.as_of)
 
     prices = CachedProvider(router.price_provider())
-    fundamentals = router.fundamentals_provider()
+    # 18.16: the live snapshot refreshes EDGAR companyfacts older than a week so new filings
+    # reach Today's Picks (research builds never refresh mid-build).
+    fundamentals = router.fundamentals_provider(edgar_max_age_days=LIVE_EDGAR_MAX_AGE_DAYS)
     # Always wired: --market all / custom --symbols can mix US and TW in one build,
     # and a non-TW fetch is a cheap no-op (raises NotSupported before any network
     # call — see FinMindProvider._require_market), so there is no US-only cost.
@@ -95,6 +99,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # The resumable crawl + checkpointing lives in the core iterator; here we just
     # print the plan, checkpoint lines, and a final summary as it streams progress.
+    live = live_us_streams(fundamentals)
     progress = build_snapshot_iter(
         symbols,
         prices,
@@ -105,6 +110,9 @@ def main(argv: list[str] | None = None) -> int:
         monthly_revenue=monthly_revenue,
         sector_map=sector_map,
         benchmarks=fetch_benchmarks(prices, symbols, as_of),  # beta_252d (roadmap 18.12)
+        quarterly_fundamentals=live.quarterly,  # 18.16: PEAD/quality/accel/accruals
+        insider=live.insider,
+        insider_coverage_end=live.insider_coverage_end,
     )
     last = next(progress)  # initial plan (done == 0)
     print(

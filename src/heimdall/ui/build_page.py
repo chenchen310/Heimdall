@@ -26,9 +26,11 @@ from heimdall.data import router
 from heimdall.data.cache import CachedProvider
 from heimdall.data.symbols import SymbolError, parse_symbol
 from heimdall.screener.snapshot import (
+    LIVE_EDGAR_MAX_AGE_DAYS,
     UNIVERSES,
     build_snapshot_iter,
     fetch_benchmarks,
+    live_us_streams,
     load_snapshot,
     snapshot_path,
     split_by_region,
@@ -132,11 +134,12 @@ def _run_in_process(symbols: list[str], *, resume: bool) -> None:
     from heimdall.data.providers import FinMindProvider
 
     prices = CachedProvider(router.price_provider())
-    funds = router.fundamentals_provider()
+    funds = router.fundamentals_provider(edgar_max_age_days=LIVE_EDGAR_MAX_AGE_DAYS)
     monthly_revenue = FinMindProvider().monthly_revenue  # no-op for non-TW symbols
     bar = st.progress(0.0, text=t("Starting…"))
     done = built = total = 0
     failures: dict[str, int] = {}
+    live = live_us_streams(funds)
     for p in build_snapshot_iter(
         symbols,
         prices,
@@ -145,6 +148,9 @@ def _run_in_process(symbols: list[str], *, resume: bool) -> None:
         resume=resume,
         monthly_revenue=monthly_revenue,
         benchmarks=fetch_benchmarks(prices, symbols, date.today()),
+        quarterly_fundamentals=live.quarterly,
+        insider=live.insider,
+        insider_coverage_end=live.insider_coverage_end,
     ):
         done, built, total, failures = p.done, p.built, p.total, p.failures
         if total:
