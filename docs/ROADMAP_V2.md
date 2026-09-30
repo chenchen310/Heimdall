@@ -6,6 +6,7 @@
 
 > **Current priority (2026-09-30): Phase 18 — US Strategy Factory.** US focus; Taiwan paused. Start
 > from the Phase 18 sequencing at the bottom of this file, not from the first unchecked card above.
+> *(2026-10-01: 18.0–18.16 are done; next is the 18.17–18.23 extension, **Wave F**.)*
 
 **How to work this roadmap (binding for every session):**
 
@@ -1547,6 +1548,13 @@ variant is a new version through the full pipeline, family budget and all).
 
 ### 17.11 US short-interest provider + features (FINRA, free)  `[ ]`
 
+> **Amendment (2026-10-01, Phase 18 extension):** this card is now a precondition of 18.20
+> (`panel_us` v4). Two additions bind:
+> 1. The two features must also reach the **live snapshot** through the 18.16 path
+>    (`factors/us_features.py` plus a `live_us_streams` stream, with a panel-row == snapshot-row
+>    parity test). Otherwise they cannot enter a factory pool (18.15 step 0).
+> 2. The Don't line's "17.7" now reads "18.20": land before it, or the next rebuild becomes v5.
+
 **Goal:** the best-documented free negative axis for US stocks: high short interest / days-to-
 cover predicts underperformance. FINRA publishes consolidated bi-monthly equity short interest
 (text archives ≈ 2014→; query API at `api.finra.org`).
@@ -2372,16 +2380,358 @@ DoD: committed log entry; zero unauthorized OOS reads. An honest closure complet
 **Don't:** change the config after seeing results — that is a new run, a new family, and a new
 declared entry.
 
+> **Phase 18 extension — cards 18.17–18.23 (added 2026-10-01, user request
+> 「請你把第1、2、4點寫進ROADMAP_V2」).** These came from comparing Heimdall with institutional quant
+> practice after 18.15 closed with nothing promoted. The comparison named four levers; three are
+> carded here, keeping the review's numbering. Lever 3 (paid, survivorship-free prices) is
+> deliberately **not** carded: the user's 2026-10-01 no-paid-data decision in
+> `docs/PAID_DATA_MEMO.md` stands.
+>
+> 1. **Turning IC into selection alpha (18.17, 18.18).** Entries 017 and 018 found real ranking IC
+>    with no top-N selection skill. Institutions profit from weak IC through breadth and
+>    portfolio construction. The Grinold–Kahn relation is IR ≈ TC · IC · √breadth, where TC is the
+>    transfer coefficient (Clarke, de Silva & Thorley 2002). A long-only, equal-weight top-20 book
+>    uses only the extreme top of a 3,000-name ranking. The plan is to measure where the alpha sits
+>    first (DEV only), then add construction options.
+> 2. **Orthogonal free data (18.19, then 17.11 → 18.20).** Short interest, plus a live Form 4 tail.
+>    These are the two free US axes that 18.15's closure named.
+> 4. **Multi-feature composites (18.21 → 18.22).** Every Heimdall signal is capped at 3–4
+>    features. The unlock condition in NORTH_STAR's black-box clause (two certified-or-rejected
+>    families) is now literally met: `tw-revenue-momentum` was certified in entry 009, and
+>    `us-value-quality` was rejected in the vault in entries 003 and 012. Whether to open that
+>    door, and how far, is the user's decision (18.21).
+>
+> All three levers meet in **one** factory run (18.23), so the extension adds one run's worth of
+> trials to US DEV, not three. Every Phase-18 rule still binds. Nothing here changes G1–G6, F1–F6,
+> or playbook §4. Proposing a gate change *because of* 18.15's result is still gate-shopping (§10).
+
+### 18.17 IC → selection transfer diagnostic (DEV only)  `[ ]`
+
+**Goal:** measure on DEV *where along the ranking* the alpha of Heimdall's recurring US signals
+sits, and how much of it a long-only top-N book captures. This evidence decides which 18.18
+options, and which book sizes, earn a slot on a factory menu. The output is descriptive, not a
+gate: no trials are logged and the registry does not change.
+**Files:** new `src/heimdall/research/transfer.py`, `tests/test_research_transfer.py`, and one
+RESEARCH_LOG entry (diagnostic; 0 VAL, 0 OOS).
+
+Steps:
+1. Evaluate this pre-stated spec list and nothing else (no additions mid-session):
+   - us-f1's top 5, exactly as tabled in entry 022, each with its own construction (trials 148,
+     1525, 1915, 2074 and 1849).
+   - `{fcf_yield}` (entry 011).
+   - `{net_issuance_12m: −1}` (entry 016).
+   - `{rev_accel_q}`, and `{fcf_yield}` with `neutralize="sector"` (entry 018).
+
+   Read `panel_us` v3, **DEV rows only**. Hard-assert that no row on or after 2020-01-01 is read:
+   the VAL window belongs to future finalists' single looks.
+2. For each spec and each month, over eligible rows in the spec's own universe tier and
+   neutralization, compute:
+   - **Rank-bucket profile.** Buckets are score deciles D1…D10 plus the nested books top-{10, 20,
+     50, 100}. Each bucket's 6m selection alpha is its EW `fwd_6m_rel` minus the EW tier universe
+     (G3 math); report the mean with its NW-t (lag 5). Report the 1m version with a plain t.
+   - **Leg decomposition.** Long leg = D10 − universe; short leg = universe − D1. Report both legs
+     as raw values, never as a ratio of near-zero numbers.
+   - **Book-size curve.** For top-{10, 20, 50, 100} at equal weight: the F1 objective (annualized
+     IR of the monthly net selection-alpha series at 20 bps per side) and turnover.
+   - **Transfer coefficient.** Each month, the cross-sectional correlation between the active
+     weights (book weight − 1/N_universe) and the score. Report the mean over months.
+   - **Size split.** Group the top-N book's members by the eligible universe's market-cap
+     terciles; report each tercile's count share and alpha contribution.
+3. Reuse the existing certify/evaluate helpers for every metric that already exists; do not
+   implement G3 or the F1 series a second time. New math is limited to TC, the buckets and the
+   size split.
+4. Write JSON output under the gitignored `data/research/diagnostics/`. Write the RESEARCH_LOG
+   entry with:
+   - the tables;
+   - an explicit statement that only DEV rows were read;
+   - a closing paragraph on which 18.18 options the evidence supports. For example:
+     short-leg-dominated alpha means long-only construction cannot harvest it; an IR that rises
+     with book size means the top_n question in 18.18 step 4 is worth asking.
+
+   The paragraph is descriptive. The user decides.
+
+DoD:
+- Known-answer tests on synthetic panels:
+  - (a) a signal that predicts only the bottom decile: IC > 0, top-20 alpha ≈ 0, and the short
+    leg carries the spread;
+  - (b) a uniformly predictive signal: alpha is monotone across deciles;
+  - (c) TC matches a hand computation on a 6-name cross-section.
+- The DEV-guard test passes.
+- Quality gates are green and the log entry is committed.
+
+**Don't:** read VAL or OOS; turn any number into a gate; evaluate specs beyond the list; propose
+F-gate changes.
+
+### 18.18 Construction options: `sector_size` neutralization + `rank_linear` weighting (+ the book-size question)  `[ ]`
+
+**Goal:** add two parameter-free construction options the factory can search, and settle the one
+user decision about book size.
+**Needs:** 18.17, whose log entry must be in hand when step 4's question is asked.
+**Files:** `src/heimdall/research/spec.py`, `construct.py`, `factory.py`, `today.py`, and the
+test mirrors (`test_research_spec.py`, `test_research_construct.py`, `test_research_factory.py`).
+
+Steps:
+1. **`neutralize` gains `"sector_size"`.** The validator accepts `""`, `"sector"` or
+   `"sector_size"`. The default stays popped from the hash, so the registry-wide hash regression
+   stays green. For each month, over the eligible pool:
+   1. take each feature's `_zscore`;
+   2. run a cross-sectional OLS on sector one-hot columns (`Unknown` is its own level) plus
+      log(`market_cap`);
+   3. take the residual and apply `_zscore` again.
+
+   Rows whose `market_cap` is NaN or ≤ 0 score NaN. The 17.5 small-group rule still applies:
+   sector groups with fewer than 5 members score NaN. Restate the 17.5 caveat (the sector map is
+   static and not point-in-time) in the docstring. In `today.py`, require `sector` and
+   `market_cap` when this option is set, and make the displayed per-feature z follow it (the 17.5
+   precedent). Known answer: when a feature = a·log(mcap) + a sector effect + ε, the neutralized
+   ranking equals the ranking of ε.
+2. **`weighting` gains `"rank_linear"`.** Members are ordered by score and weighted in proportion
+   to (m + 1 − r), where r = 1…m and m is the member count. This gives a buffered member ranked
+   below top_n a positive weight too. `max_sector_weight` still applies afterwards. Known answer
+   on 4 names: weights 0.4 / 0.3 / 0.2 / 0.1.
+3. **Both options are structural.** `count_free_params` discloses them but does not count them
+   (the 18.1 interpretation); state this in any log entry that uses them. Also:
+   - `SearchConfig` validators accept the new menu values;
+   - `DevPanel` precomputes the `sector_size` z-scores;
+   - the 18.5 equivalence suite (`evaluate_fast ≡ evaluate` to 1e-10) is extended to both
+     options and to their combinations with the existing options.
+4. **Book-size question: stop and ask the user, with 18.17's book-size curve in hand.** NORTH_STAR
+   freezes "hold top 10–20", and `SearchConfig` enforces `top_n_menu ⊆ {10, 20}`. Widening the
+   menu (for example to {30, 50}) changes the usage pattern, because there are more names to hold
+   and rebalance by hand. It therefore needs a NORTH_STAR amendment that records the user's
+   words.
+   - If the user says yes: amend NORTH_STAR and the validator (plus its test) in this PR.
+   - If the user says no: record the decision on this card and change nothing.
+
+DoD: known answers, equivalence and hash regression green; quality gates green; step 4's
+decision recorded.
+**Don't:** add other neutralizations (beta, industry-level) or weightings (score-proportional,
+optimizer); widen top_n without the recorded amendment; run a search here (that is 18.23).
+
+### 18.19 Live Form 4 delta (EDGAR daily index): insider features become live-usable  `[ ]`
+
+> Promoted from 18.B on 2026-10-01.
+
+**Goal:** the bulk Form 3/4/5 data sets end at their last published quarter (coverage ended
+2026-06-30 as of 18.16). The insider features are therefore NaN in the live snapshot, which kept
+them out of us-f1's pool (18.15 step 0). Fill the gap from the bulk coverage end up to yesterday
+with recent filings, so that the two insider features can enter a factory pool and a panel
+rebuild can carry them to the latest month.
+**Files:** `src/heimdall/data/providers/form4.py`, the `tests/test_form4*.py` goldens,
+`src/heimdall/ops/notify.py` (chain step), `docs/OPERATIONS.md`, and one line in
+`docs/DATA_SOURCES.md`.
+
+Steps:
+1. **Probe first and record the results in the PR.** Using EDGAR's daily index
+   (`/Archives/edgar/daily-index/<YYYY>/QTR<n>/` `form.<YYYYMMDD>.idx`, or `master`), confirm:
+   - (a) each Form 4 is listed under the **issuer** CIK, so the existing `_cik_map` can filter to
+     universe issuers;
+   - (b) the filing's full-submission text embeds the `ownershipDocument` XML that
+     `normalize_ownership_doc` already parses;
+   - (c) the number of filings per day for universe issuers fits within SEC's limit of about 10
+     requests per second.
+
+   Also check which form types (4, 4/A) the bulk normalization keeps, and mirror that exactly. If
+   (a), (b) or (c) fails, stop and ask.
+2. **`ingest_delta(root, until)`.** Start at max(bulk `coverage_end`, delta end) and, for each
+   business day after it:
+   - read the daily index and cache the raw file;
+   - fetch each matching submission through the provider's throttle;
+   - normalize it, taking `filed_at` from the index;
+   - append the rows to per-symbol delta caches under `data/form4/delta/`.
+
+   Keep a `_delta.json` marker with `start`, `delta_end` and `fetched_at`. Fetch delta-only and
+   keep the raw submissions (data-discipline).
+3. **Seam rule: bulk is the authority.** When `ingest_bulk` advances `coverage_end`, drop delta
+   rows with `filed_at` ≤ the new end. Test: a filing present in both sources yields exactly one
+   row.
+4. **Serving and coverage.** `get_insider_transactions` serves bulk ∪ delta. `coverage_end()`
+   returns the delta end only when the delta starts on the day after the bulk end (contiguous);
+   otherwise it returns the bulk end. A gap is NaN, never a false "no trades" 0 (the 18.16
+   posture). `live_us_streams` then picks up the new end with no change of its own.
+5. **CLI and schedule.** Add `python -m heimdall.data.providers.form4 --delta`. Put it in the
+   weekly chain right after the bulk step (the PR #52 precedent) and update OPERATIONS.md.
+6. **Tests (no network):**
+   - golden parse of a daily-index file;
+   - golden submission text → the same canonical rows as the XML path;
+   - the seam rule;
+   - the contiguity rule;
+   - a PIT leak test: a filing dated after `as_of` must not change the row.
+
+DoD: tests and quality gates green; a 5-name real-data smoke showing non-NaN
+`insider_net_buy_90d` in the live snapshot, recorded on the card (the 18.16 smoke format).
+**Don't:** bring back the per-issuer submissions crawl for history (the bulk path owns history);
+change the insider feature math; rebuild the panel (that is 18.20).
+
+### 18.20 `panel_us` v4 rebuild (carries 17.11 + 18.19)  `[ ]`
+
+**Goal:** one rebuild that carries 17.11's short interest and 18.19's insider tail, extended to
+the latest month. This is the panel 18.23 runs on.
+**Needs:** 17.11 and 18.19 merged. A card that slips past this rebuild forces a v5.
+
+Steps: follow the 17.7/18.14 procedure verbatim.
+1. **Governance guard:** no US strategy may be `certified`. If any US strategy is `incubating`,
+   recompute its realized track record on v4 and disclose any change.
+2. **Archive and rebuild:** archive v3 as `panel_us.v3.parquet`, then rebuild. Research builds
+   keep EDGAR `max_age_days=None` (the 18.16 rule).
+3. **Reproduction gates:**
+   - (a) `{fcf_yield}` reproduces its DEV/VAL numbers from entries 015 and 020 to about 2 decimal
+     places.
+   - (b) us-f1 trial 148 (`−ps +fcf_yield`, all eligible names, top 20, EW) reproduces entry 022's
+     DEV objective (IR 1.45) and α (+4.65%) to about 2 decimal places.
+   - (c) Shared months have identical row keys and a 0.0 difference on `fcf_yield`, `ret_12_1`,
+     `fwd_6m_rel` and eligibility (the 18.14 check). Insider values on rows dated on or before
+     2026-06-30 (the old bulk coverage end) are unchanged; assert this.
+4. **New-column coverage table.** Short interest starts around 2014, so its DEV window is
+   effectively 2014–2019.
+5. **RESEARCH_LOG entry.**
+
+DoD: reproduction gates exact; log entry committed.
+**Don't:** start before 17.11 and 18.19 are merged; evaluate any spec beyond the reproduction
+checks.
+
+### 18.21 Governance: multi-feature composites and the NORTH_STAR black-box clause (user decision)  `[ ]`
+
+**Goal:** record the user's decision, before any code is written, on whether a Heimdall signal
+may combine more than 3–4 features and under which counting rule. This is a statistics decision
+(playbook §11.4).
+**Files:** `docs/NORTH_STAR.md` (the non-goal bullet), `docs/RESEARCH_PLAYBOOK.md` (a §12
+composite rule, if the door is opened), and one RESEARCH_LOG entry (governance; 0 OOS).
+
+Context to give the user with the question:
+- NORTH_STAR says: "No black-box weight optimizers until the plain-weights institution has
+  produced at least two certified-or-rejected families. Hand-set weights, ≤ 4 free parameters per
+  signal." The unlock condition is literally met: `tw-revenue-momentum` was certified in entry 009,
+  and `us-value-quality` was rejected in the vault in entries 003 and 012.
+- G5 and F5 count each nonzero feature weight as one parameter, and `SearchConfig.max_features` is
+  at most 3.
+- This is not the same as 16.B's multi-signal combiner or 18.B's strategy combiner. Those blend
+  certified or incubating **books**; this card is about many **features** inside one signal.
+
+Steps:
+1. **Put the options to the user, recommendation first.**
+   - **Rung 1 (recommended): declared rule-based composites.** A composite is a fixed list of
+     documented features with a-priori directions, combined as the equal-weight mean of their
+     z-scores; no weights are fitted. It enters a spec as **one feature** and counts as one G5/F5
+     parameter, following the `f_score` precedent (9 checks in one column, 18.12). G1–G6 and F1–F6
+     stay unchanged and no certification is voided. However, counting a composite as one
+     parameter is an **interpretation of G5**, and the user must endorse it explicitly. The user
+     also confirms these anti-laundering rules:
+     - membership comes from an a-priori criterion written before any evaluation: a literature
+       definition or a documented feature category, never DEV performance;
+     - each declaration is immutable (hash-pinned) and carries a citation;
+     - at most 5 composites per declaration;
+     - every composite evaluated counts as a trial in its run;
+     - a row missing any member scores NaN (the `score()` philosophy). Joint DEV coverage is
+       reported at declaration time, since coverage says nothing about performance.
+   - **Rung 2: fitted weights** (for example IC-weighted with shrinkage toward equal weights, over
+     a trailing point-in-time window). This *is* what the optimizer clause is about, and it needs
+     a change to how G5/F5 count parameters. That means a `gates.py` PR under §4 rule 4, which
+     voids and re-runs every certification. The certified TW report cannot be replayed today,
+     because the shipped `panel_tw` lacks the `rev_mom_*` columns (see 13.8). That must be solved,
+     or ruled on, first. Not recommended now.
+   - **Rung 0: keep the clause.** 18.22 is then marked skipped.
+   - The ML ranker stays in 18.B, with its own amendment, whichever rung is chosen.
+2. **If rung 1:** the user names the initial declarations (at most 5, each with members,
+   directions and a citation), or asks the session to propose a list from the literature for a
+   yes/no. The list goes into the log entry verbatim.
+3. **Record the decision:**
+   - amend the NORTH_STAR non-goal bullet with the date, the user's words and the rung;
+   - add the composite rule to playbook §12;
+   - write the RESEARCH_LOG entry.
+
+DoD: decision and declarations recorded; the gate-mirror tests stay green (rungs 0 and 1 do not
+touch `gates.py`).
+**Don't:** write code; choose composite members by looking at DEV results; change G1–G6 or F1–F6
+in this card.
+
+### 18.22 Declared composites in scoring (`research/composites.py`)  `[ ]`
+
+**Needs:** 18.21 recorded as rung 1. If it recorded rung 0, mark this card `[-]` with a pointer;
+if rung 2, a separate gates card comes first.
+**Goal:** implement composites as a scoring-time transform inside `research/`. The panel, the
+factory, certify and the live snapshot then score them identically, with no panel rebuild.
+**Files:** new `src/heimdall/research/composites.py`, `src/heimdall/research/spec.py` (`score`,
+`count_free_params`, validators), `src/heimdall/research/factory.py` (`DevPanel`), and tests.
+
+Steps:
+1. `COMPOSITES` holds exactly the 18.21 declarations: name → {members: {feature: ±1}, citation,
+   declared date}. A test pins each declaration's canonical hash, so editing one fails CI; a
+   change means a new name.
+2. A spec references a composite as the feature key `cmp:<name>`. The spec's canonical payload
+   embeds the composite's hash, so a spec hash cannot outlive a changed definition. Existing
+   hashes are unaffected (checked by the registry-wide regression).
+3. In `score()`, a composite's value is the mean of its members' directional z-scores, computed
+   under the spec's neutralization. That mean is re-z-scored with the same `_zscore`, so the
+   composite enters on the same scale as a single feature. A missing member makes the value NaN.
+   `count_free_params` counts one per composite and discloses the members alongside the
+   structural fields.
+4. `DevPanel` precomputes composite z-scores like any other feature. `SearchConfig.feature_pool`
+   accepts `cmp:` keys with direction +1, since the directions live inside the composite.
+5. Tests:
+   - a hand-computed known answer for a 3-member composite;
+   - a missing member gives NaN;
+   - a neutralized composite equals the composite of the neutralized members;
+   - `count_free_params == 1`;
+   - the hash pin;
+   - `evaluate_fast ≡ evaluate` (1e-10) on a composite spec;
+   - **panel-row scoring == live `today` scoring** for the same date (the 18.16 parity).
+
+DoD: tests and quality gates green.
+**Don't:** add composites beyond 18.21's list; fit weights; evaluate composites on real data here
+(that is 18.23).
+
+### 18.23 Factory run #2: `us-f2` on `panel_us` v4 (research; user-gated vault)  `[ ]`
+
+**Needs:** 18.18 and 18.20, plus either 18.22 or an 18.21 decision of rung 0.
+**Goal:** the one run where levers 1, 2 and 4 meet. The pool is us-f1's documented pool plus the
+17.11 and insider features plus the 18.22 composites, searched with the 18.18 construction
+options.
+
+Steps:
+0. **Live-usability check (18.15 step 0).** Every pool feature must be computed by the live
+   snapshot (18.16 parity). Exclude any feature that is structurally NaN live; don't guess.
+1. **Ask the user to choose the space size before writing the config** (the 18.15 precedent:
+   「標準：單因子＋雙因子」). Show the 18.5 F1 trade-off with it: a larger N raises the luck bar every
+   trial must clear (in us-f1, N = 2,082 set the luck bar at IR 1.37). Then write
+   `signals/search/us-f2/config.json`, confirming N ≤ 5,000 before running. Menus = us-f1's
+   menus, plus `neutralize` `sector_size` and `weighting` `rank_linear`. Add a widened top_n only
+   if 18.18 step 4 recorded a NORTH_STAR amendment.
+2. **The "search declared" entry must also state:**
+   - (a) which DEV information shaped this config: entry 022's leaderboard and 18.17's
+     diagnostic. Both are DEV-only, so this is not config-shopping under §10, but it must be
+     disclosed;
+   - (b) the **cumulative count of US DEV factory trials** (2,082 + this run's N).
+
+   After the run, report the best trial's DSR twice: at the run's own N (the F1 gate, as §12
+   says), and at the cumulative N with V pooled across both ledgers. The second number is a
+   **disclosure only**, not a gate.
+3. **Then follow the 18.15 steps verbatim:**
+   1. commit;
+   2. run;
+   3. leaderboard;
+   4. 18.6 walk-forward (DEV);
+   5. 18.7 promotion (at most 5 VAL looks);
+   6. log entry: N, PBO, the top 10 with DSR, the walk-forward, VAL numbers and any incubations;
+   7. **stop and ask the user** before any pre-registration (at most 1 per run).
+
+   State the honest prior up front: us-f1 closed with a max DSR of 0.59, and a second run on the
+   same DEV years may close the same way. That is a valid result.
+
+DoD: log entries committed; zero unauthorized OOS reads. An honest closure completes the card.
+**Don't:** re-run us-f1's config; change the config after seeing results (that would be a new
+run, family and entry); propose changes to F1, V or N because of this result (gate-shopping).
+
 ### 18.B Backlog — promote to a full card with the user before executing
 
 - **Paper-trading bridge** — place the incubating/certified book's orders in a broker's **paper**
   account; real-money execution stays manual unless the user explicitly decides otherwise.
-- **ML ranker** (gradient-boosted) — needs a further NORTH_STAR amendment (black-box rule).
+- **ML ranker** (gradient-boosted) — needs a further NORTH_STAR amendment (the black-box rule).
+  18.21 decides the rule-based composite rungs only.
 - **Long-short / market-neutral books; weekly cadence** — check the horizon non-goal first.
 - **PIT S&P 500 membership universe** — depends on 18.11's outcome.
 - **Strategy combiner** — a blend of ≥ 2 incubating/certified strategies as its own family (16.B).
-- **Live Form 4 delta** — recent Form 4 filings since the bulk data sets' coverage end (EDGAR daily
-  index → per-filing XML, `raw_xml_doc`), so the insider features become live-usable (18.16).
+- ~~**Live Form 4 delta**~~ — promoted to card **18.19** (2026-10-01).
 
 ---
 
@@ -2426,4 +2776,13 @@ override top-to-bottom; within a wave, any order.
   18.14 (one rebuild carrying all of them).
 - **Wave E (research):** 18.15 as soon as Wave B lands, on `panel_us` v2. A second run on v3
   (after 18.14) is a new config, a new family, and its own future card.
+- **Wave F (2026-10-01 extension: levers 1, 2 and 4; see the note above 18.17):**
+  - *First, in any order:* 18.17 · 18.19 · 17.11 (with its 2026-10-01 amendment) · 18.21 (needs
+    the user).
+  - *Then:* 18.18 (needs 18.17) · 18.22 (needs 18.21 = rung 1) · 18.20 (needs 17.11 + 18.19; the
+    one v4 rebuild).
+  - *Last:* 18.23 (needs 18.18 + 18.20, plus 18.22 or an 18.21 decision of rung 0). This is the
+    extension's single factory run; it replaces the "second run on v3" idea from Wave E.
+  - Lever 3 (paid survivorship-free prices) stays uncarded by the user's 2026-10-01 decision. The
+    free fallback, a PIT S&P 500 membership universe, stays in the 17.B/18.B backlog.
 - Every vault touch still stops for a recorded user go/no-go; ≤ 1 pre-registration per factory run.
