@@ -979,3 +979,53 @@ and the numbers it runs under, so every later factory entry can cite them.
   demands a strong edge (18.5 finding). The most likely outcome is that **nothing passes F1/F2**,
   or that at most one value/quality-flavoured candidate reaches VAL. That result would be valid and
   informative (it points at data, not gates).
+
+## 022 — us-factory-us-f1 result: honest closure, nothing promoted (2026-10-01, model: Opus 5.5)
+
+- Card: ROADMAP 18.15. Declared in entry 021 (config sha256 `cf9fe18f…752a`), and run exactly as
+  declared. DEV rows only; no VAL row and no 2023+ row was read by the search.
+- **Run:** N = **2,082 trials** (1,332 stage-1 + 750 stage-2) in 150 s. Trial ledger:
+  `signals/search/us-f1/` (`trials.parquet` + the three per-month series).
+- **F2: passes.** Run PBO **0.125** (≤ 0.30). The in-sample winners are *not* mostly noise, so
+  the search found something real in the ranking sense.
+- **F1: no trial passes.**
+  - Cross-trial Sharpe variance V = 0.0131 (per month). Expected max Sharpe from luck alone at this
+    N = **0.396/month (1.37 annualized)**.
+  - Best trial: `{-ps, +fcf_yield}`, all eligible names, top 20, equal weight. Objective (net
+    selection-alpha IR vs the EW universe) **1.45 annualized**, only just above the luck benchmark.
+    **Max DSR 0.592** vs the 0.95 bar.
+- **F3:** 47 trials pass (DEV selection alpha NW-t ≥ 3 and IC t ≥ 2). F5: all trials pass.
+  **Candidates (F1 ∧ F2 ∧ F3 ∧ F5): 0.**
+- **Top of the leaderboard (DEV 2010–2019):**
+
+  | trial | recipe | universe | construction | IR | DSR | IC t | α (6m) | α NW-t | turnover |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | 148 | −ps +fcf_yield | all | top 20, EW | 1.45 | 0.59 | 1.49 | +4.65% | 5.05 | 13% |
+  | 1525 | +roe −net_debt_to_ebitda | large | top 10, inv-vol, buffer 20 | 1.17 | 0.27 | −0.37 | +4.08% | 4.54 | 12% |
+  | 1915 | −accruals −net_debt_to_ebitda | large | top 10, inv-vol, buffer 20 | 1.17 | 0.25 | 1.62 | +6.52% | 4.89 | 12% |
+  | 2074 | +fcf_yield | large | top 10, EW | 1.12 | 0.22 | 2.45 | +4.49% | 4.44 | 14% |
+  | 1849 | +fcf_yield +roe | large | top 10, EW | 1.09 | 0.19 | 2.49 | +4.66% | 5.16 | 16% |
+
+  The top 50 are dominated by value and quality: `fcf_yield` in 23 of them, `roe` 16, `ev_fcf` 13,
+  `net_debt_to_ebitda` 12, `ps` 11, `accruals` 8. Momentum, growth, earnings-event and risk
+  features barely appear.
+- **Walk-forward on DEV (18.6, descriptive).** Each year re-selected from data knowable at the prior
+  year-end, then held:
+  - **top 1:** CAGR **11.4%** vs SPY 12.0% vs EW universe 10.1%. Sharpe 0.77 vs SPY 0.93. Max DD
+    −25.7%. IR vs SPY −0.02, vs EW universe +0.19. Beat SPY in 3 of 6 years.
+  - **top 3:** CAGR 10.2%.
+
+  So the factory's own selection procedure did not beat SPY out of sample year by year within DEV,
+  even though every chosen recipe had strong in-sample alpha. This agrees with the F1 verdict.
+- **Promotion (18.7):** the run passes F2, but no candidates exist → **no VAL look spent**, nothing
+  incubated. `val_looks.json` records this and closes the run.
+  - The optional walk-forward VAL extension (2020–22, display only) was **deliberately not run**.
+    It would put VAL-period performance of these recipes on the record and could steer a future
+    run's pool (*config-shopping*, §10).
+- **Verdict: honest closure.** Free US data + today's construction menus yield strong in-sample
+  value/quality selection alpha, but nothing that survives deflation by ~2,100 trials. The strongest
+  recipe is the same `fcf_yield` idea whose skill already failed the 2023+ vault (entry 012). This
+  is the institution working, not a reason to move F1: proposing a change to F1's estimation
+  *because* of this result would be *gate-shopping* (§10).
+- Registry: no change. OOS attempts: 0 (family `us-factory-us-f1` keeps 3/3). Cumulative US vault
+  touches: still 2.

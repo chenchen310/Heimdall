@@ -2315,7 +2315,19 @@ entry 015 to ~2 dp), new-column coverage table, RESEARCH_LOG entry. If any US st
 > recent-filings source exists (18.B). Glossary labels/entries for all ten fields. 5 tests in
 > `tests/test_live_parity.py`, incl. **panel row == snapshot row for the same symbol and date**.
 
-### 18.15 Factory run #1 (research; user-gated vault)  `[ ]`
+### 18.15 Factory run #1 (research; user-gated vault)  `[x]`
+
+> **Outcome (2026-10-01, RESEARCH_LOG 021 declaration → 022 result): honest closure, nothing
+> promoted.** Space chosen by the user (「標準：單因子＋雙因子」): 36 documented, live-available
+> features, N = 2,082 trials in 150 s. **F2 passes** (PBO 0.125) but **no trial passes F1** — the
+> luck benchmark at this N is 1.37 annualized IR and the best recipe (`−ps +fcf_yield`, all names,
+> top 20) reached 1.45 → max DSR 0.59. 47 trials pass F3; 0 candidates, so `promote` spent no VAL
+> look and incubated nothing. DEV walk-forward (top 1): CAGR 11.4% vs SPY 12.0% / EW 10.1%, beat
+> SPY 3 of 6 years — the selection procedure itself does not beat the benchmark within DEV. The
+> leaderboard's top 50 is value/quality (`fcf_yield`, `roe`, `ev_fcf`, `net_debt_to_ebitda`, `ps`,
+> `accruals`). The optional VAL-extension walk-forward was deliberately not run (config-shopping
+> hygiene). The next legitimate levers are **new data** (17.11 short interest, a live Form 4 delta,
+> or the paid-data memo when the user wants it), never a gate change motivated by this result.
 
 **Goal:** the first platform-generated US strategy search, on `panel_us` v2 (don't wait for
 18.14 — a v3 run is a new config, a new family, and its own future card).
