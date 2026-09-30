@@ -87,11 +87,13 @@ def test_run_weekly_chains_every_step_in_order(
     assert any("completed cleanly" in e.title for e in events)
 
 
-def test_weekly_chain_appends_tdcc_cache_last() -> None:
-    # 16.4: the TDCC weekly cache runs last; the 16.2 chain stays an intact prefix.
+def test_weekly_chain_order() -> None:
+    # 16.4: the TDCC weekly cache runs last. 18.13 (user request 2026-09-30): the SEC Form 4
+    # bulk refresh runs right after the snapshot and before the US panel extension.
     assert WEEKLY_CHAIN[-1] == ["heimdall.research.tdcc_cache"]
-    assert WEEKLY_CHAIN[:4] == [
+    assert WEEKLY_CHAIN[:5] == [
         ["heimdall.screener.build"],
+        ["heimdall.data.providers.form4", "--download"],
         ["heimdall.research.build_dataset", "--market", "us"],
         ["heimdall.research.build_dataset", "--market", "tw"],
         ["heimdall.research.monitor", "--apply"],

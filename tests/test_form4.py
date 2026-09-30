@@ -258,3 +258,18 @@ def test_insider_features_are_nan_past_coverage() -> None:
     assert inside["insider_net_buy_90d"] == pytest.approx(1000 / 1e6)
     after = _insider_features(rows, pd.Timestamp("2023-07-31"), 1e6, end)
     assert all(pd.isna(v) for v in after.values())
+
+
+def test_cli_download_skips_ingest_when_nothing_is_new(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    f4.bulk_marker_path(tmp_path).parent.mkdir(parents=True)
+    f4.bulk_marker_path(tmp_path).write_text(json.dumps({"coverage_end": "2026-06-30"}))
+    monkeypatch.setattr(f4, "download_bulk", lambda **k: [])
+
+    def no_ingest(*a: object, **k: object) -> None:
+        raise AssertionError("nothing new: must not re-ingest")
+
+    monkeypatch.setattr(f4, "ingest_bulk", no_ingest)
+    assert f4.main(["--download"]) == 0

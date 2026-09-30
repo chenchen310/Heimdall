@@ -114,5 +114,10 @@ uv run python -m heimdall.data.providers.form4 --download
 - Panel months after the marker's `coverage_end` get **NaN** insider features, never a false "no
   trades" 0, until the next quarter is ingested.
 
-This step is manual on purpose. Adding it to the weekly chain would create a standing automatic
-download, and that is the user's call.
+**Automatic since 2026-09-30 (user decision):** the weekly chain runs
+`python -m heimdall.data.providers.form4 --download` right after the snapshot and before the US
+panel extension. Each run makes one request to SEC's index page. A zip is downloaded only when a new
+quarter has been published, and the caches are re-ingested only when something new arrived, so
+most weeks it is a no-op printing "up to date". Panel months that the resumable build already
+computed before their quarter arrived keep NaN insider values (features are frozen at first write)
+until the next full rebuild.

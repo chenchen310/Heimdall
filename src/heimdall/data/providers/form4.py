@@ -522,6 +522,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.download:
         new = download_bulk(first_year=args.first_year)
         print(f"downloaded {len(new)} new quarter(s)")
+        if not new and bulk_marker_path().exists():
+            print(f"up to date — coverage through {bulk_coverage_end()} (nothing to ingest)")
+            return 0
     rep = ingest_bulk()
     print(
         f"ingested {len(rep.quarters)} quarters → {rep.rows:,} transactions over {rep.symbols:,} "
