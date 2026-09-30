@@ -242,7 +242,10 @@ _CLUSTER_MIN_BUYERS = 3  # ≥3 distinct officer/director buyers in the window =
 
 
 def _insider_features(
-    insider: pd.DataFrame, as_of: pd.Timestamp, market_cap: float
+    insider: pd.DataFrame,
+    as_of: pd.Timestamp,
+    market_cap: float,
+    coverage_end: pd.Timestamp | None = None,
 ) -> dict[str, float]:
     """US insider-transaction features — SEC Form 4 (roadmap 12.4/13.3), the honest
     "smart money" axis. Keyed on ``filed_at`` (never ``txn_date``): a rebalance at
@@ -269,9 +272,13 @@ def _insider_features(
     Both keys are absent from a symbol with **no** insider data at all (empty
     frame → NaN), so US rows built without the Form 4 stream simply do not carry
     these columns (mirroring the other optional-stream features).
+
+    ``coverage_end`` (18.13) is the last filing date the bulk Form 4 data sets cover: a
+    month after it would read "no trades" as a genuine 0, so it is NaN instead — an
+    uncovered window is missing data, not an absence of insider activity.
     """
     out = {k: float("nan") for k in _INSIDER_KEYS}
-    if insider.empty:
+    if insider.empty or (coverage_end is not None and as_of > coverage_end):
         return out
     lo = as_of - pd.Timedelta(days=_INSIDER_WINDOW_DAYS)
     role = insider["is_officer"].to_numpy(bool) | insider["is_director"].to_numpy(bool)
@@ -653,6 +660,7 @@ def build_dataset_iter(
     insider: Callable[[str, date, date], pd.DataFrame] | None = None,
     quarterly_fundamentals: Callable[[str, date, date], pd.DataFrame] | None = None,
     sector_map: dict[str, str] | None = None,
+    insider_coverage_end: pd.Timestamp | None = None,
 ) -> Iterator[DatasetProgress]:
     """Build (or extend) the panel month by month, yielding progress per month.
 
@@ -806,6 +814,7 @@ def build_dataset_iter(
                         insider_hist.get(sym, pd.DataFrame()),
                         t,
                         float(row["market_cap"]),  # type: ignore[arg-type]
+                        insider_coverage_end,
                     )
                 )
             if quarterly_fundamentals is not None:
