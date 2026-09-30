@@ -14,6 +14,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > validated* high probability of beating the benchmark — no human/LLM judgment in the loop.
 > Read `docs/NORTH_STAR.md` first, execute one task card per session from `docs/ROADMAP_V2.md`,
 > and obey `docs/RESEARCH_PLAYBOOK.md` + `.claude/rules/signal-certification.md` to the letter.
+>
+> **Since 2026-09-30 the active program is Phase 18 — the US Strategy Factory** (NORTH_STAR
+> "Program amendment"): the platform searches, backtests and ranks strategies itself; candidates
+> reach the user only as `certified` (Today's Picks) or `incubating` (Strategy Lab). US focus;
+> Taiwan paused.
 
 ## What this is
 

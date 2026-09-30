@@ -4,6 +4,9 @@
 > persisted labels → certification harness → a Today's Picks page that only ever shows certified
 > signals. Goal and definitions: `docs/NORTH_STAR.md`. Process and gates: `docs/RESEARCH_PLAYBOOK.md`.
 
+> **Current priority (2026-09-30): Phase 18 — US Strategy Factory.** US focus; Taiwan paused. Start
+> from the Phase 18 sequencing at the bottom of this file, not from the first unchecked card above.
+
 **How to work this roadmap (binding for every session):**
 
 - Execute **one card per session/PR**, top to bottom unless the user picks a card. Mark it `[x]`
@@ -1638,6 +1641,429 @@ parameter); don't touch providers; don't trigger a panel rebuild.
 - **TW quarterly gross-margin trend** — FinMind quarterly statements, the 17.4 analog (mind the
   standalone-quarterly income-statement cadence already handled in the provider).
 
+## Phase 18 — US Strategy Factory (user program 2026-09-30)
+
+> Program decided with the user 2026-09-30 — read `docs/NORTH_STAR.md` "Program amendment — US
+> Strategy Factory" first (the four decisions, verbatim). Goal: **the platform itself generates,
+> backtests and ranks strategy candidates**; a candidate reaches the user only through the two
+> tiers — `certified` → Today's Picks (unchanged), `incubating` → Strategy Lab (new, labeled
+> 「未認證・孵化中」). All earlier rules bind: one card per PR; the four quality gates; research cards
+> follow playbook §7 **and §12** (written by 18.0); every vault touch stops for a recorded user
+> go/no-go; an honest closure completes a research card.
+>
+> **Scope resets (US focus, per the user):** *paused* — 17.2, 17.9 (the day-1–12 live-observation
+> windows can still be run as an operator chore if the user asks), 17.12's TW half, 17.13's
+> `tw-crowding`, 14.3, and every TW item in 16.B/17.B. *Absorbed* — 17.10 → 18.1/18.2; 12.3 → 18.11;
+> 17.12's `max_ret_21d` → 18.12; 17.13's `us-short-interest` → its features join the factory pool
+> after 18.14 (no hand-run family). 17.11 stays as written (a Wave-D data card).
+>
+> **Layering (the one-way rule: `research` imports `backtest`, never the reverse):** `backtest/`
+> gains the generic daily portfolio engine (target weights in → equity out; no knowledge of specs)
+> and `overfit.py` (generic multiple-testing statistics); `research/` gains `construct.py` (specs →
+> target weights), `factory.py`, `walkforward.py` (it owns windows, vault guards, tiers);
+> `ui/lab_page.py` renders. Only `research/` code may write the registry, the trial ledgers, or the
+> ledgers.
+
+### 18.0 Governance: playbook §12 (automated search) + the `incubating` status  `[ ]`
+
+**Goal:** encode the factory's discipline as numbers **before** any factory code runs, so a
+weaker session can execute it mechanically.
+**Files:** `docs/RESEARCH_PLAYBOOK.md` (new §12 + §10 anti-patterns), `src/heimdall/research/gates.py`
+(`FACTORY_*` constants, `US_LARGE_N = 500`), `src/heimdall/research/registry.py` (statuses +
+transitions), `.claude/rules/signal-certification.md` (one bullet), gate-mirror + registry tests,
+`docs/RESEARCH_LOG.md` entry 019 (program amendment — no experiment, 0 OOS).
+
+Steps:
+1. **Confirm the numbers with the user first** — they are statistics decisions (playbook §11.4).
+   Proposed defaults, from the multiple-testing literature:
+
+   | # | Factory gate (DEV unless stated) | Proposed threshold |
+   | --- | --- | --- |
+   | F1 | Deflated Sharpe Ratio of the candidate's monthly **net selection-alpha** series (book net of costs − EW tier universe, `fwd_1m_rel` basis), deflated by the run's trial count N and the cross-trial Sharpe variance | DSR ≥ **0.95** |
+   | F2 | Run-level Probability of Backtest Overfitting (CSCV, S = 16 blocks of DEV months) | PBO ≤ **0.30**, else **no** candidate of the run is promoted |
+   | F3 | G3 selection alpha (6m, certify math) NW-t — the Harvey–Liu–Zhu hurdle for mined signals — plus G1 IC t | alpha NW-t ≥ **3.0** and IC t ≥ **2.0** |
+   | F4 | VAL single look (≤ **5** finalists per run) | selection alpha > 0 **and** mean IC > 0; G6 turnover ≤ 60% |
+   | F5 | Free parameters (G5 counting; structural menu picks don't count but are disclosed) | ≤ **4** |
+   | F6 | Trials per run | N ≤ **5,000** |
+
+2. Write playbook §12 with these rules:
+   - A **search run** is declared by `signals/search/<run_id>/config.json`; its canonical hash is
+     committed in a RESEARCH_LOG "search declared" entry **before** the run. The config fixes the
+     feature pool with **a-priori directions** (from the `research/dataset.py` feature table, the
+     `_technicals` comments, or the cited literature — never inferred from data), the weight menu,
+     construction menus, universes, stages, and seed. Nothing is added mid-run.
+   - **Every** evaluated candidate is a trial, appended to `signals/search/<run_id>/trials.parquet`
+     (append-only: trial id, spec hash, DEV metrics, and the monthly series F1/F2 need). N = its row
+     count, used by F1 and disclosed wherever the run's results appear.
+   - Search reads DEV only; VAL is one look per finalist (≤ 5 per run); the vault stays
+     `certify`'s alone, unchanged.
+   - Each run is its own family `us-factory-<run_id>`; at most **one** finalist per run may be
+     pre-registered (a stricter per-run cap inside the standard family budget), after a user
+     go/no-go. A finalist whose canonical hash equals any registry spec is ineligible (no respins
+     through the factory). Every certification report of a factory spec states the run's N/DSR/PBO
+     and the market's **cumulative vault-touch count** (US = 2 as of 2026-09-30).
+   - **Incubating tier:** F1–F5 pass → registry `incubating` via code → monthly ledger freezes
+     (16.1 machinery) → rendered **only** on the Strategy Lab. Demotion once ≥ 12 forward cohorts are
+     realized: the §9 rule (trailing-12 NW CI upper < 0 → `incubation_retired`). Incubating never
+     feeds Today's Picks, rebalance defaults, or a notification's picks section.
+   - **Overlay/timing strategies:** selection gates (G1–G3, G5, G6, F1–F4) score the **un-overlaid**
+     book; G4 and every displayed equity curve use the overlaid book.
+   - §10 anti-patterns added: **config-shopping** (a run whose pool/menus were chosen after looking
+     at a prior run's VAL numbers, any 2023+ data, or 18.8's results), **trial amnesia** (any
+     leaderboard/number shown without its N, DSR, PBO), **tier leakage** (an incubating strategy's
+     holdings rendered where a certified list is expected).
+3. `gates.py` constants; extend the playbook-mirror test to §12's table.
+4. Registry: `incubating` (legal only `draft → incubating`, called from `research.factory`),
+   `incubation_retired` (terminal), and `incubating → registered` (the pre-registration route).
+   Tests for every legal and illegal edge.
+5. `signal-certification.md` bullet: "Factory candidates reach the user only as `incubating`
+   (Strategy Lab) or `certified` (Today's Picks); every factory number carries its run's N/DSR/PBO."
+6. RESEARCH_LOG 019: the amendment + the user-confirmed numbers.
+
+DoD: confirmed numbers mirrored in playbook + `gates.py` (test green); registry tests green; gates green.
+**Don't:** change G1–G6 or §4; write factory code here.
+
+### 18.1 StrategySpec construction as data (`research/construct.py`)  `[ ]`
+
+**Goal:** one pure function turns (spec, one month's cross-section, previous holdings) into a
+weighted book — the single home of every construction choice the factory searches, so certify,
+evaluate, monitor, today, the engine and the factory can never disagree.
+**Files:** `src/heimdall/research/spec.py`, new `src/heimdall/research/construct.py`,
+`tests/test_research_construct.py`, `tests/test_research_spec.py`.
+
+Steps:
+1. Extend `SignalSpec` with optional fields, each **popped from the canonical hash when default**
+   (the 17.5 rule — the registry-wide hash-regression test must stay green):
+   - `universe: "" | "us_large"` — `""` = today's behaviour (all eligible rows); `us_large` =
+     eligible rows ranked by `market_cap` at *t*, top `gates.US_LARGE_N` (500). NaN market cap ⇒
+     excluded; coverage disclosed.
+   - `filters: list[Predicate]` — reuse `screener.model.Predicate` semantics (missing ⇒ fails,
+     never passes); applied after the universe tier.
+   - `weighting: "" | "inverse_vol"` — `""` = equal; `inverse_vol` ∝ 1/`vol_63d`, NaN vol ⇒
+     equal-weight fallback for that name (count disclosed).
+   - `max_sector_weight: float | None` — cap per `sector`; excess redistributed pro-rata to
+     uncapped names, iterated to convergence.
+   - `exit_rank: int | None` — the 17.10 rank buffer (validator `> top_n`); needs `prev`.
+   - `overlay: "" | "spy_sma200_cash"` — benchmark close vs its 200-day SMA at *t*. Validated and
+     carried here but **applied by consumers** at book level (18.0 overlay rule), not inside
+     `construct_book`.
+2. `construct_book(spec, cross, prev: dict[str, float] | None) -> pd.Series` (symbol → weight,
+   sums to 1): universe → filters → `score()` (existing, incl. `neutralize`) → rank → membership
+   (plain top-N, or `exit_rank` buffering) → weights → sector cap.
+3. `count_free_params(spec)` — G5 counting (nonzero feature weights); structural fields returned
+   separately for disclosure.
+4. Tests: a legacy spec yields exactly today's `ranked.head(top_n)` members at equal weight; one
+   known-answer per option; `us_large` is point-in-time (a name crossing rank 500 between months
+   changes tier); hash regression; buffered turnover < unbuffered on a synthetic churny panel
+   (17.10 step 5).
+
+DoD: mirrors + hash regression + gates green.
+**Don't:** thread it into certify/evaluate yet (18.2); no menu values beyond this list.
+
+### 18.2 Thread `construct_book` through evaluate · certify · monitor · today  `[ ]`
+
+**Goal:** the referee and the dev lens price exactly the book the factory searched (absorbs
+17.10 steps 3–4).
+**Files:** `research/evaluate.py`, `research/certify.py`, `research/monitor.py`, `research/today.py`,
+test mirrors.
+
+Steps:
+1. Replace every `ranked.head(spec.top_n)` with `construct_book` — stateful across months when
+   `exit_rank` is set (month 1 plain, then buffered); monitor replays from the OOS start
+   deterministically; today uses the latest ledger freeze as `prev` (absent ⇒ plain top-N + an
+   on-page note).
+2. `_book_minus_universe` gains `weights` (weighted book) and the tier's universe mask — G3's EW
+   universe is **the spec's tier**, so a `us_large` spec is judged against the EW large-cap universe.
+3. `apply_costs` / `cohort_turnover` accept weights (one-way turnover = ½ Σ|Δw|); unweighted inputs
+   reproduce today's numbers bit-for-bit.
+4. Overlay: G4 and the ledger's equity use the overlaid monthly series (a cash month = 0 gross,
+   turnover charged on both switches); G1–G3/G5/G6 use the un-overlaid book.
+5. **Reproduction gate:** a read-only replay of `certify` for both committed US specs and the TW
+   spec (temp dir; never writing reports or the registry) reproduces every gate value in the
+   committed reports to 1e-9; `evaluate {fcf_yield}` reproduces RESEARCH_LOG 015.
+
+DoD: reproduction gate + mirrors + gates green.
+**Don't:** re-certify anything; don't retrofit the certified TW spec.
+
+### 18.3 Daily portfolio backtest engine + tear sheet  `[ ]`
+
+**Goal:** the one professional backtest for any spec — daily equity with next-open fills, costs,
+holdings, trades, exposures, two benchmarks and a full stats table. It is the evidence view of
+every strategy in the Lab.
+**Files:** new `src/heimdall/backtest/panel_engine.py`, new `src/heimdall/backtest/matrix.py`,
+`backtest/report.py`, `backtest/portfolio.py` (fill fix), `research/construct.py` (adapter),
+`tests/test_panel_engine.py`.
+
+Steps:
+1. `matrix.py`: build and delta-update wide `adj_open` (= open × adj_close/close), `adj_close`,
+   `volume` matrices (date × symbol) from the price cache into `data/research/matrix/us_*.parquet`;
+   validate on ingest (no negative prices; gaps reported).
+2. `panel_engine.run(target_weights: dict[pd.Timestamp, pd.Series], matrices, benchmark,
+   cost_bps, overlay_cash: pd.Series | None, start, end) -> EngineResult` — generic, spec-agnostic:
+   weights decided at month-end *t* are **filled at the t+1 open**, drift daily on adjusted closes
+   until the next fill; cost = bps × traded notional per side; an overlay cash flag at *t* moves the
+   book to cash at the next open; a held name whose prices end exits at its last close (flagged).
+   The research-side adapter `construct.book_schedule(spec, panel) -> (target_weights,
+   overlay_cash)` (needs 18.1) is the only bridge from specs; default cost = `gates.G4_COST_BPS`.
+3. `EngineResult`: daily equity (strategy / SPY / EW-tier universe rebalanced on the same dates),
+   holdings per rebalance (symbol, weight, score, rank, sector), trades (date, symbol, side, Δweight,
+   cost), turnover, sector weights over time, and an assumptions block (costs, fill rule, universe,
+   period, survivorship stamp).
+4. `report.py` stats: CAGR, vol, Sharpe, Sortino, max DD + duration, Calmar, beta/alpha vs SPY,
+   tracking error, IR vs SPY and vs EW universe, % months beating SPY, yearly returns table,
+   rolling-12m excess; quantstats HTML export.
+5. Tests: a hand-computed 3-stock × 3-month known answer; **look-ahead canary** (a +50% spike on the
+   signal-day close of a newly bought name must not reach the strategy's return); reconciliation —
+   on a synthetic panel with open ≡ previous close, the monthly-compounded engine returns equal
+   certify's G4 series to 1e-9 (on real data the gap is the one-day entry timing; report it, don't
+   hide it).
+6. Fix the standing rule breach: `backtest/portfolio.py` (Factors page) fills on the **signal**
+   bar's close (bt `SelectWhere` on an unshifted hold-mask) — shift the mask one bar; add the canary.
+
+DoD: known-answer + canary + reconciliation green; gates green.
+**Don't:** use this engine inside `certify` (G4 stays on panel labels — one pricing path for the
+referee); no intramonth stops.
+
+### 18.4 Over-fitting statistics (`backtest/overfit.py`)  `[ ]`
+
+**Goal:** the multiple-testing math the factory gates on — pure functions, known-answer tested, no
+new dependency (numpy + stdlib `statistics.NormalDist` for Φ/Φ⁻¹; scipy is only a transitive lock
+entry, so importing it would mean declaring it). Lives in `backtest/` because both the factory (`research/`) and
+the technical-rule factory (18.8, `backtest/`) need it and `backtest` may not import `research`.
+**Files:** new `src/heimdall/backtest/overfit.py`, `tests/test_overfit.py`.
+
+Steps:
+1. `psr(returns, sr_benchmark=0.0)` — Probabilistic Sharpe Ratio, skew/kurtosis-adjusted
+   (Bailey & López de Prado 2012).
+2. `expected_max_sharpe(n_trials, sr_variance)` and `dsr(returns, n_trials, sr_variance)` —
+   Deflated Sharpe Ratio (Bailey & López de Prado 2014).
+3. `pbo_cscv(trial_matrix, s=16, max_combos=None, seed=0)` — Probability of Backtest Overfitting
+   via combinatorially-symmetric cross-validation (Bailey, Borwein, López de Prado & Zhu 2017):
+   logit distribution, PBO, degradation slope; optional seeded subsample (≥ 1,000) of the
+   C(16,8) = 12,870 splits.
+4. `hlz_threshold(n_trials)` — Harvey–Liu–Zhu (2016) multiple-testing t threshold, for display.
+5. Tests: reproduce each paper's published worked example where one exists (cite the section in
+   the docstring), else hand-computed fixtures; properties — PBO ≈ 0.5 on pure-noise trials, ≈ 0
+   with one dominant planted signal; DSR decreases monotonically in N.
+
+DoD: tests + gates green.
+**Don't:** add statistics beyond this list without the user.
+
+### 18.5 The factory: search engine + trial ledger (`research/factory.py`)  `[ ]`
+
+**Goal:** the platform generates candidates itself — a declared space, searched on DEV, every
+trial logged, a leaderboard carrying DSR/PBO.
+**Files:** new `src/heimdall/research/factory.py`, `signals/search/`, `tests/test_research_factory.py`.
+
+Steps:
+1. `SearchConfig` (pydantic, canonical hash like `SignalSpec`): `run_id`, `market="US"`,
+   `feature_pool: dict[str, ±1]`, `max_features` (≤ 3), `weight_menu` (`equal` only in v1),
+   `universes` ⊆ {"", "us_large"}, `top_n_menu` ⊆ {10, 20} (the NORTH_STAR usage pattern),
+   `weighting_menu`, `exit_rank_menu`, `overlay_menu`, `neutralize_menu`, a two-stage plan (stage 1:
+   every feature subset × universe on the default construction; stage 2: the construction menus
+   for the stage-1 top K by the DEV objective), `max_trials` (≤ F6), `seed`. **DEV objective** =
+   annualized mean/sd of the monthly net selection-alpha series (the F1 series).
+2. Refuse to run unless the config hash is in a committed RESEARCH_LOG entry (the
+   `certify.check_preregistration` pattern); hard-assert that no row ≥ 2020-01-01 is read during
+   search (VAL is 18.7's single look; OOS is certify's) — tests for both.
+3. Fast evaluator: precompute per-month cross-sectional z-scores for every pool feature once, sum
+   into composites, membership/weights via `construct_book` (vectorize the plain path; stateful
+   options loop months only), metrics via the certify helpers. Target ≥ 20 candidates/s on
+   `panel_us` DEV on this machine (`concurrent.futures`; no new deps). Record the achieved rate.
+4. Trial ledger: append-only parquet; a killed run resumes without re-evaluating logged trials.
+5. Leaderboard: DEV metrics + F1 DSR (N = ledger rows; SR variance across trials) + run-level F2
+   PBO + F3/F5 flags; the top K get 18.3 engine backtests cached for the Lab.
+6. CLI: `uv run python -m heimdall.research.factory run <config.json>` and `leaderboard <run_id>`.
+
+DoD: a synthetic panel with one planted signal (found; DSR high; PBO low) and a pure-noise panel
+(nothing passes F1/F2); refusal tests; gates green.
+**Don't:** search feature directions or continuous weights; don't read VAL; don't promote (18.7).
+
+### 18.6 Walk-forward meta-backtest — "was the factory itself any good?"  `[ ]`
+
+**Goal:** backtest the **selection procedure**, not only its winner: each year the factory
+re-selects using only prior data and holds its choice — the honest estimate of what automatic
+strategy formulation would have delivered.
+**Files:** new `src/heimdall/research/walkforward.py`, `tests/test_research_walkforward.py`.
+
+Steps:
+1. For each year Y in 2014…2019 (DEV only): score a run's candidate set on the expanding window
+   [2010-01, (Y−1)-12], pick the top candidate (and, separately, an equal blend of the top 3) by the
+   run's objective subject to F3/F5, hold it through Y with the 18.3 engine; stitch the yearly
+   segments (costs on the switches).
+2. **VAL extension (2020–2022)** runs only after 18.7 has recorded the run's VAL looks — so these
+   segments are post-selection and cannot influence any finalist; the function refuses to run
+   earlier (asserted). Disclose the extension as such.
+3. Report vs SPY and vs the EW-tier universe: CAGR, Sharpe, IR, max DD, % years beating each, and
+   the sequence of selected strategies (stability of the choice).
+4. Never reads ≥ 2023 (asserted). Shown on every run's Lab page and log entry — **descriptive, not
+   a gate**.
+
+DoD: known answer on a synthetic panel whose planted signal switches mid-sample (selection lags
+one year, as expected); the ordering refusal tested; gates green.
+**Don't:** turn it into a gate; don't extend past 2022; don't run the VAL extension before 18.7's looks.
+
+### 18.7 Promotion pipeline: VAL look → `incubating` → pre-registration draft  `[ ]`
+
+**Goal:** turn a run's leaderboard into ≤ 5 VAL looks, forward-tracked incubating strategies, and
+(user-gated) one pre-registration draft.
+**Files:** `research/factory.py` (promote), `research/ledger.py` (incubating freezes),
+`research/registry.py` (transition calls only), tests.
+
+Steps:
+1. `promote(run_id, finalists)` (≤ 5): finalists must pass F1/F3/F5 in a run passing F2; each gets
+   its single VAL look (`evaluate(..., "val")`, recorded in the trial ledger); F4 passers → spec
+   JSON under `signals/specs/factory/` and registry `draft → incubating` via code.
+2. `ledger.freeze()` also freezes `incubating` entries (separate namespace
+   `signals/ledger/incubating/`), same append-only, no-backfill rules; realized track record and
+   unrealized mark reuse 16.1.
+3. `draft_preregistration(name)` prints the RESEARCH_LOG entry text (template §8 + run id, N, DSR,
+   PBO, walk-forward summary, VAL numbers, family `us-factory-<run_id>`). It does **not** commit or
+   call certify — the user's go/no-go and commit are required (§4).
+4. Tests: an F2-failing run promotes nothing; a duplicate-hash finalist is rejected; transitions
+   only through code.
+
+DoD: tests + gates green.
+**Don't:** auto-commit, auto-certify, or render incubating anywhere but the Lab.
+
+### 18.8 Technical-rule factory (single-stock, research-only)  `[ ]`
+
+**Goal:** the user's fourth strategy type — daily entry/exit rules — evaluated honestly across a
+universe instead of one hand-picked chart.
+**Files:** new `src/heimdall/backtest/tech_factory.py`, `backtest/strategies.py` (at most two new
+rules: MACD cross, Bollinger reversion), tests.
+
+Steps:
+1. Universe: current `us_large` members (or a user list). Per symbol × rule: rolling walk-forward
+   parameter selection (fit 3y → trade the next 1y) on the existing vectorbt engine (next-bar open,
+   costs); every (symbol × rule × grid point) is a counted trial.
+2. Aggregate per rule: distribution of walk-forward excess vs buy-and-hold, % of symbols beating
+   it, pooled Sharpe, DSR with the total trial count (18.4).
+3. Label everywhere: 「研究工具・持有期 < 1 個月，不在認證範圍」 (NORTH_STAR horizon non-goal).
+
+DoD: known answer on a synthetic trending / mean-reverting pair; gates green.
+**Don't:** touch the registry, tiers, ledgers, or research panel; don't let its results inform any
+factory config (config-shopping).
+
+### 18.9 Strategy Lab page (`ui/lab_page.py`)  `[ ]`
+
+**Goal:** where the user sees what the factory made.
+**Files:** new `src/heimdall/ui/lab_page.py`, `ui/app.py` (nav "Stock picking" → "Strategy Lab"),
+`ui/i18n.py`, `ui/_glossary.py` (DSR, PBO, IR, trial count), AppTest smokes.
+
+Steps:
+1. Tabs: 搜尋批次 (runs; launch a run in the background like `build_page`'s full-market build) ·
+   排行榜 (filters; N/DSR/PBO badges on every row) · 策略詳情 (the 18.3 tear sheet: equity vs SPY and
+   the EW universe, drawdown, yearly table, current holdings, trades, sector exposure, assumptions)
+   · 走動式驗證 (18.6) · 孵化中 (incubating + forward track record) · 技術策略研究 (18.8).
+2. A permanent banner on every tab: 「研究結果・未認證」 + the run's N + the survivorship stamp.
+   Certified strategies link to Today's Picks instead of being re-rendered.
+3. Data prep lives in `research/`/`backtest/`; the page only renders (business-logic rule).
+
+DoD: AppTest smokes (empty state, a fixture run, an incubating entry); gates green.
+**Don't:** render factory holdings on Today's Picks; no "buy" wording outside the certified tier.
+
+### 18.10 US rebalance / order helper  `[ ]`
+
+**Goal:** turn a certified (or, labeled, an incubating) book into an order list for an account size.
+**Files:** `research/rebalance.py`, `ui/today_page.py` + `ui/lab_page.py` (helper panel), tests.
+Steps: US rules — whole shares by default, fractional toggle, no sell tax, per-side bps; weights from
+`construct_book` (never assumed equal); diff vs the last frozen cohort; CSV export. Pure + tested.
+**Don't:** connect to any broker (18.B).
+
+### 18.11 Paid-data decision memo (executes 12.3)  `[ ]`
+
+**Goal:** the user decides with facts. Two gaps free data cannot close: (a) **survivorship-free**
+US prices + PIT fundamentals (delisted names), (b) **analyst estimates / revisions** history.
+**Files:** new `docs/PAID_DATA_MEMO.md`, `docs/DATA_SOURCES.md` (pointer).
+
+Steps:
+1. Survey current offerings **on the vendors' own sites at execution time** (never from memory):
+   delisted coverage, history depth, as-reported/PIT fundamentals, estimate-history depth, API and
+   rate limits, personal-use licence, price per year. Check at least Sharadar (Nasdaq Data Link),
+   Norgate Data, EODHD, FMP paid tiers, Tiingo; add others found.
+2. Per option: integration cost (one `DataProvider` + which panel rebuild) and research gain
+   (survivorship stamp → measured bias; revisions family unlocked).
+3. Free fallback: a committed historical S&P 500 membership list (17.B survivorship-lite) — what it
+   fixes and what it cannot (delisted prices are absent from yfinance).
+4. End with a recommendation and **one budget question for the user**.
+
+DoD: memo committed. **Don't:** sign up, pay, or add keys.
+
+### 18.12 US free feature batch (breadth for the factory pool)  `[ ]`
+
+**Goal:** add documented, orthogonal free axes the pool lacks.
+**Files:** `factors/metrics.py`, `data/providers/edgar.py` (two tags), `research/dataset.py`,
+`ui/_glossary.py`, tests.
+
+Steps (each: a-priori direction + one-line rationale, PIT test, known-answer test; any snapshot
+field also needs its glossary entry — `test_every_screenable_numeric_field_has_a_glossary_label`):
+1. `max_ret_21d` (−; Bali–Cakici–Whitelaw lottery effect) — 17.12 step 1, in `_technicals`.
+2. `beta_252d` vs SPY (−; betting-against-beta) — `_technicals`.
+3. `ind_mom_6m` (+; Moskowitz–Grinblatt industry momentum) — EW 6m return of the name's sector at
+   *t*; restate the 17.5 static-sector-map (non-PIT) caveat.
+4. `f_score` (+; Piotroski) — 9 binary checks from annual rows sharing one `fiscal_end` (the 17.6
+   rule); add `AssetsCurrent`/`LiabilitiesCurrent` to `edgar.METRIC_SPECS` (cached companyfacts
+   re-normalize offline); a check with missing inputs scores 0 and `f_score_n` stores how many were
+   evaluable.
+
+DoD: tests + gates green. Columns reach `panel_us` via 18.14.
+**Don't:** trigger a rebuild; no variants.
+
+### 18.13 Form 4 insider crawl (runs 13.3's deferred crawl)  `[ ]`
+
+**Goal:** populate the insider stream so `insider_net_buy_90d` / `insider_cluster_buy` join the pool.
+**Files:** a resumable crawler under `research/` (reuse the 13.7 ledger pattern), `docs/OPERATIONS.md`.
+Steps: first check whether `build_dataset`'s insider wiring already crawls resumably; SEC
+fair-access pacing (≤ 10 req/s, declared `SEC_EDGAR_USER_AGENT`); resumable ledger; record issuer
+and filing counts in the PR. Running across several sessions is fine.
+**Don't:** rebuild the panel here.
+
+### 18.14 `panel_us` v3 rebuild (+ extend to the latest month)  `[ ]`
+
+**Goal:** one rebuild carrying 17.14 `pct_of_52w_high`, 18.12, insider (18.13), and 17.11 short
+interest if merged.
+Steps: the 17.7 procedure verbatim — governance guard (no US `certified`), archive v2 →
+`panel_us.v2.parquet`, rebuild, **reproduction gate** (evaluate `{fcf_yield}` DEV/VAL reproduces
+entry 015 to ~2 dp), new-column coverage table, RESEARCH_LOG entry. If any US strategy is
+`incubating`, recompute its realized track record on v3 and disclose any change.
+**Don't:** start before 18.12 (and 18.13 if its crawl has finished) — a slipped card forces a v4.
+
+### 18.15 Factory run #1 (research; user-gated vault)  `[ ]`
+
+**Goal:** the first platform-generated US strategy search, on `panel_us` v2 (don't wait for
+18.14 — a v3 run is a new config, a new family, and its own future card).
+
+Steps:
+1. Write `signals/search/us-f1/config.json`. Pool = every `panel_us` v2 feature with a documented
+   a-priori direction (list each with its source); exclude, don't guess, anything undocumented;
+   exclude ratios whose negative values rank ambiguously (`pe`, `peg`, `ev_ebitda`, `ev_fcf`) unless
+   the feature table says how negatives are handled; drop `net_issuance_12m` (byte-identical to
+   `share_dilution_yoy`, entry 016). Stage 1 = every 1–2-feature equal-weight subset × {"",
+   "us_large"} on the default construction; stage 2 = the top 50 × top_n {10, 20} × {equal,
+   inverse_vol} × {no buffer, exit_rank = 2·top_n} × {no overlay, spy_sma200_cash} × {raw, sector}.
+   Confirm N ≤ 5,000 before running (≈ 2,500 expected).
+2. Commit the "search declared" RESEARCH_LOG entry with the config hash → run → leaderboard → 18.6
+   walk-forward (DEV part) → 18.7 promote (≤ 5 VAL looks) → 18.6 VAL extension (display only).
+3. Log entry: N, PBO, top-10 table with DSR, walk-forward summary, VAL numbers, which strategies
+   (if any) entered `incubating`. State the honest prior up front: the hand-run history (entries
+   011/016/017/018) shows real IC without selection skill, so the run may close with nothing
+   promoted — a valid result that points at 18.11.
+4. **Stop and ask the user** before any pre-registration (≤ 1 per run).
+
+DoD: committed log entry; zero unauthorized OOS reads. An honest closure completes the card.
+**Don't:** change the config after seeing results — that is a new run, a new family, and a new
+declared entry.
+
+### 18.B Backlog — promote to a full card with the user before executing
+
+- **Paper-trading bridge** — place the incubating/certified book's orders in a broker's **paper**
+  account; real-money execution stays manual unless the user explicitly decides otherwise.
+- **ML ranker** (gradient-boosted) — needs a further NORTH_STAR amendment (black-box rule).
+- **Long-short / market-neutral books; weekly cadence** — check the horizon non-goal first.
+- **PIT S&P 500 membership universe** — depends on 18.11's outcome.
+- **Strategy combiner** — a blend of ≥ 2 incubating/certified strategies as its own family (16.B).
+
 ---
 
 **Sequencing:** 7.1 → 7.2 → 7.3 → 8.1 → 8.2 → 8.3 → 9.1 → 9.2 → 10.x → 11.x → 12.x.
@@ -1664,3 +2090,21 @@ The first "north-star moment" is completing 9.2 + one certified 10.x signal. ✅
   stops for a recorded user go/no-go first. A REJECTED verdict, honestly logged, completes any
   research card. When a **second** signal certifies, promote the 16.B multi-signal combiner to a
   full card with the user.
+
+**Phase 18 sequencing (2026-09-30 — supersedes the 13–17 waves; US focus, TW paused)** — waves
+override top-to-bottom; within a wave, any order.
+
+- **Ops note:** the weekly launchd chain failed on `uv` not found every run from 2026-07-20 to
+  2026-09-28 (so `panel_us` stopped at 2026-07-13 and the 2026-08/09 ledger cohorts were never
+  frozen — unrecoverable by the no-backfill rule). Fixed on `main` 2026-09-30 (merge `7214aff`);
+  confirm the first post-fix run (Mon 2026-10-05) succeeded before relying on any incubating ledger.
+- **Wave A (foundation):** 18.0 (needs the user-confirmed F-numbers) · 18.1 → 18.2 · 18.3 (needs
+  18.1) · 18.4 · 18.11 (docs only — any time).
+- **Wave B (the factory):** 18.5 (needs 18.0/18.1/18.4) → 18.6 (needs 18.3) → 18.7 (needs 18.2).
+- **Wave C (product):** 18.9 (needs 18.3/18.5; its incubating tab after 18.7) · 18.10 · 18.8
+  (needs 18.4).
+- **Wave D (data breadth — parallel from day one):** 18.12 · 18.13 (background crawl) · 17.11 →
+  18.14 (one rebuild carrying all of them).
+- **Wave E (research):** 18.15 as soon as Wave B lands, on `panel_us` v2. A second run on v3
+  (after 18.14) is a new config, a new family, and its own future card.
+- Every vault touch still stops for a recorded user go/no-go; ≤ 1 pre-registration per factory run.
