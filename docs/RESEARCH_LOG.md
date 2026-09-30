@@ -929,3 +929,53 @@ and the numbers it runs under, so every later factory entry can cite them.
 - **Not included:** 17.11 FINRA short interest (not built). The 13.x/17.x panel-only features still
   do not reach the live snapshot (the 18.12 finding), which remains a precondition for 18.15.
 - Registry status change: none. OOS attempts spent: 0.
+
+## 021 — search declared: us-factory-us-f1 (2026-10-01, model: Opus 5.5)
+
+- Card: ROADMAP 18.15. This is the **declaration** required by playbook §12.2. It is committed
+  before the run, and the factory refuses to run without it. Nothing has been evaluated yet.
+- Config: `signals/search/us-f1/config.json`, sha256
+  `cf9fe18f6e5ec3c5ee21c18cf2b17624721af77b6ef01f778739b28b81fa752a`. Family `us-factory-us-f1`:
+  standard 3-attempt budget, ≤ 1 pre-registration for this run.
+- **User decisions:** 「標準：單因子＋雙因子 (Recommended)」 — the full 1–2-feature space rather than the
+  single-feature-only alternative. The user was told beforehand that the larger N raises the F1 bar
+  by ~15%.
+- **Pool (36 features).** Directions are fixed a priori and never searched. Every feature is present
+  in `panel_us` v3 **and** the live snapshot (18.16).
+
+  | group | features and direction | direction source |
+  | --- | --- | --- |
+  | value | `pe` −, `ps` −, `peg` −, `ev_ebitda` −, `ev_fcf` −, `fcf_yield` + | `factors.scoring.FACTORS`; the snapshot sets a non-positive denominator to NaN, so a negative value never ranks |
+  | quality | `roe` +, `roic` +, `net_margin` +, `gross_margin` +, `operating_margin` +, `fcf_margin` +, `gross_profitability` + (Novy-Marx), `f_score` + (Piotroski), `accruals` − (Sloan) | feature docs 13.5 / 17.6 / 18.12 |
+  | leverage | `debt_to_equity` −, `net_debt_to_ebitda` −, `interest_coverage` + | `factors.scoring.FACTORS` |
+  | growth | `revenue_growth_yoy` +, `eps_growth_yoy` +, `rev_accel_q` +, `gross_margin_delta_q` +, `asset_growth` − | feature docs 13.5 / 17.4 |
+  | issuance | `share_dilution_yoy` − | feature doc 13.5 |
+  | earnings events | `sue` +, `earn_gap` + | feature doc 13.4 |
+  | trend / momentum | `ret_12_1` +, `ret_6m` +, `ret_3m` +, `ret_12m` +, `pct_above_sma_200` +, `pct_of_52w_high` + (George–Hwang), `ind_mom_6m` + (Moskowitz–Grinblatt) | `factors.scoring` / 17.14 / 18.12 |
+  | risk | `vol_63d` −, `beta_252d` − (betting-against-beta), `max_ret_21d` − (lottery) | feature docs 18.12 |
+
+  **Excluded, with reasons:**
+  - insider features — NaN in the live snapshot past the bulk Form 4 coverage (18.16);
+  - `rsi_14` — no a-priori direction;
+  - `net_issuance_12m` and `buyback_yield` — byte-identical to ± `share_dilution_yoy` (entry 016).
+- **Space.** Stage 1 is every 1- and 2-feature equal-weight subset × universe {all eligible,
+  `us_large`} on the default construction (top 20, equal weight, no buffer, raw ranking): (36 + 630) × 2
+  = **1,332**. Stage 2 takes the stage-1 top 50 by DEV objective × top_n {20, 10} × {equal,
+  inverse-vol} × {no buffer, exit_rank = 2·top_n} × {raw, sector-neutral}, minus the default:
+  ≤ **750**. **N ≤ 2,082** (F6 cap 5,000). The overlay `spy_sma200_cash` is reported for finalists
+  and never counted as a trial (§12.4).
+- **Plan.**
+  1. DEV-only search.
+  2. Leaderboard (F1 DSR, F2 run PBO, F3, F5).
+  3. Cache DEV engine backtests for the top 10.
+  4. Walk-forward on DEV (top1, top3).
+  5. `promote`: at most 5 F1 + F3 + F5 candidates of an F2-passing run get the single VAL look; F4
+     passers become `incubating`.
+  6. Walk-forward VAL extension (display only).
+  7. A result entry.
+  8. **Stop and ask the user** before any pre-registration. The 2023+ vault is not touched by this card.
+- **Honest prior, stated before looking.** Hand-run entries 011/016/017/018 repeatedly found real
+  rank IC without selection skill above the equal-weight universe. F1's deflation by N ≈ 2,100
+  demands a strong edge (18.5 finding). The most likely outcome is that **nothing passes F1/F2**,
+  or that at most one value/quality-flavoured candidate reaches VAL. That result would be valid and
+  informative (it points at data, not gates).
