@@ -20,3 +20,6 @@ honest; this rule keeps **claims** honest. Full process: `docs/RESEARCH_PLAYBOOK
 - **Every certified number carries its caveats**: benchmark-relative, `current_universe
   (optimistic)` survivorship stamp, CI + cohort count alongside any probability.
 - **No LLM output feeds any certified computation.** Identical results with `personas/` absent.
+- **Factory candidates reach the user only as `incubating` (Strategy Lab) or `certified` (Today's
+  Picks)**, and every factory number carries its run's trial count N, DSR and PBO. Search runs are
+  declared (hash committed) before they run and read DEV rows only (`docs/RESEARCH_PLAYBOOK.md` §12).

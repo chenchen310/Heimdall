@@ -244,6 +244,52 @@ def test_illegal_transitions_raise(tmp_path: Path, path: list[str], to: str) -> 
         registry.transition("us-mom-v1", 1, to, cert_report="r.json", root=tmp_path)
 
 
+def test_factory_incubating_paths(tmp_path: Path) -> None:
+    # Playbook §12.3: draft → incubating → registered (the pre-registration route) …
+    registry.add(_spec(), "p.json", root=tmp_path)
+    entry = registry.transition("us-mom-v1", 1, "incubating", root=tmp_path)
+    assert entry["status"] == "incubating"
+    registry.transition("us-mom-v1", 1, "registered", root=tmp_path)
+    entry = registry.transition("us-mom-v1", 1, "rejected", cert_report="r.json", root=tmp_path)
+    assert entry["status"] == "rejected"
+    # … or incubating → incubation_retired (the §9 drift rule), which is terminal.
+    registry.add(_spec(version=2), "p2.json", root=tmp_path)
+    registry.transition("us-mom-v1", 2, "incubating", root=tmp_path)
+    registry.transition("us-mom-v1", 2, "incubation_retired", root=tmp_path)
+    assert registry.get("us-mom-v1", version=2, root=tmp_path)["status"] == "incubation_retired"
+
+
+@pytest.mark.parametrize(
+    ("path", "to"),
+    [
+        (["incubating"], "certified"),  # incubating never skips the vault
+        (["incubating"], "rejected"),
+        (["incubating"], "under_review"),  # the certified drift path is not the incubating one
+        (["incubating"], "retired"),
+        (["incubating", "incubation_retired"], "incubating"),  # terminal
+        (["incubating", "incubation_retired"], "registered"),
+        (["registered"], "incubating"),  # only drafts are promoted by the factory
+        (["registered", "certified"], "incubating"),
+        (["registered", "certified"], "incubation_retired"),
+    ],
+)
+def test_illegal_incubating_transitions_raise(tmp_path: Path, path: list[str], to: str) -> None:
+    registry.add(_spec(), "p.json", root=tmp_path)
+    for step in path:
+        kw = {"cert_report": "r.json"} if step in {"certified", "rejected"} else {}
+        registry.transition("us-mom-v1", 1, step, root=tmp_path, **kw)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="illegal transition"):
+        registry.transition("us-mom-v1", 1, to, cert_report="r.json", root=tmp_path)
+
+
+def test_every_status_has_a_lifecycle_entry() -> None:
+    assert set(registry._LEGAL) == registry.STATUSES
+    for targets in registry._LEGAL.values():
+        assert targets <= registry.STATUSES
+    terminal = {s for s, t in registry._LEGAL.items() if not t}
+    assert terminal == {"rejected", "retired", "incubation_retired"}
+
+
 def test_certification_outcomes_require_report(tmp_path: Path) -> None:
     registry.add(_spec(), "p.json", root=tmp_path)
     registry.transition("us-mom-v1", 1, "registered", root=tmp_path)

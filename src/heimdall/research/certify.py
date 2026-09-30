@@ -415,11 +415,14 @@ def certify_and_record(
     check_preregistration(spec, log_entry, log_path)
     entry = registry.get(spec.name, spec.version, root=root)
     status = str(entry["status"])
-    if status == "draft":  # a valid committed log entry IS the registration
+    # A valid committed log entry IS the registration — for a hand-made draft, or for an
+    # incubating factory finalist the user sent to the vault (playbook §12).
+    if status in {"draft", "incubating"}:
         registry.transition(spec.name, spec.version, "registered", root=root)
     elif status != "registered":
         raise ValueError(
-            f"{spec.name} v{spec.version} is {status!r}; only draft/registered specs can run"
+            f"{spec.name} v{spec.version} is {status!r}; "
+            "only draft/incubating/registered specs can run"
         )
     if spend:
         attempt = registry.spend_attempt(spec.family, root=root)  # peeking is spending

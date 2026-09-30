@@ -1664,7 +1664,19 @@ parameter); don't touch providers; don't trigger a panel rebuild.
 > `ui/lab_page.py` renders. Only `research/` code may write the registry, the trial ledgers, or the
 > ledgers.
 
-### 18.0 Governance: playbook §12 (automated search) + the `incubating` status  `[ ]`
+### 18.0 Governance: playbook §12 (automated search) + the `incubating` status  `[x]`
+
+> **Outcome (2026-09-30, RESEARCH_LOG 019):** the user confirmed F1–F6 as proposed
+> (「F1–F6 照建議值」). Playbook §12 (12.1 gate table, 12.2 declaring/running a search, 12.3
+> families/vault/incubating tier, 12.4 overlays, 12.5 technical rules) + three §10 anti-patterns
+> (config-shopping, trial amnesia, tier leakage) + the §6 lifecycle diagram. `gates.py` gained
+> `FACTORY_*` (incl. `FACTORY_PBO_BLOCKS`, `FACTORY_MAX_PREREG_PER_RUN`,
+> `FACTORY_INCUBATION_MIN_COHORTS`) and `US_LARGE_N`; new `tests/test_research_gates.py` parses the
+> §12.1 table so the playbook and `gates.py` cannot drift apart. Registry: `incubating` /
+> `incubation_retired` with the three legal edges, and a test that every status has a lifecycle
+> entry. One small addition beyond the card text: `certify_and_record` accepts an `incubating` spec
+> (it registers through the committed log entry, like a draft); without it the
+> `incubating → registered` edge had no caller. Two certify tests cover it.
 
 **Goal:** encode the factory's discipline as numbers **before** any factory code runs, so a
 weaker session can execute it mechanically.

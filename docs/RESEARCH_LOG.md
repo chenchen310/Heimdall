@@ -853,3 +853,32 @@ future `tw-bigholder` family card.
   lacks *selection skill above equal-weighting* on the in-sample windows. No free US family has cleared
   both DEV gates since the 12.5 redefinition. Today's Picks stays US-empty; the certified TW
   `tw-revenue-momentum v1` is unaffected. This continues to arm (not schedule) the 12.3 paid-data memo.
+
+## 019 — program amendment: US Strategy Factory governance (2026-09-30, model: Opus 5.5)
+
+Not an experiment — no panel row read, no spec registered, **0 OOS**. Records the program change
+and the numbers it runs under, so every later factory entry can cite them.
+
+- **Program (user, 2026-09-30):** make Heimdall a professional quant stock-selection platform that
+  formulates strategies automatically, with backtest evidence, US first. Recorded in `NORTH_STAR.md`
+  "Program amendment — US Strategy Factory" (four AskUserQuestion decisions, verbatim) and executed as
+  `ROADMAP_V2.md` Phase 18. Why: entries 001–018 = 8 US families, ~30 DEV evaluations, 0 US
+  certifications (2 vault touches, both `us-fcf-yield`, both rejected), all hand-written in one
+  narrow shape; the recurring finding is real rank IC without selection skill above the EW universe.
+- **Two tiers:** `certified` (unchanged — G1–G6 on the vault → Today's Picks) and the new
+  `incubating` (factory finalists passing F1–F5 → forward ledger → Strategy Lab only). New registry
+  statuses `incubating` / `incubation_retired`; `incubating → registered` is the pre-registration
+  route and `certify` accepts it.
+- **Factory gates, user-confirmed verbatim (「F1–F6 照建議值」), now `RESEARCH_PLAYBOOK.md` §12.1 and
+  `research/gates.py` `FACTORY_*` (mirror test `tests/test_research_gates.py`):** F1 DSR ≥ 0.95 on the
+  DEV monthly net selection-alpha series deflated by the run's trial count · F2 run-level PBO ≤ 0.30
+  (CSCV, S = 16) or the run promotes nothing · F3 DEV selection-alpha NW-t ≥ 3.0 and IC t ≥ 2.0 ·
+  F4 VAL single look, ≤ 5 finalists/run, alpha > 0 and IC > 0, turnover ≤ 60% · F5 ≤ 4 free
+  parameters · F6 ≤ 5,000 trials/run. Plus: ≤ 1 pre-registration per run (family
+  `us-factory-<run_id>`), incubating demotion armed after 12 realized forward cohorts, `us_large` =
+  PIT top 500 by market cap.
+- **Unchanged:** G1–G6 and every threshold in §3/§5; the 2023+ vault and §4; 3 attempts per family;
+  no LLM in any tiered computation; the 6-month benchmark-relative definition.
+- **Disclosure baseline for future factory certifications:** cumulative US vault touches = **2**
+  (`us-fcf-yield` v1, v2).
+- Registry status change: none. OOS attempts spent: 0.

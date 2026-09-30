@@ -1,4 +1,4 @@
-"""The referee's numbers — universe hygiene (§3) and certification gates (§5).
+"""The referee's numbers — universe hygiene (§3), certification gates (§5), factory gates (§12).
 
 Every constant mirrors ``docs/RESEARCH_PLAYBOOK.md`` and is pinned by a test
 (the duplication is the tripwire: changing either place alone fails CI). A
@@ -51,6 +51,38 @@ G5_MAX_PARAMS: int = 4  # free parameters: each nonzero feature weight counts as
 G6_MAX_TURNOVER: float = 0.40  # mean one-way monthly turnover of the top-N set
 G6_STRESS_TURNOVER: float = 0.60  # 40–60%: G4 must also pass at the stress cost; above: reject
 G6_STRESS_COST_BPS: float = 40.0
+
+# --- Strategy Factory gates F1–F6 (playbook §12) — machine-searched candidates only ---
+# These decide whether a factory candidate may enter the `incubating` tier (Strategy Lab). They
+# never replace G1–G6: an incubating strategy reaches Today's Picks only by passing the vault.
+# User-confirmed 2026-09-30 (RESEARCH_LOG 019).
+
+# F1: Deflated Sharpe Ratio of the DEV monthly net selection-alpha series, deflated by the run's
+# trial count and the cross-trial Sharpe variance (Bailey & López de Prado 2014).
+FACTORY_MIN_DSR: float = 0.95
+# F2: run-level Probability of Backtest Overfitting (CSCV over S blocks of DEV months, Bailey et al.
+# 2017); a run above the ceiling promotes nothing.
+FACTORY_MAX_PBO: float = 0.30
+FACTORY_PBO_BLOCKS: int = 16
+# F3: DEV G3 selection-alpha NW-t (the Harvey–Liu–Zhu hurdle for mined signals) and DEV G1 IC t.
+FACTORY_MIN_ALPHA_T: float = 3.0
+FACTORY_MIN_IC_T: float = 2.0
+# F4: the single VAL look — at most this many finalists per run; each needs selection alpha > 0,
+# mean IC > 0, and mean one-way turnover at or under the ceiling.
+FACTORY_MAX_VAL_FINALISTS: int = 5
+FACTORY_VAL_MAX_TURNOVER: float = 0.60
+# F5: free parameters, G5 counting (structural menu picks are disclosed, not counted).
+FACTORY_MAX_PARAMS: int = 4
+# F6: evaluated candidates per search run (every one is a logged trial).
+FACTORY_MAX_TRIALS: int = 5_000
+
+# At most this many finalists per run may be pre-registered for the vault (user go/no-go first).
+FACTORY_MAX_PREREG_PER_RUN: int = 1
+# The incubating demotion rule (§9 drift test) arms once this many forward cohorts are realized.
+FACTORY_INCUBATION_MIN_COHORTS: int = 12
+
+# The `us_large` universe tier: eligible rows ranked by market cap at t, top N (point-in-time).
+US_LARGE_N: int = 500
 
 
 def nw_tstat(series: npt.ArrayLike, null: float = 0.0, lag: int = 5) -> float:

@@ -303,6 +303,39 @@ def test_record_flow_writes_immutable_report_and_transitions(tmp_path: Path) -> 
         )
 
 
+def test_record_flow_accepts_an_incubating_factory_finalist(tmp_path: Path) -> None:
+    # Playbook §12.3: an incubating finalist the user sent to the vault registers through the
+    # committed log entry, spends its family's attempt, and ends certified | rejected as usual.
+    bench = _bench_series()
+    spec = _spec()
+    log = tmp_path / "LOG.md"
+    _write_log(log, "001", spec.canonical_hash())
+    registry.add(spec, "signals/specs/good-sig.json", root=tmp_path)
+    registry.transition("good-sig", 1, "incubating", root=tmp_path)
+
+    report = certify_and_record(
+        spec, _good_panel(bench), bench, log_entry="001", log_path=log, root=tmp_path
+    )
+    assert report.verdict == "CERTIFIED"
+    assert registry.get("good-sig", 1, root=tmp_path)["status"] == "certified"
+    assert registry.family_attempts("test-good", root=tmp_path) == 1
+
+
+def test_record_flow_refuses_a_retired_incubating_spec(tmp_path: Path) -> None:
+    bench = _bench_series()
+    spec = _spec()
+    log = tmp_path / "LOG.md"
+    _write_log(log, "001", spec.canonical_hash())
+    registry.add(spec, "signals/specs/good-sig.json", root=tmp_path)
+    registry.transition("good-sig", 1, "incubating", root=tmp_path)
+    registry.transition("good-sig", 1, "incubation_retired", root=tmp_path)
+    with pytest.raises(ValueError, match="only draft/incubating/registered"):
+        certify_and_record(
+            spec, _good_panel(bench), bench, log_entry="001", log_path=log, root=tmp_path
+        )
+    assert registry.family_attempts("test-good", root=tmp_path) == 0  # refusal costs nothing
+
+
 def test_record_flow_refusals_cost_no_attempt(tmp_path: Path) -> None:
     bench = _bench_series()
     spec = _spec(name="guarded", family="guarded-family")
