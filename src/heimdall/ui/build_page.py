@@ -123,7 +123,8 @@ def _quick_tab() -> None:
 
     rebuild = st.toggle(t("Re-fetch symbols already in the snapshot"), value=False)
     st.caption(
-        f"{len(symbols)} {t('symbols')} — " + (t("refresh all") if rebuild else t("new only"))
+        f"{len(symbols)} {t('symbols')} — "
+        + (t("refresh all") if rebuild else t("new + not yet built today"))
     )
 
     if st.button(t("Build now"), type="primary", disabled=not symbols):
