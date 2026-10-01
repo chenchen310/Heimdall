@@ -24,9 +24,8 @@ import numpy as np
 import pandas as pd
 
 from heimdall.data.symbols import parse_symbol
-from heimdall.factors.scoring import _zscore
 from heimdall.research import construct, gates
-from heimdall.research.spec import SignalSpec, _sector_zscore
+from heimdall.research.spec import SignalSpec, feature_z
 
 _REQUIRED = {"symbol", "as_of", "price", "dollar_vol_21d", "ret_12_1"}
 
@@ -57,9 +56,9 @@ def eligibility(snapshot: pd.DataFrame, market: str) -> pd.DataFrame:
 def _construction_columns(spec: SignalSpec) -> set[str]:
     """Snapshot columns a spec's construction needs beyond its features (18.1)."""
     cols = {pred.field for pred in spec.filters}
-    if spec.neutralize == "sector" or spec.max_sector_weight is not None:
+    if spec.neutralize in ("sector", "sector_size") or spec.max_sector_weight is not None:
         cols.add("sector")
-    if spec.universe == "us_large":
+    if spec.universe == "us_large" or spec.neutralize == "sector_size":
         cols.add("market_cap")
     if spec.weighting == "inverse_vol":
         cols.add("vol_63d")
@@ -99,12 +98,7 @@ def todays_picks(
 
     pool = df[construct.pool_mask(spec, df)]
     for feat in spec.features:
-        z = (
-            _sector_zscore(pool[feat], pool["sector"])
-            if spec.neutralize == "sector"
-            else _zscore(pool[feat])
-        )
-        df.loc[pool.index, f"z_{feat}"] = z
+        df.loc[pool.index, f"z_{feat}"] = feature_z(pool[feat], pool, spec.neutralize)
 
     book = construct.select(spec, df, df["signal_score"], prev)
     picks = df.set_index("symbol").loc[list(book.index)].reset_index()

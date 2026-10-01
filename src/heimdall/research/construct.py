@@ -9,7 +9,7 @@ what "the book" is. Pipeline, in order:
 2. **filters** — screener predicates (missing data fails, never passes);
 3. **score** — :func:`heimdall.research.spec.score` over that pool (z-scores within it);
 4. **membership** — plain top-N, or the ``exit_rank`` rank buffer given last month's book;
-5. **weights** — equal, or inverse ``vol_63d``;
+5. **weights** — equal, inverse ``vol_63d``, or rank-linear (18.18);
 6. **sector cap** — ``max_sector_weight`` per ``sector``, excess redistributed pro-rata.
 
 The G3 comparison universe is step 1 only (eligible ∩ tier): filters are part of the selection
@@ -140,12 +140,24 @@ def cap_sectors(weights: pd.Series, sectors: pd.Series, cap: float) -> pd.Series
     return w
 
 
+def _rank_linear(names: list[str]) -> pd.Series:
+    """Weights ∝ (m + 1 − r) over the m members in rank order (18.18): the best name gets m
+    shares, the last one share. Ranked within the members, so a buffered member that has slipped
+    below ``top_n`` still holds a positive weight. Parameter-free (structural)."""
+    m = len(names)
+    raw = pd.Series([float(m - i) for i in range(m)], index=names)
+    return raw / float(raw.sum())
+
+
 def weights_for(spec: SignalSpec, cross: pd.DataFrame, names: list[str]) -> pd.Series:
-    """Weights over ``names`` (rank order): equal or inverse-vol, then the sector cap."""
+    """Weights over ``names`` (rank order): equal, inverse-vol or rank-linear, then the sector
+    cap."""
     if not names:
         return pd.Series(dtype=float)
     if spec.weighting == "inverse_vol":
         w = _inverse_vol(cross, names)
+    elif spec.weighting == "rank_linear":
+        w = _rank_linear(names)
     else:
         w = pd.Series(1.0 / len(names), index=names)
     if spec.max_sector_weight is not None:
