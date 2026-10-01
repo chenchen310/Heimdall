@@ -199,6 +199,9 @@ still tracked and displayed, but the auto-flip guards the certified edge, not th
   N, DSR and PBO.
 - **Tier leakage** — an `incubating` strategy's holdings rendered anywhere a certified list is
   expected (Today's Picks, rebalance defaults, a notification's picks section).
+- **Composite laundering** — passing many fitted choices off as "one parameter". It covers picking
+  a composite's members by DEV/VAL performance, and editing or re-declaring a composite after seeing
+  its results (§12.6).
 
 ## 11. Working agreement for future (smaller-model) sessions
 
@@ -285,3 +288,31 @@ Daily entry/exit rules (the technical-rule factory, ROADMAP 18.8) are **research
 horizon is under the NORTH_STAR one-month floor, so they are never tiered, never registered, and
 never read the research panel. They still report their trial count and DSR, and their results may
 not inform any factory config (*config-shopping*, §10).
+
+### 12.6 Declared composites (added 2026-10-02, RESEARCH_LOG 024)
+
+The user opened rung 1 of the NORTH_STAR black-box clause: a signal may combine many features
+through a **declared composite**, without fitting any weight.
+
+- **What a composite is.** A fixed list of documented features, each with its a-priori direction.
+  Its value is the mean of the members' directional z-scores, computed with the spec's own
+  neutralization. That mean is z-scored again, so a composite enters a spec on the same scale as a
+  single feature. **A row missing any member scores NaN**, never a silent re-weighting (the
+  `score()` rule).
+- **Counting.** One composite is **one** G5/F5 parameter. This is the `f_score` precedent (nine
+  checks in one column), and the user endorsed this interpretation of G5 on 2026-10-02. Every
+  number shown for a composite lists its members.
+- **Declaration rules:**
+  1. Members come from an **a-priori criterion written before any evaluation**: a literature
+     definition or a documented feature category. DEV coverage (whether data exist) may be
+     consulted, since it carries no return information. DEV or VAL performance never may.
+  2. A declaration is a committed RESEARCH_LOG entry made **before** any composite in it is first
+     evaluated.
+  3. At most **5** composites per declaration, each with a citation.
+  4. A declared composite is **immutable**. Its canonical hash is pinned in code, so any change
+     is a new name and a new declaration.
+  5. Every composite evaluated is a **trial** in its run and counts toward N (§12.2).
+- **Outside rung 1:**
+  - **Fitted weights** (IC-weighting, shrinkage, regression) would change how G5/F5 count, so
+    they are a §4 rule 4 change.
+  - **ML models** need their own NORTH_STAR amendment.

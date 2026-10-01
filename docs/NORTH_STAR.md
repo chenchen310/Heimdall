@@ -92,6 +92,13 @@ Execution: `docs/ROADMAP_V2.md` **Phase 18**. Process rules for automated search
   menu-listed weights, ≤ 4 free parameters per strategy — under playbook §12's trial counting and
   over-fitting gates. Continuous weight optimizers and ML models (e.g. gradient-boosted rankers)
   still require a further amendment.
+  *Amended 2026-10-02 (ROADMAP 18.21, RESEARCH_LOG 024):* the user chose rung 1, 「第 1 級：宣告式等權合成」.
+  A signal may use a **declared composite**: a fixed list of documented features with a-priori
+  directions, chosen from the literature before any evaluation and combined as the equal-weight mean
+  of their z-scores. Nothing is fitted. A composite enters a spec as one feature and counts as
+  **one** free parameter (the `f_score` precedent, an interpretation of G5 the user endorsed). The
+  rules are in playbook §12.6. Fitted weights (rung 2) and ML models still require a further
+  amendment.
 
 ## Gap analysis — current state vs the goal
 
