@@ -386,3 +386,60 @@ def us_fundamental_features(
     out.update(_accel_features(fund_annual, fund_quarter, as_of))
     out.update(_accruals_features(fund_annual, as_of))
     return out
+
+
+# --- FINRA short interest (roadmap 17.11) ---------------------------------------------------
+
+SHORT_INTEREST_KEYS: list[str] = ["short_ratio", "short_ratio_delta_63d"]
+#: The newest usable cycle must have settled within this many days of the row date. Cycles are
+#: twice a month and become available 10 weekdays after settlement, so a healthy feed is at most
+#: ~30 days old; anything older means a gap in the data and scores NaN, never a stale value.
+_SI_MAX_AGE_DAYS = 35
+_SI_DELTA_BARS = 63
+
+
+def _days_to_cover(si: pd.DataFrame, d: pd.Timestamp) -> float:
+    """Short shares ÷ FINRA's average daily volume of the newest cycle available on ``d``."""
+    usable = si[si["available_at"] <= d]
+    if usable.empty:
+        return float("nan")
+    i = int(usable["settlement_date"].to_numpy().argmax())
+    if (d - pd.Timestamp(usable["settlement_date"].to_numpy()[i])).days > _SI_MAX_AGE_DAYS:
+        return float("nan")
+    volume = float(usable["avg_daily_volume"].to_numpy(dtype=float)[i])
+    if bool(usable["split_flag"].to_numpy(dtype=bool)[i]) or not volume > 0:
+        return float("nan")  # a split inside the cycle may mix share bases
+    return float(usable["short_shares"].to_numpy(dtype=float)[i]) / volume
+
+
+def short_interest_features(
+    si: pd.DataFrame, price: pd.DataFrame, as_of: pd.Timestamp
+) -> dict[str, float]:
+    """US short-interest features from FINRA's twice-monthly cycles (roadmap 17.11).
+
+    Point-in-time on ``available_at`` (settlement + 10 weekdays; the settlement date itself is
+    never knowable). Both directions are **−**: a heavily shorted stock tends to underperform
+    (days to cover: Hong, Li, Ni, Scheinkman & Yan 2016).
+
+    - ``short_ratio``: days to cover, the newest available cycle's short shares ÷ FINRA's
+      average daily volume **of the same cycle**. The card asked for our own 21-day median
+      volume, but the price cache's volume is adjusted backwards for later splits while a short
+      position is in the shares of its own date, so the ratio would be off by the split factor
+      before every split. FINRA's volume is on the same share basis. A cycle with a split inside
+      it, or a zero volume, scores NaN.
+    - ``short_ratio_delta_63d``: ``short_ratio`` now minus its value 63 trading bars earlier,
+      each read point-in-time on its own date.
+
+    NaN with no usable cycle, or when the newest one settled more than 35 days before the date.
+    """
+    out = {k: float("nan") for k in SHORT_INTEREST_KEYS}
+    if si.empty:
+        return out
+    now = _days_to_cover(si, as_of)
+    out["short_ratio"] = now
+    dates = pd.to_datetime(price["date"])
+    dates = dates[dates <= as_of].sort_values()
+    if len(dates) > _SI_DELTA_BARS:
+        then = _days_to_cover(si, pd.Timestamp(dates.iloc[-1 - _SI_DELTA_BARS]))
+        out["short_ratio_delta_63d"] = now - then
+    return out

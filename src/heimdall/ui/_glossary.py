@@ -373,6 +373,18 @@ _ENTRIES: dict[str, dict[str, str]] = {
         "en": "1 when 3+ different insiders bought on the open market in 90 days, else 0.",
         "zh": "近 90 天有 3 位以上不同內部人在公開市場買進時為 1，否則為 0。",
     },
+    "short_ratio": {
+        "category": "risk",
+        "direction": "lower",
+        "en": "Days to cover: shares sold short ÷ average daily volume (FINRA, twice a month).",
+        "zh": "空單回補天數：放空股數 ÷ 平均日成交量（FINRA，每月公布兩次）。",
+    },
+    "short_ratio_delta_63d": {
+        "category": "risk",
+        "direction": "lower",
+        "en": "Change in days to cover over the last 63 trading days. Rising shorts are a warning.",
+        "zh": "近 63 個交易日空單回補天數的變化。放空增加是警訊。",
+    },
     "max_ret_21d": {
         "category": "technical",
         "direction": "lower",
@@ -706,6 +718,11 @@ _LABELS: dict[str, dict[str, str]] = {
     "accruals": {"en": "Accruals", "zh": "應計項目"},
     "insider_net_buy_90d": {"en": "Insider net buying (90d)", "zh": "內部人淨買進（90 天）"},
     "insider_cluster_buy": {"en": "Insider cluster buy", "zh": "內部人集體買進"},
+    "short_ratio": {"en": "Days to cover (short)", "zh": "空單回補天數"},
+    "short_ratio_delta_63d": {
+        "en": "Days-to-cover change (63d)",
+        "zh": "空單回補天數變化（63 日）",
+    },
     "max_ret_21d": {"en": "Max 1-day return (21d)", "zh": "近月單日最大漲幅"},
     "beta_252d": {"en": "Beta (1y)", "zh": "Beta（1 年）"},
     "ind_mom_6m": {"en": "Industry momentum (6m)", "zh": "產業動能（6 個月）"},

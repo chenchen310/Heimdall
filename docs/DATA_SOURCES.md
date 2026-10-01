@@ -19,6 +19,12 @@ Decision reference for which vendor feeds what, and when to pay. All vendors are
   research family. No key. History comes from SEC's quarterly Insider Transactions Data Sets
   (18.13). Filings after the latest quarter come from EDGAR's daily `form` index plus each
   submission's text (18.19, `--delta`), so the insider features are usable live.
+- **FINRA equity short interest** (`data/providers/finra.py`, roadmap 17.11) — FINRA's public Query
+  API (`otcMarket/consolidatedShortInterest`, no key) serves the twice-monthly short positions of
+  every exchange-listed and OTC issue, with FINRA's average daily volume per cycle. History starts
+  **2017-12-29**. Each cycle is used only **10 weekdays after settlement** (user decision
+  2026-10-01; FINRA's current schedule publishes after 7 business days, and past schedules are
+  not on its site). Feeds `short_ratio` (days to cover) and `short_ratio_delta_63d`.
 - **FRED** (St. Louis Fed) — 800k+ macro series (GDP, CPI, unemployment, yield curve `T10Y2Y`, Fed
   funds). Free key, 1,000 req/day. Use `fredapi`. Feeds Two Sigma macro + Citadel rate sensitivity.
 - **yfinance** — quick prices for US **and** TW (`.TW`/`.TWO`). Unofficial/scraping-based and
