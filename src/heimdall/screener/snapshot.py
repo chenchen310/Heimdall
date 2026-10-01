@@ -14,6 +14,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 
@@ -356,6 +357,18 @@ class BuildProgress:
     finished: bool = False
 
 
+def _built_on(row: dict[str, object], as_of: date) -> bool:
+    """Was this snapshot row built for ``as_of``? A row without a usable ``as_of`` is not."""
+    stamp = row.get("as_of")
+    if stamp is None:
+        return False
+    try:
+        ts = pd.Timestamp(str(stamp))
+    except (TypeError, ValueError):
+        return False
+    return not pd.isna(ts) and ts.date() == as_of
+
+
 def build_snapshot_iter(
     symbols: list[str],
     prices: DataProvider,
@@ -377,9 +390,16 @@ def build_snapshot_iter(
 
     The same crawl the ``build`` CLI runs, exposed as an iterator so the UI can
     drive a progress bar and the CLI can print — the loop lives in one place. On
-    ``resume`` (default) existing rows are kept and symbols already in the snapshot
-    are skipped; the table is flushed to disk every ``checkpoint_every`` symbols and
-    once more at the end. A per-symbol error is tallied, never fatal.
+    ``resume`` (default) a symbol is skipped only when its existing row was already built
+    **for this** ``as_of``; a row from an earlier date is rebuilt. Resuming therefore finishes
+    an interrupted build of the same day, while a weekly run refreshes every row. (Before
+    this, any row present was skipped, so a complete snapshot was never refreshed.) The table
+    is flushed to disk every ``checkpoint_every`` symbols and once more at the end.
+
+    Old rows stay in the table until their replacement is built, so the file on disk is
+    complete at every checkpoint. A per-symbol error is tallied, never fatal, and keeps the
+    symbol's previous row (its ``as_of`` shows its age). A symbol that now returns no price
+    data at all drops out.
 
     Yields an initial ``BuildProgress`` (``done == 0``) once the plan is known, one
     after each symbol, and a final one with ``finished=True``. The yielded object is
@@ -389,11 +409,12 @@ def build_snapshot_iter(
     if resume:
         with contextlib.suppress(FileNotFoundError):
             existing = load_snapshot(root)
-    done_syms = set(existing["symbol"]) if not existing.empty else set()
-    todo = [s for s in symbols if s not in done_syms]
-    rows: list[dict[str, object]] = (
-        existing.to_dict("records") if not existing.empty else []  # type: ignore[assignment]
+    records = (
+        cast("list[dict[str, object]]", existing.to_dict("records")) if not existing.empty else []
     )
+    by_symbol: dict[str, dict[str, object]] = {str(r["symbol"]): r for r in records}
+    fresh = {sym for sym, r in by_symbol.items() if _built_on(r, as_of)}
+    todo = [s for s in symbols if s not in fresh]
 
     prog = BuildProgress(total=len(todo))
     yield prog  # initial plan, before any fetch
@@ -419,18 +440,20 @@ def build_snapshot_iter(
             )
         except Exception as exc:  # network/provider hiccup — skip, don't abort the crawl
             prog.failures[type(exc).__name__] = prog.failures.get(type(exc).__name__, 0) + 1
-            row = None
-        if row is not None:
-            rows.append(row)
-            prog.built += 1
+        else:
+            if row is not None:
+                by_symbol[symbol] = row
+                prog.built += 1
+            else:  # no price data any more: the symbol drops out
+                by_symbol.pop(symbol, None)
         prog.done, prog.last_symbol = i, symbol
         if i % checkpoint_every == 0:
-            save_snapshot(add_industry_momentum(pd.DataFrame(rows)), root)
+            save_snapshot(add_industry_momentum(pd.DataFrame(list(by_symbol.values()))), root)
         yield prog
 
     # Industry momentum is cross-sectional (every row's sector mean), so it is recomputed on
     # the whole table at each save rather than per row.
-    save_snapshot(add_industry_momentum(pd.DataFrame(rows)), root)
+    save_snapshot(add_industry_momentum(pd.DataFrame(list(by_symbol.values()))), root)
     prog.finished = True
     yield prog
 

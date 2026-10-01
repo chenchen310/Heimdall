@@ -14,7 +14,10 @@ be running.
    "Weekly: SEC Form 4 daily delta" below)
 2. **FINRA short interest** — `python -m heimdall.data.providers.finra` fetches any new
    twice-monthly cycle (see "Weekly: FINRA short interest" below)
-3. **Snapshot refresh** — `python -m heimdall.screener.build`
+3. **Snapshot refresh** — `python -m heimdall.screener.build`. Every row from an earlier day is
+   rebuilt in place, so the file stays complete throughout the build. A resumed build skips only
+   rows already built today, so a run interrupted mid-way finishes on the same day. Before
+   2026-10-02 any existing row was skipped, so a complete snapshot was never refreshed.
 4. **Form 4 bulk refresh** — `python -m heimdall.data.providers.form4 --download` (a no-op
    until SEC posts a new quarter; see "Quarterly: SEC Form 4 insider data" below)
 5. **Panel extension** — `python -m heimdall.research.build_dataset --market us` then `--market tw`

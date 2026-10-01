@@ -224,7 +224,7 @@ _ZH: dict[str, str] = {
     ),
     "Re-fetch symbols already in the snapshot": "重新抓取已在快照中的代號",
     "refresh all": "全部更新",
-    "new only": "僅新增",
+    "new + not yet built today": "新增＋今天尚未更新的",
     "Build now": "立即建立",
     "Starting…": "開始中…",
     "Done": "完成",

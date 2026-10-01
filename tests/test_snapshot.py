@@ -522,3 +522,65 @@ def test_build_snapshot_iter_mixed_symbols_sector_consistent_schema(tmp_path: Pa
     assert "sector" in snap.columns  # present for BOTH rows of the one table
     assert snap.loc["2330.TW", "sector"] == "半導體業"
     assert snap.loc["X.US", "sector"] == "Unknown"  # missing from the map, never dropped
+
+
+# --- the weekly refresh: resume rebuilds rows from an earlier as_of -------------------------
+
+
+def test_resume_rebuilds_rows_from_an_earlier_day_in_place(tmp_path: Path) -> None:
+    prices, nofund = _Prices(_ohlcv()), _NoFundamentals()
+    syms = ["A.US", "B.US", "C.US"]
+    old_day, new_day = date(2024, 3, 25), date(2024, 4, 1)
+    for _ in build_snapshot_iter(syms, prices, nofund, old_day, root=tmp_path):
+        pass
+    # A symbol outside this run's list is kept untouched.
+    for _ in build_snapshot_iter(["X.US"], prices, nofund, old_day, root=tmp_path):
+        pass
+
+    plan_total, sizes = -1, []
+    for i, p in enumerate(
+        build_snapshot_iter(syms, prices, nofund, new_day, checkpoint_every=1, root=tmp_path)
+    ):
+        if i == 0:
+            plan_total = p.total
+        elif not p.finished:
+            sizes.append(len(load_snapshot(tmp_path)))  # the file at every checkpoint
+    assert plan_total == 3  # every row was from an earlier day: all are rebuilt
+    assert sizes == [4, 4, 4]  # old rows stay until replaced: never a half-empty snapshot
+    snap = load_snapshot(tmp_path).set_index("symbol")
+    days = pd.to_datetime(snap["as_of"]).dt.date
+    assert {s: days[s] for s in syms} == dict.fromkeys(syms, new_day)
+    assert days["X.US"] == old_day
+
+    # Same day again: nothing left to do (an interrupted build resumes, a finished one stops).
+    again = next(iter(build_snapshot_iter(syms, prices, nofund, new_day, root=tmp_path)))
+    assert again.total == 0
+
+
+def test_resume_keeps_the_old_row_on_error_and_drops_a_symbol_without_prices(
+    tmp_path: Path,
+) -> None:
+    nofund = _NoFundamentals()
+    for _ in build_snapshot_iter(
+        ["A.US", "BAD.US", "GONE.US"], _Prices(_ohlcv()), nofund, date(2024, 3, 25), root=tmp_path
+    ):
+        pass
+
+    class _Changed(DataProvider):
+        def get_ohlcv(self, symbol: str, start: date, end: date) -> pd.DataFrame:
+            if symbol == "BAD.US":
+                raise ProviderError("boom")  # a transient failure today
+            if symbol == "GONE.US":
+                return _ohlcv().iloc[0:0]  # no price data any more
+            return _ohlcv()
+
+    last = None
+    for p in build_snapshot_iter(
+        ["A.US", "BAD.US", "GONE.US"], _Changed(), nofund, date(2024, 4, 1), root=tmp_path
+    ):
+        last = p
+    assert last is not None and last.failures == {"ProviderError": 1} and last.built == 1
+    snap = load_snapshot(tmp_path).set_index("symbol")
+    assert sorted(snap.index) == ["A.US", "BAD.US"]
+    days = pd.to_datetime(snap["as_of"]).dt.date
+    assert days["A.US"] == date(2024, 4, 1) and days["BAD.US"] == date(2024, 3, 25)
