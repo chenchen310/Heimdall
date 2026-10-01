@@ -25,7 +25,7 @@ import streamlit as st
 
 from heimdall.data.base import ProviderError
 from heimdall.data.symbols import REGION_CURRENCY
-from heimdall.research import registry
+from heimdall.research import composites, registry
 from heimdall.research.benchmark import BENCHMARK
 from heimdall.research.dataset import load_panel
 from heimdall.research.ledger import (
@@ -453,7 +453,8 @@ def render() -> None:
         if picks.empty:
             st.info(t("No eligible names to rank right now."))
             continue
-        lead = ["symbol", "signal_score", *(f"z_{f}" for f in spec.features), *spec.features]
+        raw = composites.columns(list(spec.features))  # composites show their members (18.22)
+        lead = ["symbol", "signal_score", *(f"z_{f}" for f in spec.features), *raw]
         cols = [c for c in [*lead, "price", "market_cap"] if c in picks.columns]
         display = picks[cols].rename(
             columns={c: f"{c} ({currency})" for c in cols if c in MONETARY_FIELDS}
