@@ -2508,9 +2508,55 @@ decision recorded.
 **Don't:** add other neutralizations (beta, industry-level) or weightings (score-proportional,
 optimizer); widen top_n without the recorded amendment; run a search here (that is 18.23).
 
-### 18.19 Live Form 4 delta (EDGAR daily index): insider features become live-usable  `[ ]`
+### 18.19 Live Form 4 delta (EDGAR daily index): insider features become live-usable  `[x]`
 
 > Promoted from 18.B on 2026-10-01.
+
+> **Outcome (2026-10-01).**
+>
+> **Probe** (2026-09-29 index):
+> - (a) every Form 4 is listed once per CIK it involves, so the issuer row is there and
+>   `_cik_map` filters to ticker-mapped issuers;
+> - (b) the full-submission `.txt` embeds the `ownershipDocument` XML;
+> - (c) about 395 Form 4 filings a day, 384 of them listing a ticker CIK, takes about 1 minute at
+>   ~8 requests per second (a quarter-start day reached 2,081).
+>
+> **Built:** the delta path in `data/providers/form4.py`:
+> - `parse_daily_index`, `form4_filings` (originals only, one fetch per accession),
+>   `normalize_submission` (CIK → every current ticker, as the bulk path does; owner CIKs without
+>   leading zeros, as the bulk path stores them, or one insider would count twice in
+>   `insider_cluster_buy`);
+> - `ingest_delta` (day by day, raw zip per day, a day marked done only when complete),
+>   `prune_delta` (the seam, also called by `ingest_bulk`), and `coverage_end_with_delta`
+>   (never across a gap);
+> - the `--delta` CLI, which now loads `.env`.
+>
+> **Three findings while running it:**
+> - Without the User-Agent, SEC answers **403**, which looks exactly like a missing directory. A
+>   missing quarter listing is therefore an error unless the quarter began within the last
+>   7 days. The first real run had silently reported "0 days" because of this.
+> - SEC removed one indexed filing after dissemination (2026-08-06, gone under both CIK paths).
+>   Every listed path is now tried; a filing gone under all of them is skipped, counted
+>   `withdrawn`, and named in that day's raw zip.
+> - EDGAR accepts filings from **06:00 New York time**, so the next weekday is vouched for until
+>   then. A build at 08:00 Taipei on a Monday (Sunday evening in New York), or on a Taipei
+>   afternoon, reads live insider values instead of NaN.
+>
+> **Weekly chain:** the delta runs **first**, not "right after the bulk step" as the card said.
+> The chain builds the snapshot before the bulk step, so placing it after the bulk step would
+> leave the live snapshot a week stale.
+>
+> **Real data:**
+> - The catch-up stored all 64 index days, 2026-07-01 → 09-30 (219 MB including raw), so
+>   coverage moved from 2026-06-30 to 2026-10-01.
+> - The second leg alone was 19,927 filings → 43,245 rows, with 1 withdrawn and 0 unparsed.
+> - Live smoke (`build_row`, as of 2026-10-01): `insider_net_buy_90d` populated for AAPL
+>   (−7e-07), NVDA (−1.7e-04), MSFT (−1.9e-05), JPM (−2e-06) and TSLA (−7e-07). With bulk-only
+>   coverage the same call gives NaN.
+>
+> **Tests** (no network): index golden, de-duplication and amendments, submission golden vs the
+> XML path, the coverage rule (incl. a Taipei clock), contiguity, the seam, PIT leak, end-to-end
+> ingest + resume, failure keeps earlier days, the 403 guard, withdrawn filings.
 
 **Goal:** the bulk Form 3/4/5 data sets end at their last published quarter (coverage ended
 2026-06-30 as of 18.16). The insider features are therefore NaN in the live snapshot, which kept

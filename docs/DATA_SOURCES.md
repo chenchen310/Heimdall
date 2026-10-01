@@ -16,7 +16,9 @@ Decision reference for which vendor feeds what, and when to pay. All vendors are
   (the US has no public daily institutional flow; 13F is quarterly + 45-day-lagged). Same shared
   `User-Agent`/CIK cache as the fundamentals provider; `ownershipDocument` XML → canonical
   per-transaction rows, keyed on the **filing** timestamp (point-in-time). Feeds the `us-insider`
-  research family. No key.
+  research family. No key. History comes from SEC's quarterly Insider Transactions Data Sets
+  (18.13). Filings after the latest quarter come from EDGAR's daily `form` index plus each
+  submission's text (18.19, `--delta`), so the insider features are usable live.
 - **FRED** (St. Louis Fed) — 800k+ macro series (GDP, CPI, unemployment, yield curve `T10Y2Y`, Fed
   funds). Free key, 1,000 req/day. Use `fredapi`. Feeds Two Sigma macro + Citadel rate sensitivity.
 - **yfinance** — quick prices for US **and** TW (`.TW`/`.TWO`). Unofficial/scraping-based and
