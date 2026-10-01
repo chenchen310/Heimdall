@@ -2405,7 +2405,30 @@ declared entry.
 > trials to US DEV, not three. Every Phase-18 rule still binds. Nothing here changes G1–G6, F1–F6,
 > or playbook §4. Proposing a gate change *because of* 18.15's result is still gate-shopping (§10).
 
-### 18.17 IC → selection transfer diagnostic (DEV only)  `[ ]`
+### 18.17 IC → selection transfer diagnostic (DEV only)  `[x]`
+
+> **Outcome (2026-10-01, RESEARCH_LOG 023):** new `research/transfer.py` (`diagnose`,
+> `transfer_coefficient`, `size_split`, `dev_rows`, `render_markdown`, a CLI) and 8 tests in
+> `tests/test_research_transfer.py`, covering the three known answers, the DEV guard
+> (scrambling rows after DEV leaves every output byte-identical), the size-split identity, and
+> agreement with `evaluate()`. The pre-stated list is pinned: the five us-f1 trials' canonical
+> hashes equal the ledger's `spec_hash`. On `panel_us` v3 every summary number reproduces its
+> earlier record (entries 016/018/020/022).
+>
+> Findings:
+> - **Value/quality alpha sits in the long leg at the very top** (top 10 ≫ top 50; short legs
+>   ≈ 0).
+> - **F1 IR does not rise with book size.** t148 peaks sharply at its searched size: 0.44 /
+>   1.45 / 1.07 / 0.54.
+> - **The "IC without selection skill" cases are structural.** `rev_accel_q` is hump-shaped
+>   (the middle deciles carry it), and sector-neutral `fcf_yield`'s information is in the short
+>   leg (+1.65%, NW-t 2.98).
+> - **The all-universe value books are 73–83% small caps**, and the small-cap tercile supplies
+>   ~80% of their alpha.
+>
+> For 18.18 (descriptive): `rank_linear` is consistent with the evidence; widening top_n is not
+> supported by IR; `sector_size` has weak prior support. The user decides. 0 VAL, 0 OOS;
+> registry unchanged.
 
 **Goal:** measure on DEV *where along the ranking* the alpha of Heimdall's recurring US signals
 sits, and how much of it a long-only top-N book captures. This evidence decides which 18.18
