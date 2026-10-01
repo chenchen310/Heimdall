@@ -20,6 +20,7 @@ import json
 import math
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -29,7 +30,9 @@ from heimdall.screener.model import Predicate
 
 #: Construction menus (roadmap 18.1). ``""`` is always today's behaviour.
 UNIVERSES: tuple[str, ...] = ("", "us_large")  # us_large = PIT top gates.US_LARGE_N by market cap
-WEIGHTINGS: tuple[str, ...] = ("", "inverse_vol")  # "" = equal weight
+WEIGHTINGS: tuple[str, ...] = ("", "inverse_vol", "rank_linear")  # "" = equal weight
+#: Score neutralizations: raw, within-sector (17.5), or sector + size residual (18.18).
+NEUTRALIZATIONS: tuple[str, ...] = ("", "sector", "sector_size")
 OVERLAYS: tuple[str, ...] = ("", "spy_sma200_cash")  # cash while the benchmark < its 200d SMA
 
 #: Construction fields and their defaults. A field holding its default is popped from the
@@ -55,7 +58,7 @@ class SignalSpec(BaseModel):
     features: dict[str, float]
     top_n: int = Field(default=20, ge=1)
     description: str = ""  # free text; excluded from the canonical hash
-    neutralize: str = ""  # "" = raw cross-section | "sector" = within-sector ranking (17.5)
+    neutralize: str = ""  # "" raw | "sector" within-sector (17.5) | "sector_size" (18.18)
     # --- construction (18.1); every default reproduces the pre-18.1 book exactly ---
     universe: str = ""  # "" = every eligible row | "us_large" = PIT top-N eligible by market cap
     filters: list[Predicate] = []  # screener predicates; missing data fails, never passes
@@ -67,8 +70,8 @@ class SignalSpec(BaseModel):
     @field_validator("neutralize")
     @classmethod
     def _known_neutralize(cls, v: str) -> str:
-        if v not in ("", "sector"):
-            raise ValueError(f"neutralize must be '' or 'sector', got {v!r}")
+        if v not in NEUTRALIZATIONS:
+            raise ValueError(f"neutralize must be one of {NEUTRALIZATIONS}, got {v!r}")
         return v
 
     @field_validator("universe")
@@ -204,6 +207,51 @@ def _sector_zscore(values: pd.Series, sectors: pd.Series) -> pd.Series:
     return out
 
 
+def _sector_size_zscore(values: pd.Series, sectors: pd.Series, market_cap: pd.Series) -> pd.Series:
+    """Z-score with sector and size removed (18.18): the pool's winsorized z, residualized by
+    one cross-sectional OLS on sector dummies (``Unknown`` is its own level) plus
+    log(market cap), then z-scored again.
+
+    Rows with no usable market cap (NaN or ≤ 0) or no feature value score NaN, and so do rows in
+    a sector with fewer than ``_MIN_SECTOR_MEMBERS`` usable rows (the 17.5 small-group rule: a
+    dummy would fit them exactly). The sector map is the static current map, not point-in-time
+    (the 17.5 caveat).
+    """
+    out = pd.Series(float("nan"), index=values.index)
+    z = _zscore(values)
+    cap = pd.to_numeric(market_cap, errors="coerce").astype(float)
+    sec = sectors.astype(object).where(sectors.notna(), "Unknown").astype(str)
+    usable = z.notna() & (cap > 0)
+    counts = sec[usable].value_counts()
+    usable &= sec.map(counts).fillna(0) >= _MIN_SECTOR_MEMBERS
+    if int(usable.sum()) < 2:
+        return out
+    dummies = pd.get_dummies(sec[usable], dtype=float)
+    x = np.column_stack([dummies.to_numpy(), np.log(cap[usable].to_numpy())])
+    y = z[usable].to_numpy(dtype=float)
+    beta, *_ = np.linalg.lstsq(x, y, rcond=None)
+    resid = pd.Series(y - x @ beta, index=z.index[usable.to_numpy()])
+    out.loc[resid.index] = _zscore(resid)
+    return out
+
+
+def feature_z(values: pd.Series, pool: pd.DataFrame, neutralize: str) -> pd.Series:
+    """One feature's z-scores over ``pool`` under a spec's neutralization: the single home used by
+    :func:`score`, ``research.today`` and the factory, so the three can never disagree. A missing
+    ``sector`` or ``market_cap`` column raises ``KeyError`` (never a guessed neutralization)."""
+    if neutralize == "":
+        return _zscore(values)
+    if "sector" not in pool.columns:
+        raise KeyError("sector")
+    if neutralize == "sector":
+        return _sector_zscore(values, pool["sector"])
+    if neutralize == "sector_size":
+        if "market_cap" not in pool.columns:
+            raise KeyError("market_cap")
+        return _sector_size_zscore(values, pool["sector"], pool["market_cap"])
+    raise ValueError(f"unknown neutralize {neutralize!r}")  # pragma: no cover - validated
+
+
 def score(spec: SignalSpec, cross_section: pd.DataFrame) -> pd.Series:
     """Spec score for one cross-section: weighted sum of winsorized (±3σ) z-scores.
 
@@ -216,8 +264,9 @@ def score(spec: SignalSpec, cross_section: pd.DataFrame) -> pd.Series:
     When ``spec.neutralize == "sector"`` each feature is z-scored **within its
     ``sector`` group** instead of across the whole eligible pool (the practitioner
     fix for a value book that is otherwise a structural short on the leading
-    mega-cap theme — roadmap 17.5). A missing ``sector`` column then raises
-    ``KeyError``, the same posture as a missing feature.
+    mega-cap theme — roadmap 17.5); ``"sector_size"`` also removes log market cap
+    (18.18, :func:`_sector_size_zscore`). A missing ``sector`` / ``market_cap`` column
+    then raises ``KeyError``, the same posture as a missing feature.
     """
     out = pd.Series(float("nan"), index=cross_section.index)
     if "eligible" in cross_section.columns:
@@ -226,15 +275,11 @@ def score(spec: SignalSpec, cross_section: pd.DataFrame) -> pd.Series:
         pool = cross_section
     if pool.empty:
         return out
-    neutral = spec.neutralize == "sector"
-    if neutral and "sector" not in cross_section.columns:
-        raise KeyError("sector")
     total = pd.Series(0.0, index=pool.index)
     for feat, weight in spec.features.items():
         if feat not in cross_section.columns:
             raise KeyError(f"feature {feat!r} not in the cross-section")
-        z = _sector_zscore(pool[feat], pool["sector"]) if neutral else _zscore(pool[feat])
-        total = total + weight * z
+        total = total + weight * feature_z(pool[feat], pool, spec.neutralize)
     out.loc[pool.index] = total
     return out
 

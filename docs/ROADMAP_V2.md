@@ -2532,7 +2532,40 @@ DoD:
 **Don't:** read VAL or OOS; turn any number into a gate; evaluate specs beyond the list; propose
 F-gate changes.
 
-### 18.18 Construction options: `sector_size` neutralization + `rank_linear` weighting (+ the book-size question)  `[ ]`
+### 18.18 Construction options: `sector_size` neutralization + `rank_linear` weighting (+ the book-size question)  `[x]`
+
+> **Outcome (2026-10-02).**
+> - **`neutralize="sector_size"`** (new `spec.NEUTRALIZATIONS`):
+>   1. take the pool's winsorized z;
+>   2. run one cross-sectional OLS on sector dummies (`Unknown` is its own level) plus log market
+>      cap;
+>   3. z-score the residual.
+>
+>   NaN for a missing or non-positive market cap, and for sectors with fewer than 5 usable rows.
+>   The 17.5 static-map caveat is in the docstring.
+> - **Shared helper:** all three neutralizations now go through **`spec.feature_z()`**, used by
+>   `score()`, `today.py` (the displayed per-feature z) and the factory's `prepare`, so the three
+>   cannot disagree. `today.py` asks the snapshot for `sector` and `market_cap` under this option.
+> - **`weighting="rank_linear"`**: weights ∝ (m + 1 − r) over the members in rank order, so a
+>   buffered member below top_n keeps a positive weight; the sector cap applies afterwards.
+>   - Both options are structural (disclosed, not counted, the 18.1 interpretation).
+>   - Both are accepted by the `SearchConfig` validators.
+>   - All defaults still pop from the hash; the registry-wide hash regression is green.
+> - **Step 4, the book-size question:** asked with 18.17's curve in hand. The user decided
+>   「維持 10–20 檔」, so NORTH_STAR and the `top_n_menu ⊆ {10, 20}` validator are **unchanged**.
+>
+> **Tests:**
+> - New `tests/test_research_neutralize.py` (no `test_research_spec.py` exists, so the new file
+>   is named for the feature):
+>   - a feature = 2·log(cap) + sector effect + an orthogonal ε ranks **exactly** as ε after
+>     neutralization, while the raw ranking does not;
+>   - the residual has zero correlation with size and zero sector means;
+>   - small-group, cap and missing-column NaN/KeyError rules;
+>   - `feature_z` ≡ `score()` for every neutralization.
+> - `tests/test_research_construct.py`: the 0.4 / 0.3 / 0.2 / 0.1 known answer, buffered members,
+>   then the sector cap.
+> - The 18.5 equivalence suite (`evaluate_fast ≡ evaluate`, 1e-10) grows from 18 to 30 cases with
+>   both options and their combinations.
 
 **Goal:** add two parameter-free construction options the factory can search, and settle the one
 user decision about book size.

@@ -45,19 +45,19 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from heimdall.backtest.overfit import dsr_from_moments, moments, pbo_cscv
 from heimdall.data.store import data_root
-from heimdall.factors.scoring import _zscore
 from heimdall.research import construct, gates, registry
 from heimdall.research.benchmark import BENCHMARK
 from heimdall.research.certify import _cagr, _sharpe, traded_fractions
 from heimdall.research.dataset import load_panel
 from heimdall.research.evaluate import WINDOWS, evaluate
 from heimdall.research.spec import (
+    NEUTRALIZATIONS,
     OVERLAYS,
     UNIVERSES,
     WEIGHTINGS,
     SignalSpec,
-    _sector_zscore,
     count_free_params,
+    feature_z,
 )
 
 #: Search reads rows on/before this date only; VAL starts the next day (playbook §4).
@@ -117,8 +117,8 @@ class SearchConfig(BaseModel):
             raise ValueError("top_n_menu ⊆ {10, 20} (NORTH_STAR usage: hold 10–20)")
         if not set(self.weighting_menu) <= set(WEIGHTINGS) or not self.weighting_menu:
             raise ValueError(f"weighting_menu ⊆ {WEIGHTINGS}")
-        if not set(self.neutralize_menu) <= {"", "sector"} or not self.neutralize_menu:
-            raise ValueError("neutralize_menu ⊆ {'', 'sector'}")
+        if not set(self.neutralize_menu) <= set(NEUTRALIZATIONS) or not self.neutralize_menu:
+            raise ValueError(f"neutralize_menu ⊆ {NEUTRALIZATIONS}")
         if not set(self.overlay_menu) <= set(OVERLAYS) or not self.overlay_menu:
             raise ValueError(f"overlay_menu ⊆ {OVERLAYS}")
         if not self.exit_rank_multiples or any(
@@ -288,16 +288,15 @@ def prepare(panel: pd.DataFrame, config: SearchConfig) -> DevPanel:
     for uni, nz, feat in itertools.product(
         config.universes, config.neutralize_menu, config.feature_pool
     ):
-        if nz == "sector" and not has_sector:
+        if nz != "" and not has_sector:
             raise KeyError("sector")
         out = np.full(len(dev), np.nan)
         for a, b in bounds:
             rows = np.flatnonzero(tier[uni][a:b]) + a
             if not len(rows):
                 continue
-            vals = dev[feat].iloc[rows]
-            zz = _sector_zscore(vals, dev["sector"].iloc[rows]) if nz == "sector" else _zscore(vals)
-            out[rows] = zz.to_numpy(dtype=float)
+            pool = dev.iloc[rows]
+            out[rows] = feature_z(pool[feat], pool, nz).to_numpy(dtype=float)
         z[(uni, nz, feat)] = out
 
     def col(name: str) -> _Arr:

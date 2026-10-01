@@ -288,3 +288,42 @@ def test_count_free_params_counts_features_and_discloses_structure() -> None:
     n, structural = count_free_params(_spec(weighting="inverse_vol", exit_rank=4))
     assert n == 1
     assert structural == {"weighting": "inverse_vol", "exit_rank": 4}
+
+
+# --- 18.18: rank-linear weighting ----------------------------------------------------------
+
+
+def test_rank_linear_known_answer_and_structural() -> None:
+    spec = _spec(top_n=4, weighting="rank_linear")
+    w = construct.weights_for(spec, pd.DataFrame(), ["a", "b", "c", "d"])
+    assert w.to_dict() == pytest.approx({"a": 0.4, "b": 0.3, "c": 0.2, "d": 0.1})
+    assert not construct.is_equal_weight(spec)
+    n, structural = count_free_params(spec)
+    assert n == len(spec.features) and structural == {"weighting": "rank_linear"}
+
+
+def test_rank_linear_weights_buffered_members_by_rank_within_the_book() -> None:
+    # A held name that slipped to rank 5 (below top_n = 2, inside exit_rank = 6) is the book's
+    # second member: it gets the second weight, never zero or a negative one.
+    ranked = ["a", "b", "c", "d", "e", "f"]
+    names = construct.buffered_members(ranked, {"e", "z"}, top_n=2, exit_rank=6)
+    assert names == ["a", "e"]
+    w = construct.weights_for(
+        _spec(top_n=2, exit_rank=6, weighting="rank_linear"), pd.DataFrame(), names
+    )
+    assert w.to_dict() == pytest.approx({"a": 2 / 3, "e": 1 / 3})
+
+
+def test_rank_linear_then_the_sector_cap() -> None:
+    cross = pd.DataFrame({"symbol": ["a", "b", "c", "d"], "sector": ["X", "X", "Y", "Z"]})
+    spec = _spec(top_n=4, weighting="rank_linear", max_sector_weight=0.5)
+    w = construct.weights_for(spec, cross, ["a", "b", "c", "d"])
+    # X starts at 0.7, is capped at 0.5; the 0.2 excess goes pro rata to Y (0.2) and Z (0.1).
+    assert w.to_dict() == pytest.approx(
+        {"a": 0.5 * 4 / 7, "b": 0.5 * 3 / 7, "c": 1 / 3, "d": 1 / 6}
+    )
+
+
+def test_unknown_weighting_is_rejected() -> None:
+    with pytest.raises(ValidationError, match="weighting"):
+        _spec(weighting="score_proportional")

@@ -145,6 +145,16 @@ def test_config_hash_ignores_description_and_validates() -> None:
             "exit_rank": 20,
             "neutralize": "sector",
         },
+        {"neutralize": "sector_size"},  # 18.18
+        {"weighting": "rank_linear"},  # 18.18
+        {"weighting": "rank_linear", "exit_rank": 20, "neutralize": "sector_size"},
+        {
+            "universe": "us_large",
+            "weighting": "rank_linear",
+            "exit_rank": 20,
+            "neutralize": "sector_size",
+            "max_sector_weight": 0.4,
+        },
     ],
 )
 @pytest.mark.parametrize("features", [{"good": 1.0}, {"good": 1.0, "n3": 1.0}, {"n4": 1.0}])
@@ -153,7 +163,7 @@ def test_fast_path_reproduces_evaluate(
 ) -> None:
     monkeypatch.setattr(gates, "US_LARGE_N", 60)
     panel = _panel(n_syms=90, end="2014-12-31")
-    cfg = _config()
+    cfg = _config(neutralize_menu=["", "sector", "sector_size"])
     spec = SignalSpec.model_validate(
         {
             "name": "e",
