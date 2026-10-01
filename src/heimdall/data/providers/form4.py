@@ -40,6 +40,20 @@ issuer is keyed by its **CIK** and mapped to its *current* ticker (EDGAR ``compa
 so a renamed company's history joins its current symbol; an issuer no longer listed keeps its
 filing-time ticker.
 
+**Delta path (roadmap 18.19).** The data sets are quarterly, so between releases the newest
+filings live only on EDGAR. :func:`ingest_delta` walks EDGAR's **daily index** from the day after
+the bulk coverage end. It fetches each Form 4 original that lists a ticker-mapped CIK, parses
+the ``ownershipDocument`` embedded in the full submission text with the same transaction parser,
+maps the issuer by CIK as the bulk path does, and appends per-symbol caches under
+``form4/delta/`` plus a ``_delta.json`` marker. Three rules keep it honest:
+
+- **Bulk is the authority.** Delta rows filed on or before the bulk coverage end are dropped
+  whenever the bulk advances (:func:`prune_delta`), and serving reads delta rows only after it.
+- **Never vouch across a gap.** :meth:`Form4Provider.coverage_end` extends past the bulk end only
+  when the delta starts on the day right after it (:func:`coverage_end_with_delta`).
+- **Only complete days.** Today's index (New York time) is never read, because it may still
+  grow; a day is marked done only after all of its filings are stored.
+
 See ``.claude/rules/canonical-schema.md`` and ``.claude/rules/data-discipline.md``.
 """
 
@@ -50,11 +64,13 @@ import os
 import re
 import time
 import zipfile
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import requests
@@ -137,7 +153,9 @@ def raw_xml_doc(primary_document: str) -> str:
     )
 
 
-def normalize_ownership_doc(xml_text: str, filed_at: str) -> pd.DataFrame:
+def normalize_ownership_doc(
+    xml_text: str, filed_at: str, symbol: str | None = None
+) -> pd.DataFrame:
     """Parse one Form 4 ``ownershipDocument`` XML into canonical transaction rows.
 
     Pure (no network) — the unit of the golden test. ``filed_at`` is the SEC
@@ -145,15 +163,17 @@ def normalize_ownership_doc(xml_text: str, filed_at: str) -> pd.DataFrame:
     the XML itself does not carry it; it becomes the point-in-time key on every
     row. Only **non-derivative** transactions with a share amount are emitted
     (derivative option mechanics are excluded); a transaction missing its code or
-    share count is skipped rather than guessed.
+    share count is skipped rather than guessed. ``symbol`` overrides the filing's
+    own trading symbol (the delta path keys issuers by CIK, 18.19).
     """
     fetched_at = datetime.now(UTC).replace(tzinfo=None)
     root = ET.fromstring(xml_text)
 
-    trading_symbol = _text(root.find("./issuer/issuerTradingSymbol"))
-    if not trading_symbol:
-        return pd.DataFrame(columns=INSIDER_COLUMNS)
-    symbol = parse_symbol(f"{trading_symbol.upper()}.US").canonical
+    if symbol is None:
+        trading_symbol = _text(root.find("./issuer/issuerTradingSymbol"))
+        if not trading_symbol:
+            return pd.DataFrame(columns=INSIDER_COLUMNS)
+        symbol = parse_symbol(f"{trading_symbol.upper()}.US").canonical
 
     rel = root.find("./reportingOwner/reportingOwnerRelationship")
     owner_id = root.find("./reportingOwner/reportingOwnerId")
@@ -221,8 +241,9 @@ class Form4Provider(DataProvider):
         raise NotSupported("form4 serves insider transactions, not prices")
 
     def coverage_end(self) -> pd.Timestamp | None:
-        """Last filing date the bulk ingest covers (None before any ingest)."""
-        return bulk_coverage_end(self._root)
+        """Last filing date the ingested Form 4 data covers (None before any ingest): the bulk
+        coverage end, extended by a contiguous delta (18.19)."""
+        return coverage_end_with_delta(self._root)
 
     def get_insider_transactions(self, symbol: str, start: date, end: date) -> pd.DataFrame:
         """Canonical insider-transaction rows for ``symbol`` filed within ``[start, end]``.
@@ -241,11 +262,12 @@ class Form4Provider(DataProvider):
         elif bulk_marker_path(self._root).exists():
             # Bulk-ingested: every Form 4 filer in the data sets has a cache, so no cache means
             # no filings — never fall back to thousands of per-filing requests.
-            return pd.DataFrame(columns=INSIDER_COLUMNS)
+            df = pd.DataFrame(columns=INSIDER_COLUMNS)
         else:
             df = self._crawl(sym.ticker)
             cache.parent.mkdir(parents=True, exist_ok=True)
             df.to_parquet(cache, index=False)
+        df = self._with_delta(sym.canonical, df)
         if df.empty:
             return df
         lo, hi = pd.Timestamp(start), pd.Timestamp(end)
@@ -253,6 +275,21 @@ class Form4Provider(DataProvider):
 
     def _cache_path(self, canonical: str) -> Path:
         return self._root / "form4" / f"{canonical.replace('.', '_')}.parquet"
+
+    def _with_delta(self, canonical: str, bulk: pd.DataFrame) -> pd.DataFrame:
+        """Bulk rows plus the delta rows filed **after** the bulk coverage end (18.19). Bulk is
+        the authority, so a filing in both sources is served once (from the bulk)."""
+        bulk_end = bulk_coverage_end(self._root)
+        path = delta_dir(self._root) / f"{canonical.replace('.', '_')}.parquet"
+        if bulk_end is None or not path.exists():
+            return bulk
+        extra = pd.read_parquet(path)
+        extra = extra[extra["filed_at"] > bulk_end]
+        if extra.empty:
+            return bulk
+        if bulk.empty:
+            return extra.reset_index(drop=True)
+        return pd.concat([bulk, extra], ignore_index=True)
 
     # -- network -------------------------------------------------------------
     def _throttle(self) -> None:
@@ -509,16 +546,438 @@ def ingest_bulk(root: Path | None = None) -> BulkReport:
         ingested_at=datetime.now(UTC).isoformat(),
     )
     bulk_marker_path(base).write_text(json.dumps(asdict(report), indent=2) + "\n")
+    prune_delta(base)  # 18.19 seam: the new quarter supersedes the delta rows it now covers
     return report
+
+
+# --- delta path: EDGAR daily index since the bulk coverage end (roadmap 18.19) -------------
+
+_DAILY_INDEX_DIR = "https://www.sec.gov/Archives/edgar/daily-index/{year}/QTR{q}/index.json"
+_DAILY_INDEX_FILE = "https://www.sec.gov/Archives/edgar/daily-index/{year}/QTR{q}/{name}"
+_ARCHIVE_ROOT = "https://www.sec.gov/Archives/"
+_ET = ZoneInfo("America/New_York")  # EDGAR's clock: filing dates are New York dates
+# One row of ``form.YYYYMMDD.idx``: the form type ends at the first run of ≥ 2 spaces (a form
+# type may hold one space, e.g. ``1-A POS``); CIK, date and path are the last three tokens.
+_IDX_ROW = re.compile(
+    r"^(?P<form>\S+(?: \S+)*?)\s{2,}.*?\s(?P<cik>\d+)\s+(?P<date>\d{8})\s+"
+    r"(?P<file>edgar/data/\S+)\s*$"
+)
+_IDX_NAME = re.compile(r"form\.(\d{8})\.idx")
+_OWNERSHIP = re.compile(r"<ownershipDocument>.*?</ownershipDocument>", re.S)
+_RETRIES = 4
+Fetch = Callable[[str], str]  # URL → body; raises FileNotFoundError when SEC has no such file
+
+
+def delta_dir(root: Path | None = None) -> Path:
+    return (root if root is not None else data_root()) / "form4" / "delta"
+
+
+def delta_marker_path(root: Path | None = None) -> Path:
+    return (root if root is not None else data_root()) / "form4" / "_delta.json"
+
+
+def read_delta_marker(root: Path | None = None) -> dict[str, Any] | None:
+    path = delta_marker_path(root)
+    return dict(json.loads(path.read_text())) if path.exists() else None
+
+
+def _write_marker(root: Path, marker: dict[str, Any]) -> None:
+    path = delta_marker_path(root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(marker, indent=2) + "\n")
+    os.replace(tmp, path)
+
+
+def _write_parquet(frame: pd.DataFrame, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    frame.to_parquet(tmp, index=False)
+    os.replace(tmp, path)
+
+
+def parse_daily_index(text: str) -> pd.DataFrame:
+    """EDGAR ``form.YYYYMMDD.idx`` → ``[form_type, cik, date_filed, file_name]`` (headers skip)."""
+    rows = [
+        (m["form"], int(m["cik"]), pd.Timestamp(m["date"]), m["file"])
+        for m in (_IDX_ROW.match(line) for line in text.splitlines())
+        if m is not None
+    ]
+    return pd.DataFrame(rows, columns=["form_type", "cik", "date_filed", "file_name"])
+
+
+def _accession(path: str) -> str:
+    return path.rsplit("/", 1)[1].removesuffix(".txt")
+
+
+def form4_filings(index: pd.DataFrame, ciks: set[int]) -> list[str]:
+    """Archive paths of the Form 4 **originals** (``4``; amendments excluded, as in the bulk
+    path) listing at least one CIK in ``ciks``. A filing is listed once per CIK it involves
+    (issuer and each reporting owner); one path per accession is returned, in index order."""
+    f4 = index[index["form_type"] == "4"]
+    wanted = {_accession(p) for p in f4.loc[f4["cik"].isin(ciks), "file_name"]}
+    out: list[str] = []
+    seen: set[str] = set()
+    for path in f4["file_name"]:
+        acc = _accession(str(path))
+        if acc in wanted and acc not in seen:
+            seen.add(acc)
+            out.append(str(path))
+    return out
+
+
+def archive_paths(index: pd.DataFrame) -> dict[str, list[str]]:
+    """Accession → every archive path the index lists for it (one per CIK it involves)."""
+    out: dict[str, list[str]] = {}
+    for path in index["file_name"]:
+        out.setdefault(_accession(str(path)), []).append(str(path))
+    return out
+
+
+def extract_ownership_xml(submission: str) -> str | None:
+    """The ``ownershipDocument`` embedded in a full-submission text, or None."""
+    m = _OWNERSHIP.search(submission)
+    return m.group(0) if m else None
+
+
+def normalize_submission(
+    submission: str, filed_at: str, cik_to_ticker: dict[int, list[str]]
+) -> pd.DataFrame:
+    """One full-submission text → canonical rows keyed like the bulk path.
+
+    Transactions come from :func:`normalize_ownership_doc` (one parser for every path); the
+    issuer is then mapped by **CIK** to every current ticker, as :func:`normalize_bulk_quarter`
+    does. Only originals (``documentType`` 4) are kept. An issuer with no current ticker is
+    dropped: the delta fetches only filings listing a ticker-mapped CIK, so it cannot vouch for
+    complete coverage of the others.
+    """
+    empty = pd.DataFrame(columns=INSIDER_COLUMNS)
+    xml = extract_ownership_xml(submission)
+    if xml is None:
+        return empty
+    root = ET.fromstring(xml)
+    if (_text(root.find("./documentType")) or "") != "4":
+        return empty
+    cik = (_text(root.find("./issuer/issuerCik")) or "").strip()
+    current = cik_to_ticker.get(int(cik)) if cik.isdigit() else None
+    tickers = [t for t in (clean_ticker(x) for x in current or []) if t]
+    if not tickers:
+        return empty
+    base = normalize_ownership_doc(xml, filed_at, symbol=f"{tickers[0]}.US")
+    if base.empty:
+        return empty
+    out = pd.concat([base.assign(symbol=f"{t}.US") for t in tickers], ignore_index=True)
+    # The bulk path stores owner CIKs without leading zeros; match it, or one insider would
+    # count as two distinct buyers across the seam (``insider_cluster_buy``).
+    out["owner_cik"] = out["owner_cik"].map(lambda v: v.lstrip("0") if isinstance(v, str) else v)
+    out["provider"] = "form4-delta"
+    return out[INSIDER_COLUMNS]
+
+
+def next_weekday(d: date) -> date:
+    d += timedelta(days=1)
+    while d.weekday() >= 5:
+        d += timedelta(days=1)
+    return d
+
+
+def today_et() -> date:
+    return datetime.now(_ET).date()
+
+
+def now_et() -> datetime:
+    return datetime.now(_ET)
+
+
+#: EDGAR accepts submissions from 06:00 New York time on business days, so before that hour no
+#: filing can carry the day's date.
+_EDGAR_OPENS_HOUR = 6
+
+
+def delta_coverage_end(last_index: date, now: datetime) -> date:
+    """The last filing date the delta can vouch for, given the last daily index it stored.
+
+    EDGAR dates filings on weekdays only, so every filing up to the day before the next weekday
+    is known. That next weekday is vouched for too until EDGAR opens on it (06:00 New York time):
+    before then no filing can carry its date. A holiday counts as a weekday, which only shortens
+    the claim (missing data stays NaN, never a false zero). ``now`` is a New York datetime.
+    """
+    nxt = next_weekday(last_index)
+    opens = datetime(nxt.year, nxt.month, nxt.day, _EDGAR_OPENS_HOUR, tzinfo=_ET)
+    return nxt if now.astimezone(_ET) < opens else nxt - timedelta(days=1)
+
+
+def coverage_end_with_delta(
+    root: Path | None = None, now: datetime | None = None
+) -> pd.Timestamp | None:
+    """The bulk coverage end, extended by the delta only when the delta is contiguous with it
+    (it starts the day after the bulk end) — never across a gap."""
+    bulk_end = bulk_coverage_end(root)
+    if bulk_end is None:
+        return None
+    marker = read_delta_marker(root)
+    if (
+        marker is None
+        or marker.get("start") != (bulk_end + pd.Timedelta(days=1)).date().isoformat()
+    ):
+        return bulk_end
+    last = marker.get("last_index") or bulk_end.date().isoformat()
+    end = delta_coverage_end(date.fromisoformat(last), now or now_et())
+    return max(bulk_end, pd.Timestamp(end))
+
+
+def prune_delta(root: Path | None = None) -> None:
+    """The seam rule: bulk is the authority. Drop delta rows filed on/before the bulk coverage
+    end, and re-anchor the marker on the day after it (only when that keeps it contiguous)."""
+    base = root if root is not None else data_root()
+    bulk_end = bulk_coverage_end(base)
+    if bulk_end is None:
+        return
+    ddir = delta_dir(base)
+    for path in sorted(ddir.glob("*.parquet")) if ddir.exists() else []:
+        df = pd.read_parquet(path)
+        keep = df[df["filed_at"] > bulk_end]
+        if keep.empty:
+            path.unlink()
+        elif len(keep) < len(df):
+            _write_parquet(keep.reset_index(drop=True), path)
+    marker = read_delta_marker(base)
+    if marker is None:
+        return
+    start = (bulk_end + pd.Timedelta(days=1)).date()
+    if date.fromisoformat(str(marker["start"])) <= start:
+        last = str(marker.get("last_index") or "")
+        if last and date.fromisoformat(last) <= bulk_end.date():
+            last = ""
+        _write_marker(base, {**marker, "start": start.isoformat(), "last_index": last})
+
+
+def _sec_fetcher(min_interval_s: float = 0.12) -> Fetch:
+    """A throttled SEC GET (~8 req/s, under the 10 req/s fair-access limit) with retries on
+    429/5xx. 403/404 mean "no such file" on EDGAR's archive and raise FileNotFoundError."""
+    session = requests.Session()
+    session.headers["User-Agent"] = _user_agent()
+    last = [0.0]
+
+    def get(url: str) -> str:
+        for attempt in range(_RETRIES):
+            wait = min_interval_s - (time.monotonic() - last[0])
+            if wait > 0:
+                time.sleep(wait)
+            last[0] = time.monotonic()
+            try:
+                resp = session.get(url, timeout=60)
+            except requests.RequestException:
+                time.sleep(2.0 * 2**attempt)
+                continue
+            if resp.status_code == 200:
+                return resp.text
+            if resp.status_code in (403, 404):
+                raise FileNotFoundError(url)
+            if resp.status_code == 429 or resp.status_code >= 500:
+                time.sleep(2.0 * 2**attempt)
+                continue
+            raise ProviderError(f"SEC {resp.status_code} for {url}")
+        raise ProviderError(f"SEC unreachable after {_RETRIES} attempts: {url}")
+
+    return get
+
+
+#: A new quarter's daily-index directory appears with its first index, so it may be missing for
+#: this many days into the quarter; any other missing directory is an error.
+_NEW_QUARTER_GRACE_DAYS = 7
+
+
+def _index_days(get: Fetch, after: date, until: date) -> list[tuple[date, str]]:
+    """Daily ``form`` indexes dated in (``after``, ``until``], oldest first.
+
+    SEC answers 403 both for a missing path and for a request without a proper User-Agent, so a
+    missing quarter directory is accepted only for a quarter that began in the last few days;
+    otherwise it raises instead of silently reporting "no filings"."""
+    out: list[tuple[date, str]] = []
+    year, q = after.year, (after.month - 1) // 3 + 1
+    while (year, q) <= (until.year, (until.month - 1) // 3 + 1):
+        try:
+            listing = json.loads(get(_DAILY_INDEX_DIR.format(year=year, q=q)))
+        except FileNotFoundError:
+            quarter_start = date(year, 3 * q - 2, 1)
+            if (until - quarter_start).days > _NEW_QUARTER_GRACE_DAYS:
+                raise ProviderError(
+                    f"EDGAR daily index {year} QTR{q} unavailable (403/404); "
+                    "check SEC_EDGAR_USER_AGENT"
+                ) from None
+            listing = {"directory": {"item": []}}
+        for item in listing["directory"]["item"]:
+            m = _IDX_NAME.fullmatch(str(item["name"]))
+            if m is None:
+                continue
+            day = datetime.strptime(m.group(1), "%Y%m%d").date()
+            if after < day <= until:
+                url = _DAILY_INDEX_FILE.format(year=year, q=q, name=item["name"])
+                out.append((day, url))
+        year, q = (year + 1, 1) if q == 4 else (year, q + 1)
+    return sorted(out)
+
+
+def _store_day(base: Path, day: date, rows: pd.DataFrame) -> int:
+    """Append one day's rows to the per-symbol delta caches (idempotent: the day's rows are
+    replaced, so a re-run after a crash never double counts). Returns the rows written."""
+    if rows.empty:
+        return 0
+    stamp = pd.Timestamp(day)
+    written = 0
+    for sym, grp in rows.groupby("symbol"):
+        try:
+            canonical = parse_symbol(str(sym)).canonical
+        except Exception:  # noqa: BLE001 — a malformed ticker is skipped, as in the bulk ingest
+            continue
+        path = delta_dir(base) / f"{canonical.replace('.', '_')}.parquet"
+        old = pd.read_parquet(path) if path.exists() else pd.DataFrame(columns=INSIDER_COLUMNS)
+        old = old[old["filed_at"] != stamp] if not old.empty else old
+        new = grp if old.empty else pd.concat([old, grp], ignore_index=True)
+        _write_parquet(new.sort_values("filed_at").reset_index(drop=True), path)
+        written += len(grp)
+    return written
+
+
+@dataclass
+class DeltaReport:
+    start: str  # first filing date the delta covers (the day after the bulk coverage end)
+    last_index: str  # last daily index stored ("" = none yet)
+    days: int  # daily indexes processed by this run
+    filings: int  # Form 4 submissions fetched by this run
+    rows: int  # canonical rows written by this run
+    unparsed: int  # submissions without a parseable ownership document (skipped, counted)
+    withdrawn: int  # listed in the index but gone from the archive under every CIK (skipped)
+    ingested_at: str
+
+
+def ingest_delta(
+    root: Path | None = None, until: date | None = None, fetch: Fetch | None = None
+) -> DeltaReport:
+    """Store every Form 4 original filed after the bulk coverage end, day by day.
+
+    Reads the daily indexes dated after the last stored day up to ``until`` (default: yesterday
+    in New York, since today's index may still grow). A day is marked done only once all of its
+    filings are stored; a fetch failure stops the run with every earlier day intact. Raw
+    indexes and submissions are kept per day under ``form4/delta/raw/`` (data discipline).
+
+    A filing the index lists but the archive no longer has under **any** of its CIK paths was
+    removed by SEC after dissemination (seen 2026-08-06). The bulk data sets are built from the
+    archive and are not expected to carry it either, so it is skipped and counted as
+    ``withdrawn`` (and listed in that day's raw zip), never retried forever.
+    """
+    base = root if root is not None else data_root()
+    bulk_end = bulk_coverage_end(base)
+    if bulk_end is None:
+        raise FileNotFoundError("no bulk Form 4 coverage yet; run `--download` first")
+    prune_delta(base)
+    start = (bulk_end + pd.Timedelta(days=1)).date()
+    marker = read_delta_marker(base)
+    if marker is not None and date.fromisoformat(str(marker["start"])) != start:
+        # Not contiguous with the bulk (cannot happen while the bulk only advances): rebuild.
+        for path in delta_dir(base).glob("*.parquet"):
+            path.unlink()
+        marker = None
+    last = str(marker.get("last_index") or "") if marker else ""
+    after = date.fromisoformat(last) if last else bulk_end.date()
+    stop = until if until is not None else today_et() - timedelta(days=1)
+    get = fetch if fetch is not None else _sec_fetcher()
+    cik_map = _cik_map(base)
+    ciks = set(cik_map)
+
+    days = filings = rows = unparsed = withdrawn = 0
+    for day, url in _index_days(get, after, stop):
+        index_text = get(url)
+        index = parse_daily_index(index_text)
+        paths = archive_paths(index)
+        raw: dict[str, str] = {url.rsplit("/", 1)[1]: index_text}
+        frames: list[pd.DataFrame] = []
+        gone: list[str] = []
+        for filing in form4_filings(index, ciks):
+            acc = _accession(filing)
+            text = None
+            for candidate in paths[acc]:
+                try:
+                    text = get(_ARCHIVE_ROOT + candidate)
+                    break
+                except FileNotFoundError:
+                    continue
+            if text is None:
+                gone.append(acc)
+                withdrawn += 1
+                continue
+            raw[f"{acc}.txt"] = text
+            filings += 1
+            try:
+                frames.append(normalize_submission(text, day.isoformat(), cik_map))
+            except (ET.ParseError, ValueError):
+                unparsed += 1  # one malformed filing must not stop the day
+        raw_zip = delta_dir(base) / "raw" / str(day.year) / f"{day:%Y%m%d}.zip"
+        raw_zip.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(raw_zip, "w", zipfile.ZIP_DEFLATED) as z:
+            for name, body in raw.items():
+                z.writestr(name, body)
+            if gone:
+                z.writestr("withdrawn.txt", "\n".join(gone) + "\n")
+        found = [f for f in frames if not f.empty]
+        day_rows = pd.concat(found, ignore_index=True) if found else pd.DataFrame()
+        rows += _store_day(base, day, day_rows)
+        days += 1
+        last = day.isoformat()
+        _write_marker(
+            base,
+            {
+                "start": start.isoformat(),
+                "last_index": last,
+                "ingested_at": datetime.now(UTC).isoformat(),
+            },
+        )
+    if marker is None and days == 0:
+        _write_marker(
+            base,
+            {
+                "start": start.isoformat(),
+                "last_index": "",
+                "ingested_at": datetime.now(UTC).isoformat(),
+            },
+        )
+    return DeltaReport(
+        start=start.isoformat(),
+        last_index=last,
+        days=days,
+        filings=filings,
+        rows=rows,
+        unparsed=unparsed,
+        withdrawn=withdrawn,
+        ingested_at=datetime.now(UTC).isoformat(),
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
     import argparse
 
-    p = argparse.ArgumentParser(description="SEC Form 4 bulk data sets (roadmap 18.13)")
+    from dotenv import load_dotenv
+
+    load_dotenv()  # SEC_EDGAR_USER_AGENT: SEC refuses requests without a descriptive UA
+    p = argparse.ArgumentParser(description="SEC Form 4 bulk data sets (18.13) + daily delta")
     p.add_argument("--download", action="store_true", help="fetch quarterly zips not on disk")
     p.add_argument("--first-year", type=int, default=2009)
+    p.add_argument(
+        "--delta", action="store_true", help="store filings after the bulk coverage end (18.19)"
+    )
+    p.add_argument("--until", default=None, help="last index day for --delta (YYYY-MM-DD)")
     args = p.parse_args(argv)
+    if args.delta:
+        until = date.fromisoformat(args.until) if args.until else None
+        drep = ingest_delta(until=until)
+        print(
+            f"delta: {drep.days} day(s), {drep.filings:,} filings → {drep.rows:,} rows "
+            f"({drep.unparsed} unparsed, {drep.withdrawn} withdrawn); "
+            f"stored through {drep.last_index or 'nothing yet'}; "
+            f"coverage end {coverage_end_with_delta()}"
+        )
+        return 0
     if args.download:
         new = download_bulk(first_year=args.first_year)
         print(f"downloaded {len(new)} new quarter(s)")

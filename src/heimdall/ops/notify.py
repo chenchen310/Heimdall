@@ -32,7 +32,13 @@ from typing import cast
 # The SEC Form 4 bulk refresh (roadmap 18.13) runs before the US panel extension so new
 # months read the newest quarter; the user asked for it to run automatically (2026-09-30).
 # It only downloads a quarter not yet on disk and re-ingests only when something is new.
+# The Form 4 daily delta (roadmap 18.19) runs **first**: the snapshot reads insider features
+# live, so the filings since the bulk coverage end must be stored before it is built. The FINRA
+# short-interest refresh (17.11) follows for the same reason: a stale table makes the live
+# days-to-cover features NaN after 35 days.
 WEEKLY_CHAIN: list[list[str]] = [
+    ["heimdall.data.providers.form4", "--delta"],
+    ["heimdall.data.providers.finra"],
     ["heimdall.screener.build"],
     ["heimdall.data.providers.form4", "--download"],
     ["heimdall.research.build_dataset", "--market", "us"],

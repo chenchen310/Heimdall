@@ -20,8 +20,9 @@ import pytest
 
 from heimdall.data.base import DataProvider, NotSupported
 from heimdall.data.providers.edgar import SecEdgarProvider
+from heimdall.data.providers.finra import normalize_cycle
 from heimdall.data.schema import FUNDAMENTALS_COLUMNS, OHLCV_COLUMNS
-from heimdall.factors.us_features import _INSIDER_KEYS, US_FEATURE_KEYS
+from heimdall.factors.us_features import _INSIDER_KEYS, SHORT_INTEREST_KEYS, US_FEATURE_KEYS
 from heimdall.research.dataset import build_dataset_iter, load_panel
 from heimdall.screener.snapshot import build_row
 
@@ -118,6 +119,22 @@ def _insider() -> pd.DataFrame:
     )
 
 
+def _short() -> pd.DataFrame:
+    """FINRA cycles for X.US (17.11), normalized exactly as the provider stores them."""
+    recs = [
+        {
+            "symbolCode": "X",
+            "settlementDate": d,
+            "marketClassCode": "NYSE",
+            "currentShortPositionQuantity": s,
+            "averageDailyVolumeQuantity": 2_000_000.0,
+            "stockSplitFlag": None,
+        }
+        for d, s in [("2024-02-29", 3e6), ("2024-03-15", 3.5e6), ("2024-05-31", 5e6)]
+    ]
+    return normalize_cycle(recs, pd.Timestamp("2024-07-01").to_pydatetime())
+
+
 class _Prices(DataProvider):
     def __init__(self, frames: dict[str, pd.DataFrame]) -> None:
         self._frames = frames
@@ -147,6 +164,7 @@ def test_snapshot_features_equal_the_panel_features(tmp_path: Path) -> None:
     prices, funds = _Prices(frames), _Funds()
     quarterly = lambda s, a, b: funds.get_fundamentals(s, "income", "quarter")  # noqa: E731
     insider = lambda s, a, b: _insider() if s == "X.US" else pd.DataFrame()  # noqa: E731
+    short = lambda s, a, b: _short() if s == "X.US" else pd.DataFrame()  # noqa: E731
     _drive(
         build_dataset_iter(
             ["X.US"],
@@ -159,6 +177,7 @@ def test_snapshot_features_equal_the_panel_features(tmp_path: Path) -> None:
             min_cross_section=0,
             quarterly_fundamentals=quarterly,
             insider=insider,
+            short_interest=short,
         )
     )
     panel_row = load_panel("US", tmp_path).set_index("symbol").loc["X.US"]
@@ -173,9 +192,19 @@ def test_snapshot_features_equal_the_panel_features(tmp_path: Path) -> None:
         benchmarks={"US": bench},
         quarterly_fundamentals=quarterly,
         insider=insider,
+        short_interest=short,
     )
     assert live is not None
-    keys = [*US_FEATURE_KEYS, *_INSIDER_KEYS, "beta_252d", "f_score", "max_ret_21d"]
+    keys = [
+        *US_FEATURE_KEYS,
+        *_INSIDER_KEYS,
+        *SHORT_INTEREST_KEYS,
+        "beta_252d",
+        "f_score",
+        "max_ret_21d",
+    ]
+    assert not np.isnan(float(live["short_ratio"]))  # type: ignore[arg-type]
+    assert not np.isnan(float(live["short_ratio_delta_63d"]))  # type: ignore[arg-type]
     checked = 0
     for k in keys:
         a, b = float(panel_row[k]), float(live[k])  # type: ignore[arg-type]
@@ -194,11 +223,14 @@ def test_non_us_rows_get_nan_columns_and_no_streams_mean_no_columns() -> None:
         date(2022, 2, 1),
         quarterly_fundamentals=q,
         insider=lambda s, a, b: pd.DataFrame(),
+        short_interest=lambda s, a, b: pd.DataFrame(),
     )
     assert tw is not None
-    assert all(np.isnan(tw[k]) for k in [*US_FEATURE_KEYS, *_INSIDER_KEYS])  # type: ignore[arg-type]
+    tw_keys = [*US_FEATURE_KEYS, *_INSIDER_KEYS, *SHORT_INTEREST_KEYS]
+    assert all(np.isnan(tw[k]) for k in tw_keys)  # type: ignore[arg-type]
     plain = build_row("2330.TW", _Prices(frames), _Funds(), date(2022, 2, 1))
     assert plain is not None and "sue" not in plain and "insider_net_buy_90d" not in plain
+    assert "short_ratio" not in plain
 
 
 def test_live_insider_is_nan_past_the_bulk_coverage() -> None:

@@ -57,6 +57,7 @@ from heimdall.factors.us_features import (  # noqa: F401 — 18.16 one home; re-
     _pead_features,
     _seasonal_prior,
     _seasonal_yoy_changes,
+    short_interest_features,
     us_fundamental_features,
 )
 from heimdall.research import gates
@@ -325,6 +326,7 @@ def build_dataset_iter(
     quarterly_fundamentals: Callable[[str, date, date], pd.DataFrame] | None = None,
     sector_map: dict[str, str] | None = None,
     insider_coverage_end: pd.Timestamp | None = None,
+    short_interest: Callable[[str, date, date], pd.DataFrame] | None = None,
 ) -> Iterator[DatasetProgress]:
     """Build (or extend) the panel month by month, yielding progress per month.
 
@@ -407,6 +409,16 @@ def build_dataset_iter(
             except (ProviderError, NotSupported):
                 insider_hist[sym] = pd.DataFrame()
 
+    # Optional US stream: FINRA short interest for the 17.11 features. ~200 days of warm-up
+    # covers the 63-bar delta window plus a cycle's 10-weekday availability lag.
+    si_hist: dict[str, pd.DataFrame] = {}
+    if short_interest is not None:
+        for sym in price_hist:
+            try:
+                si_hist[sym] = short_interest(sym, start - timedelta(days=200), end)
+            except (ProviderError, NotSupported):
+                si_hist[sym] = pd.DataFrame()
+
     # Optional US stream: quarterly fundamentals — the extra data the 13.4 PEAD
     # ``sue`` feature needs (annual rows, already fetched above, cover 13.5's
     # issuance/quality set and PEAD's Q4/10-K earnings dates). Its presence is the
@@ -485,6 +497,8 @@ def build_dataset_iter(
                 fq = fund_q.get(sym, pd.DataFrame(columns=FUNDAMENTALS_COLUMNS))
                 # 18.16: the same one call the live snapshot makes (parity by construction).
                 row.update(us_fundamental_features(fund_data[sym], fq, ohlcv, bench_adj, t))
+            if short_interest is not None:  # 17.11: the same call the live snapshot makes
+                row.update(short_interest_features(si_hist.get(sym, pd.DataFrame()), hist, t))
             if tdcc_weeks is not None:
                 row.update(_big_holder_features(tdcc_weeks, sym, t))
             ok, why = _eligibility(
