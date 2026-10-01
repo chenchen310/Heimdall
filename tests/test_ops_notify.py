@@ -91,9 +91,13 @@ def test_run_weekly_chains_every_step_in_order(
 
 def test_weekly_chain_order() -> None:
     # 16.4: the TDCC weekly cache runs last. 18.13 (user request 2026-09-30): the SEC Form 4
-    # bulk refresh runs right after the snapshot and before the US panel extension.
+    # bulk refresh runs right after the snapshot and before the US panel extension. 18.19: the
+    # Form 4 daily delta runs first, so the live snapshot sees the newest filings. 17.11: the
+    # FINRA short-interest refresh also runs before the snapshot.
     assert WEEKLY_CHAIN[-1] == ["heimdall.research.tdcc_cache"]
-    assert WEEKLY_CHAIN[:5] == [
+    assert WEEKLY_CHAIN[:7] == [
+        ["heimdall.data.providers.form4", "--delta"],
+        ["heimdall.data.providers.finra"],
         ["heimdall.screener.build"],
         ["heimdall.data.providers.form4", "--download"],
         ["heimdall.research.build_dataset", "--market", "us"],

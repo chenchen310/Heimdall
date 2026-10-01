@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from heimdall.data.providers.edgar import SecEdgarProvider
 from heimdall.data.providers.finmind import FinMindProvider
+from heimdall.data.providers.finra import FinraProvider
 from heimdall.data.providers.fmp import FmpProvider
 from heimdall.data.providers.form4 import Form4Provider
 from heimdall.data.providers.fred import FredProvider
@@ -16,4 +17,5 @@ __all__ = [
     "FmpProvider",
     "FinMindProvider",
     "Form4Provider",
+    "FinraProvider",
 ]

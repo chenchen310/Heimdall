@@ -1029,3 +1029,145 @@ and the numbers it runs under, so every later factory entry can cite them.
   *because* of this result would be *gate-shopping* (§10).
 - Registry: no change. OOS attempts: 0 (family `us-factory-us-f1` keeps 3/3). Cumulative US vault
   touches: still 2.
+
+## 023 — diagnostic: IC → selection transfer (2026-10-01, model: Claude Code)
+
+- Card: ROADMAP 18.17. **Descriptive, not an experiment:** no spec is proposed, no trial is
+  logged, the registry does not change. **DEV rows only** (2010-01 → 2019-12, 120 months;
+  `transfer.dev_rows` asserts that no row ≥ 2020-01-01 survives, and a test proves rows after DEV
+  cannot move any output). 0 VAL looks, 0 OOS reads.
+- Tool: `heimdall.research.transfer` (new). G1/G3 come from `evaluate()`, the F1 objective from
+  the factory's `evaluate_fast`, and bucket returns from `certify._book_mean`, so no gate math is
+  re-implemented. Panel `panel_us` v3; `current_universe (optimistic)`; costs 20 bps per side.
+  Output JSON: `data/research/diagnostics/transfer_2026-10-01.json` (gitignored).
+- **Pre-stated list (the card's, nothing added):** us-f1 trials 148, 1525, 1915, 2074 and 1849
+  (their ledger specs exactly: a test pins each canonical hash to the ledger's `spec_hash`),
+  `{fcf_yield}` (011), `{net_issuance_12m: −1}` (016), `{rev_accel_q}` (018), and `{fcf_yield}`
+  sector-neutral (018).
+- **Reproduction:** every summary number below equals its earlier record: the five us-f1 trials'
+  IC t, G3 α and F1 IR match entry 022 / the trial ledger, `{fcf_yield}` matches entry 020's
+  reproduction gate, and the 016/018 rows match those entries.
+
+**Summary.** G3 α and F1 IR are for each spec as constructed; TC is the mean monthly
+correlation between book weights and scores; coverage is the share of the tier universe that
+scores.
+
+| spec | IC (t) | G3 α 6m (NW-t) | F1 IR | TC | coverage |
+| --- | --- | --- | --- | --- | --- |
+| us-f1 t148 | +0.0143 (+1.49) | +4.65% (+5.05) | +1.45 | +0.26 | 53% |
+| us-f1 t1525 | −0.0040 (−0.37) | +4.08% (+4.54) | +1.17 | +0.42 | 58% |
+| us-f1 t1915 | +0.0149 (+1.62) | +6.52% (+4.89) | +1.17 | +0.50 | 46% |
+| us-f1 t2074 | +0.0228 (+2.45) | +4.49% (+4.44) | +1.12 | +0.59 | 82% |
+| us-f1 t1849 | +0.0224 (+2.49) | +4.66% (+5.16) | +1.09 | +0.57 | 77% |
+| fcf_yield (011) | +0.0220 (+2.84) | +2.99% (+3.92) | +0.89 | +0.37 | 65% |
+| net_issuance_12m (016) | +0.0163 (+1.97) | +1.73% (+2.50) | +0.53 | +0.09 | 79% |
+| rev_accel_q (018) | +0.0198 (+2.68) | −0.80% (−0.69) | +0.09 | +0.42 | 62% |
+| fcf_yield sector-neutral (018) | +0.0126 (+1.77) | +1.45% (+1.74) | +0.45 | +0.74 | 65% |
+
+**Rank-bucket profile:** mean 6m alpha of each EW bucket vs the EW tier universe. D1 is the
+lowest score and D10 the highest; the top-K books are the K best-ranked names.
+
+| spec | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 | D9 | D10 | top10 | top20 | top50 | top100 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| us-f1 t148 | +0.7% | +0.7% | +0.2% | −0.5% | −1.1% | +0.2% | −0.2% | −0.3% | +0.0% | +2.5% | +2.7% | +4.7% | +3.1% | +1.5% |
+| us-f1 t1525 | +0.5% | +0.6% | +0.6% | +0.6% | −0.5% | +1.3% | +1.1% | −0.9% | +0.8% | +2.0% | +3.3% | +3.0% | +1.4% | +0.6% |
+| us-f1 t1915 | +0.0% | −1.4% | +2.0% | +0.9% | +0.2% | −0.8% | +0.5% | +1.1% | +1.1% | +2.1% | +5.1% | +2.8% | +1.5% | +0.8% |
+| us-f1 t2074 | −0.6% | −3.1% | +0.4% | +0.9% | +0.2% | +1.0% | +0.5% | +0.1% | +0.2% | +1.3% | +4.5% | +1.6% | +0.9% | +0.4% |
+| us-f1 t1849 | −0.2% | −3.2% | −0.0% | +0.9% | +0.9% | +0.2% | +0.3% | +0.0% | +0.7% | +1.5% | +4.7% | +2.2% | +1.1% | +0.8% |
+| fcf_yield (011) | +0.9% | −2.0% | −0.5% | +0.4% | −0.5% | +0.2% | −0.5% | −0.3% | +0.4% | +1.6% | +3.1% | +3.0% | +2.2% | +1.4% |
+| net_issuance_12m (016) | −1.2% | −0.5% | +0.3% | +0.4% | −0.2% | −0.4% | −0.2% | −0.3% | +0.1% | +0.6% | +1.4% | +1.7% | +0.8% | +0.4% |
+| rev_accel_q (018) | −0.7% | −0.7% | +0.8% | +1.8% | +1.0% | +1.4% | +1.1% | +0.4% | −0.1% | −0.7% | −0.8% | −1.0% | −1.1% | −0.6% |
+| fcf_yield sector-neutral (018) | −1.6% | −0.1% | +0.6% | −0.7% | +0.1% | −0.1% | −0.3% | +1.1% | +1.0% | −0.3% | +1.7% | +1.5% | −0.8% | −0.4% |
+
+**Legs.** Long = D10 − universe; short = universe − D1 (positive means the bottom decile does
+predictably badly). 1m with a plain t, 6m with NW-t (lag 5).
+
+| spec | long 1m (t) | short 1m (t) | long 6m (NW-t) | short 6m (NW-t) |
+| --- | --- | --- | --- | --- |
+| us-f1 t148 | +0.42% (+3.07) | +0.05% (+0.21) | +2.55% (+4.30) | −0.66% (−0.54) |
+| us-f1 t1525 | +0.35% (+1.98) | +0.02% (+0.14) | +2.01% (+2.84) | −0.53% (−0.68) |
+| us-f1 t1915 | +0.20% (+0.96) | +0.03% (+0.22) | +2.13% (+2.34) | −0.04% (−0.06) |
+| us-f1 t2074 | +0.31% (+2.25) | +0.06% (+0.41) | +1.33% (+1.83) | +0.57% (+0.88) |
+| us-f1 t1849 | +0.29% (+2.23) | +0.04% (+0.26) | +1.52% (+2.46) | +0.24% (+0.33) |
+| fcf_yield (011) | +0.34% (+3.07) | +0.02% (+0.11) | +1.63% (+3.01) | −0.86% (−0.98) |
+| net_issuance_12m (016) | +0.14% (+1.41) | +0.14% (+0.72) | +0.64% (+1.48) | +1.16% (+1.56) |
+| rev_accel_q (018) | +0.10% (+0.66) | +0.40% (+2.16) | −0.68% (−0.98) | +0.74% (+1.19) |
+| fcf_yield sector-neutral (018) | −0.07% (−0.62) | +0.31% (+2.10) | −0.27% (−0.48) | +1.65% (+2.98) |
+
+**Book-size curve:** the equal-weight top-K version of each recipe (same features, universe and
+neutralization; no buffer, no inverse-vol). Each cell is F1 IR / G3 α 6m (NW-t) / one-way
+turnover / TC.
+
+| spec | top 10 | top 20 | top 50 | top 100 |
+| --- | --- | --- | --- | --- |
+| us-f1 t148 | +0.44 / +2.7% (+2.33) / 11% / +0.33 | +1.45 / +4.7% (+5.05) / 13% / +0.26 | +1.07 / +3.1% (+5.34) / 13% / +0.20 | +0.54 / +1.5% (+2.68) / 12% / +0.17 |
+| us-f1 t1525 | +0.84 / +3.3% (+3.45) / 14% / +0.48 | +0.85 / +3.0% (+4.32) / 12% / +0.48 | +0.27 / +1.3% (+2.07) / 9% / +0.52 | +0.07 / +0.7% (+2.03) / 8% / +0.55 |
+| us-f1 t1915 | +0.77 / +5.1% (+3.84) / 12% / +0.55 | +0.60 / +2.8% (+3.10) / 12% / +0.64 | +0.52 / +1.5% (+2.21) / 9% / +0.72 | +0.32 / +0.9% (+2.63) / 8% / +0.72 |
+| us-f1 t2074 | +1.12 / +4.5% (+4.44) / 14% / +0.59 | +0.57 / +1.6% (+2.16) / 10% / +0.65 | +0.44 / +0.9% (+1.40) / 9% / +0.69 | +0.19 / +0.4% (+0.87) / 8% / +0.66 |
+| us-f1 t1849 | +1.09 / +4.7% (+5.16) / 16% / +0.57 | +0.61 / +2.2% (+3.40) / 13% / +0.64 | +0.50 / +1.1% (+1.97) / 10% / +0.67 | +0.30 / +0.8% (+1.86) / 9% / +0.65 |
+| fcf_yield (011) | +0.71 / +3.1% (+2.83) / 10% / +0.49 | +0.89 / +3.0% (+3.92) / 10% / +0.37 | +0.94 / +2.2% (+3.63) / 11% / +0.25 | +0.69 / +1.4% (+2.60) / 10% / +0.18 |
+| net_issuance_12m (016) | +0.19 / +1.4% (+1.47) / 12% / +0.08 | +0.53 / +1.7% (+2.50) / 10% / +0.09 | +0.30 / +0.8% (+1.53) / 10% / +0.09 | +0.36 / +0.4% (+0.85) / 8% / +0.11 |
+| rev_accel_q (018) | −0.08 / −0.6% (−0.33) / 30% / +0.48 | +0.09 / −0.8% (−0.69) / 29% / +0.43 | −0.12 / −0.9% (−1.02) / 26% / +0.37 | +0.08 / −0.4% (−0.84) / 24% / +0.33 |
+| fcf_yield sector-neutral (018) | +0.30 / +1.7% (+1.24) / 16% / +0.68 | +0.45 / +1.4% (+1.74) / 16% / +0.74 | −0.39 / −0.8% (−1.59) / 14% / +0.68 | −0.58 / −0.4% (−1.00) / 12% / +0.57 |
+
+**Size split of each spec's own book:** members by market-cap tercile of the tier universe
+(n/a = no usable market cap). Each cell is mean count share / 6m alpha contribution; the
+contributions sum to the book's G3 α.
+
+| spec | small | mid | large | n/a |
+| --- | --- | --- | --- | --- |
+| us-f1 t148 | 73% / +3.70% | 10% / +0.61% | 17% / +0.34% | 0% / +0.00% |
+| us-f1 t1525 | 31% / +0.45% | 31% / +1.41% | 37% / +2.22% | 0% / +0.00% |
+| us-f1 t1915 | 31% / +1.87% | 36% / +1.95% | 34% / +2.70% | 0% / +0.00% |
+| us-f1 t2074 | 37% / +2.43% | 24% / +1.09% | 39% / +0.97% | 0% / +0.00% |
+| us-f1 t1849 | 34% / +1.97% | 26% / +1.38% | 40% / +1.32% | 0% / +0.00% |
+| fcf_yield (011) | 83% / +2.28% | 8% / +0.37% | 9% / +0.34% | 0% / +0.00% |
+| net_issuance_12m (016) | 30% / +0.77% | 31% / +0.66% | 28% / −0.21% | 11% / +0.51% |
+| rev_accel_q (018) | 31% / +0.45% | 32% / −0.75% | 25% / −0.61% | 10% / +0.13% |
+| fcf_yield sector-neutral (018) | 65% / +1.54% | 20% / −0.13% | 15% / +0.04% | 0% / +0.00% |
+
+- **Findings (descriptive):**
+  1. **Value/quality alpha sits in the long leg, at the very top.** For the five us-f1 recipes and
+     `{fcf_yield}`, D10 beats the universe by +1.3% to +2.6% over 6m (NW-t 1.8–4.3). The short leg
+     is about zero or negative. Within the top decile the alpha concentrates further: in the four
+     `us_large` recipes, the top 10 earn +3.3% to +5.1% while the top 50 earn +0.9% to +1.5%. For
+     these signals a concentrated long-only book is the right shape; the short side has nothing
+     to harvest.
+  2. **IR does not rise with book size.** The `us_large` recipes peak at 10 names (t2074: 1.12 →
+     0.57 → 0.44 → 0.19). t148 peaks sharply at the size it was found with (0.44 / **1.45** /
+     1.07 / 0.54 at 10/20/50/100). That narrow peak is consistent with entry 022's F1 verdict that
+     part of its 1.45 is selection luck. Only `{fcf_yield}` (011) is flat from 20 to 50 names
+     (0.89 / 0.94).
+  3. **"Real IC without selection skill" is structural, not noise.** `rev_accel_q` has a
+     hump-shaped profile: the middle deciles D4–D7 earn +1.0% to +1.8%, and both tails are negative
+     (D10 −0.7%). Its IC comes from separating the middle from the tails, not from the top.
+     Sector-neutral `fcf_yield` moved its information to the bottom: the short leg earns +1.65%
+     over 6m (NW-t 2.98), the long leg −0.27%. A long-only top-N book cannot harvest either one.
+     Using them as exclusion screens would be a new construction idea; it is not tested here.
+  4. **TC is not the binding constraint where the alpha is at the top.** It is 0.26–0.37 for
+     top-20 books over the whole eligible universe, and 0.5–0.6 inside the 500-name `us_large`
+     tier.
+  5. **The all-universe value books are small-cap books.** 73% (t148) and 83% (`{fcf_yield}`) of
+     their members sit in the smallest market-cap tercile, and that tercile supplies roughly 80%
+     of their alpha (+3.70 of +4.65 points; +2.28 of +2.99). 20 bps per side probably understates
+     small-cap trading costs, so these books' net alpha is an upper bound. The `us_large` recipes
+     spread their alpha across all three terciles.
+- **What the evidence says about 18.18 (descriptive; the user decides):**
+  - `rank_linear` weighting is **consistent** with finding 1: alpha rises toward the very top
+    ranks.
+  - Widening top_n (18.18 step 4) is **not supported** by IR (finding 2). Only a usage reason
+    could justify it.
+  - `sector_size` neutralization has **weak prior support**. Sector neutralization already moved
+    `fcf_yield`'s information to the short leg (finding 3), and size neutralization would remove
+    the small-cap concentration where the all-universe alpha lives (finding 5). It is still a
+    legitimate test of whether the alpha is selection or a size/sector tilt, but expectations
+    should be low.
+  - The short-leg findings (3) bear on the 18.B long-short backlog item, which first needs the
+    horizon/usage non-goal check.
+- **Caveats:**
+  - DEV only, so these numbers say nothing about VAL or the vault.
+  - The us-f1 rows are the winners of 2,082 trials, so their DEV numbers carry selection
+    optimism, and this diagnostic inherits it.
+  - Coverage is 46–82%: unscored names count in the universe leg (the G3 convention) but in no
+    bucket.
+- Registry: no change. OOS attempts: 0. Cumulative US vault touches: still 2.

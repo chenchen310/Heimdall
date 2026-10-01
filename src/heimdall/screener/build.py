@@ -113,6 +113,7 @@ def main(argv: list[str] | None = None) -> int:
         quarterly_fundamentals=live.quarterly,  # 18.16: PEAD/quality/accel/accruals
         insider=live.insider,
         insider_coverage_end=live.insider_coverage_end,
+        short_interest=live.short_interest,  # 17.11
     )
     last = next(progress)  # initial plan (done == 0)
     print(
