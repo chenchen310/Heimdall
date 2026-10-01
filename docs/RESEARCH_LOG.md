@@ -1171,3 +1171,49 @@ contributions sum to the book's G3 α.
   - Coverage is 46–82%: unscored names count in the universe leg (the G3 convention) but in no
     bucket.
 - Registry: no change. OOS attempts: 0. Cumulative US vault touches: still 2.
+
+## 024 — governance: declared composites (rung 1) + the first declaration (2026-10-02, model: Claude Code)
+
+- Card: ROADMAP 18.21. **Governance only:** no evaluation of any kind; 0 DEV/VAL performance reads,
+  0 OOS. Registry unchanged.
+- **User decisions (2026-10-02, AskUserQuestion; verbatim):**
+  - Rung: 「第 1 級：宣告式等權合成 (Recommended)」. Rung 0 (keep the clause) and rung 2 (fitted
+    weights) were declined. The user explicitly accepted the G5 interpretation that one composite is
+    one parameter, together with the rules now in playbook §12.6.
+  - How to choose the first composites: 「由我依文獻提案，你逐一同意 (Recommended)」.
+  - Approved: 「價值 value, 獲利 profitability, 投資／增資 investment」 and
+    「動能 momentum, 低風險 low_risk」, i.e. all five proposed.
+- **A-priori criterion (written before proposing members).** Members were chosen this way:
+  1. Take the five standard factor families of the asset-pricing literature: value, profitability,
+     investment, momentum, low risk.
+  2. Within each family, use the live-available features (the us-f1 pool, entry 021) whose
+     documented direction matches that literature.
+  3. Drop a member only if it would cut the family's joint DEV coverage sharply.
+
+  The only data consulted was DEV *coverage* (eligible rows where every member is non-NaN). No
+  label, return, IC or alpha was computed.
+- **The first declaration (5 composites; all members equal-weight; direction in brackets):**
+
+  | composite | members | literature | DEV joint coverage | median names / month |
+  | --- | --- | --- | --- | --- |
+  | `value` | `pe` (−), `ps` (−), `fcf_yield` (+) | Lakonishok, Shleifer & Vishny 1994; Barbee, Mukherji & Raines 1996 | 45.9% | 567 |
+  | `profitability` | `roe` (+), `operating_margin` (+), `fcf_margin` (+) | Novy-Marx 2013; Fama & French 2015 (RMW); Asness, Frazzini & Pedersen (QMJ profitability) | 49.4% | 599 |
+  | `investment` | `asset_growth` (−), `share_dilution_yoy` (−) | Cooper, Gulen & Schill 2008; Fama & French 2015 (CMA); Pontiff & Woodgate 2008 | 80.8% | 990 |
+  | `momentum` | `ret_12_1` (+), `pct_of_52w_high` (+), `ind_mom_6m` (+) | Jegadeesh & Titman 1993; George & Hwang 2004; Moskowitz & Grinblatt 1999 | 99.9% | 1,143 |
+  | `low_risk` | `beta_252d` (−), `vol_63d` (−), `max_ret_21d` (−) | Frazzini & Pedersen 2014; Ang, Hodrick, Xing & Zhang 2006; Bali, Cakici & Whitelaw 2011 | 100.0% | 1,144 |
+
+- **Members left out, with the reason (coverage only):**
+  - `ev_ebitda` would cut `value` to 33.8% joint coverage.
+  - `accruals` would cut `profitability` to 38.9%.
+  - `gross_profitability` (38.2%) and `gross_margin` (32.2%) are too sparse alone.
+  - Short-interest features stay out by the 17.11 decision.
+  - Earnings-event and insider composites are deferred to a later declaration.
+
+  The fundamental composites cover as little as about 2% of names in the earliest DEV months
+  (thin EDGAR XBRL in 2010), against a median of 567–599 names a month.
+- **What follows:**
+  - 18.22 implements exactly these five (hash-pinned; `cmp:<name>` feature keys).
+  - 18.23 may put them in the us-f2 pool. Each composite evaluated is a trial (§12.6 rule 5).
+  - Inside a factory run, each run is its own family (§12.3). A composite evaluated by hand outside
+    the factory belongs to a new `us-composite-…` family (the 13.6 rule).
+- OOS attempts: 0. Cumulative US vault touches: still 2.

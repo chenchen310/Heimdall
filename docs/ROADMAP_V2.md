@@ -2706,7 +2706,25 @@ DoD: reproduction gates exact; log entry committed.
 **Don't:** start before 17.11 and 18.19 are merged; evaluate any spec beyond the reproduction
 checks.
 
-### 18.21 Governance: multi-feature composites and the NORTH_STAR black-box clause (user decision)  `[ ]`
+### 18.21 Governance: multi-feature composites and the NORTH_STAR black-box clause (user decision)  `[x]`
+
+> **Outcome (2026-10-02, RESEARCH_LOG 024):** the user chose **rung 1**
+> (「第 1 級：宣告式等權合成」), accepting the G5 interpretation that one composite is one parameter
+> and the anti-laundering rules.
+> - **NORTH_STAR:** the black-box bullet is amended (rung 2 and ML still need a further
+>   amendment).
+> - **Playbook:** new §12.6 "Declared composites" and a new §10 anti-pattern, *composite
+>   laundering*.
+> - **`gates.py`:** unchanged; the gate-mirror tests still pass.
+> - **Declarations:** the user asked for a literature proposal 「由我依文獻提案，你逐一同意」 and
+>   approved all five composites. Members were picked by family and by DEV *coverage* only:
+>   - `value` = pe−, ps−, fcf_yield+
+>   - `profitability` = roe+, operating_margin+, fcf_margin+
+>   - `investment` = asset_growth−, share_dilution_yoy−
+>   - `momentum` = ret_12_1+, pct_of_52w_high+, ind_mom_6m+
+>   - `low_risk` = beta_252d−, vol_63d−, max_ret_21d−
+>
+>   Citations and coverage are in entry 024. 18.22 now implements exactly this list.
 
 **Goal:** record the user's decision, before any code is written, on whether a Heimdall signal
 may combine more than 3–4 features and under which counting rule. This is a statistics decision
