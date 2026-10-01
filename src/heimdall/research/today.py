@@ -24,8 +24,8 @@ import numpy as np
 import pandas as pd
 
 from heimdall.data.symbols import parse_symbol
-from heimdall.research import construct, gates
-from heimdall.research.spec import SignalSpec, feature_z
+from heimdall.research import composites, construct, gates
+from heimdall.research.spec import SignalSpec, term_z
 
 _REQUIRED = {"symbol", "as_of", "price", "dollar_vol_21d", "ret_12_1"}
 
@@ -80,7 +80,9 @@ def todays_picks(
     excludes). Raises ``ValueError`` when the snapshot lacks required columns
     (e.g. built before the 7.1 fields) — rebuild it rather than guess.
     """
-    required = _REQUIRED | set(spec.features) | _construction_columns(spec)
+    required = (
+        _REQUIRED | set(composites.columns(list(spec.features))) | _construction_columns(spec)
+    )
     missing = sorted(required - set(snapshot.columns))
     if missing:
         raise ValueError(
@@ -98,7 +100,7 @@ def todays_picks(
 
     pool = df[construct.pool_mask(spec, df)]
     for feat in spec.features:
-        df.loc[pool.index, f"z_{feat}"] = feature_z(pool[feat], pool, spec.neutralize)
+        df.loc[pool.index, f"z_{feat}"] = term_z(feat, pool, spec.neutralize)
 
     book = construct.select(spec, df, df["signal_score"], prev)
     picks = df.set_index("symbol").loc[list(book.index)].reset_index()
@@ -108,7 +110,7 @@ def todays_picks(
         "signal_score",
         "weight",
         *[f"z_{f}" for f in spec.features],
-        *spec.features,
+        *composites.columns(list(spec.features)),  # a composite shows its members' raw values
     ]
     rest = [c for c in picks.columns if c not in lead]
     return picks[lead + rest]

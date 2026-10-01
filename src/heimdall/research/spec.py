@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from heimdall.data.symbols import MARKET_REGION
 from heimdall.factors.scoring import _zscore
+from heimdall.research import composites
 from heimdall.screener.model import Predicate
 
 #: Construction menus (roadmap 18.1). ``""`` is always today's behaviour.
@@ -138,6 +139,15 @@ class SignalSpec(BaseModel):
                 raise ValueError(f"label leakage: {feat!r} is a forward label, not a feature")
             if not math.isfinite(weight) or weight == 0:
                 raise ValueError(f"feature {feat!r} weight must be finite and nonzero")
+            if composites.is_composite(feat):  # 18.22: declared composites only, never flipped
+                try:
+                    composites.get(feat)
+                except KeyError as exc:
+                    raise ValueError(str(exc)) from None
+                if weight < 0:
+                    raise ValueError(
+                        f"composite {feat!r} weight must be positive: its directions are declared"
+                    )
         return v
 
     def canonical_hash(self) -> str:
@@ -157,6 +167,7 @@ class SignalSpec(BaseModel):
         for fld, default in CONSTRUCTION_DEFAULTS.items():  # 17.5/18.1: defaults don't hash
             if payload.get(fld, default) == default:
                 payload.pop(fld, None)
+        _embed_composites(payload)
         blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(blob.encode()).hexdigest()
 
@@ -169,8 +180,18 @@ class SignalSpec(BaseModel):
         for fld, default in CONSTRUCTION_DEFAULTS.items():
             if payload.get(fld, default) == default:
                 payload.pop(fld, None)
+        _embed_composites(payload)
         blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(blob.encode()).hexdigest()
+
+
+def _embed_composites(payload: dict[str, object]) -> None:
+    """18.22: a spec that uses composites hashes their definitions too, so a spec hash can never
+    outlive a changed composite. A spec without composites is untouched (hash-stable)."""
+    feats = payload.get("features")
+    used = sorted(k for k in feats if composites.is_composite(k)) if isinstance(feats, dict) else []
+    if used:
+        payload["composites"] = {k: composites.get(k).canonical_hash() for k in used}
 
 
 def count_free_params(spec: SignalSpec) -> tuple[int, dict[str, object]]:
@@ -181,11 +202,14 @@ def count_free_params(spec: SignalSpec) -> tuple[int, dict[str, object]]:
     picks don't count, but are always shown).
     """
     dumped = spec.model_dump()
-    structural = {
+    structural: dict[str, object] = {
         fld: dumped[fld]
         for fld, default in CONSTRUCTION_DEFAULTS.items()
         if dumped.get(fld, default) != default
     }
+    used = [k for k in spec.features if composites.is_composite(k)]
+    if used:  # 18.22: one parameter per composite, its members always disclosed
+        structural["composites"] = {k: dict(composites.get(k).members) for k in used}
     return len(spec.features), structural
 
 
@@ -252,6 +276,19 @@ def feature_z(values: pd.Series, pool: pd.DataFrame, neutralize: str) -> pd.Seri
     raise ValueError(f"unknown neutralize {neutralize!r}")  # pragma: no cover - validated
 
 
+def term_z(key: str, pool: pd.DataFrame, neutralize: str) -> pd.Series:
+    """The z-scores one spec term contributes: a plain feature's :func:`feature_z`, or for a
+    declared composite (``cmp:<name>``, 18.22) the mean of its members' directional z-scores
+    under the same neutralization, z-scored again so it sits on a single feature's scale. A row
+    missing any member is NaN (missing data excludes, never re-weights)."""
+    if not composites.is_composite(key):
+        return feature_z(pool[key], pool, neutralize)
+    comp = composites.get(key)
+    parts = [sign * feature_z(pool[col], pool, neutralize) for col, sign in comp.members]
+    mean = pd.concat(parts, axis=1).mean(axis=1, skipna=False)
+    return _zscore(mean)
+
+
 def score(spec: SignalSpec, cross_section: pd.DataFrame) -> pd.Series:
     """Spec score for one cross-section: weighted sum of winsorized (±3σ) z-scores.
 
@@ -277,9 +314,10 @@ def score(spec: SignalSpec, cross_section: pd.DataFrame) -> pd.Series:
         return out
     total = pd.Series(0.0, index=pool.index)
     for feat, weight in spec.features.items():
-        if feat not in cross_section.columns:
-            raise KeyError(f"feature {feat!r} not in the cross-section")
-        total = total + weight * feature_z(pool[feat], pool, spec.neutralize)
+        for col in composites.columns([feat]):
+            if col not in cross_section.columns:
+                raise KeyError(f"feature {col!r} not in the cross-section")
+        total = total + weight * term_z(feat, pool, spec.neutralize)
     out.loc[pool.index] = total
     return out
 

@@ -45,7 +45,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from heimdall.backtest.overfit import dsr_from_moments, moments, pbo_cscv
 from heimdall.data.store import data_root
-from heimdall.research import construct, gates, registry
+from heimdall.research import composites, construct, gates, registry
 from heimdall.research.benchmark import BENCHMARK
 from heimdall.research.certify import _cagr, _sharpe, traded_fractions
 from heimdall.research.dataset import load_panel
@@ -57,7 +57,7 @@ from heimdall.research.spec import (
     WEIGHTINGS,
     SignalSpec,
     count_free_params,
-    feature_z,
+    term_z,
 )
 
 #: Search reads rows on/before this date only; VAL starts the next day (playbook §4).
@@ -105,6 +105,13 @@ class SearchConfig(BaseModel):
                 raise ValueError(f"label leakage: {feat!r} is a forward label")
             if sign not in (1, -1):
                 raise ValueError(f"{feat!r}: a direction is +1 or −1, got {sign!r}")
+            if composites.is_composite(feat):  # 18.22: directions live inside the composite
+                try:
+                    composites.get(feat)
+                except KeyError as exc:
+                    raise ValueError(str(exc)) from None
+                if sign != 1:
+                    raise ValueError(f"{feat!r}: a composite's pool direction is +1")
         return v
 
     @model_validator(mode="after")
@@ -258,7 +265,7 @@ def prepare(panel: pd.DataFrame, config: SearchConfig) -> DevPanel:
         raise AssertionError("the search must never read a row ≥ VAL start")
     if "eligible" in dev.columns:
         dev = dev[dev["eligible"].astype(bool)]
-    missing = sorted(set(config.feature_pool) - set(dev.columns))
+    missing = sorted(set(composites.columns(list(config.feature_pool))) - set(dev.columns))
     if missing:
         raise KeyError(f"pool features absent from the panel: {missing}")
     # Stable by date only: within a month the panel's own row order is kept, because
@@ -296,7 +303,7 @@ def prepare(panel: pd.DataFrame, config: SearchConfig) -> DevPanel:
             if not len(rows):
                 continue
             pool = dev.iloc[rows]
-            out[rows] = feature_z(pool[feat], pool, nz).to_numpy(dtype=float)
+            out[rows] = term_z(feat, pool, nz).to_numpy(dtype=float)
         z[(uni, nz, feat)] = out
 
     def col(name: str) -> _Arr:

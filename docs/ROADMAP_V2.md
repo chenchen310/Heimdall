@@ -2812,7 +2812,47 @@ touch `gates.py`).
 **Don't:** write code; choose composite members by looking at DEV results; change G1–G6 or F1–F6
 in this card.
 
-### 18.22 Declared composites in scoring (`research/composites.py`)  `[ ]`
+### 18.22 Declared composites in scoring (`research/composites.py`)  `[x]`
+
+> **Outcome (2026-10-02).**
+> - **`research/composites.py`** holds exactly entry 024's five declarations (`value`,
+>   `profitability`, `investment`, `momentum`, `low_risk`). Each has a `canonical_hash` (name +
+>   signed members; the citation does not hash), `MAX_PER_DECLARATION = 5`, and the `get` /
+>   `columns` helpers.
+> - **Specs** reference a composite as `cmp:<name>`. The validators accept only declared names, and
+>   only with a **positive** weight, because the directions are declared and never flipped.
+> - **Hashes:** `canonical_hash` and `recipe_hash` embed each used composite's hash, so a spec hash
+>   cannot outlive a changed definition. Specs without composites are byte-identical; the
+>   registry-wide regression is green.
+> - **Scoring:** the new `spec.term_z()` is the one home for a term's z-scores:
+>   1. take each member's `feature_z` under the spec's neutralization;
+>   2. apply its sign and average, with `skipna=False` (a missing member gives NaN);
+>   3. z-score the mean again.
+>
+>   `score()`, `today.py` and the factory's `prepare` all call it.
+> - **Parameter counting:** `count_free_params` counts one per composite and discloses its members
+>   under `structural["composites"]`.
+> - **Factory:** `SearchConfig.feature_pool` takes `cmp:` keys with direction +1 only, and
+>   `prepare` checks the member columns.
+> - **Live path:** `todays_picks` and the Today page require and show the members' raw columns
+>   next to the composite's `z_cmp:<name>`.
+>
+> **Tests:** 14 in `tests/test_research_composites.py`:
+> - the declaration and hash pins, and every member carrying its us-f1-documented direction;
+> - a hand-computed known answer; a missing member gives NaN;
+> - a sector-neutral composite equals the composite of the neutralized members;
+> - one parameter per composite with members disclosed; spec hashes embed definitions;
+> - the validators;
+> - `evaluate_fast ≡ evaluate` (1e-10) on 4 composite constructions (including `sector_size` +
+>   `rank_linear` + buffer, and a composite mixed with a plain feature);
+> - **panel scoring == live `todays_picks` scoring** on the same cross-section.
+>
+> No real-data evaluation (18.23's job).
+>
+> **Found, outside this card (reported to the user, not fixed here):** the live snapshot on disk
+> (built 2026-09-29) predates 18.16, so it lacks the 18.16/17.11/18.19 columns, including
+> `asset_growth`. The weekly chain runs `screener.build` **without `--rebuild`**, and a resumed
+> build skips every symbol already in the snapshot, so a complete snapshot is never refreshed.
 
 **Needs:** 18.21 recorded as rung 1. If it recorded rung 0, mark this card `[-]` with a pointer;
 if rung 2, a separate gates card comes first.
