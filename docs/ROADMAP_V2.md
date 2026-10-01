@@ -1546,7 +1546,54 @@ DoD: all mirrors green; hash regression green; gates green.
 that interpretation in any log entry using it**; don't retrofit the certified TW spec (a buffered
 variant is a new version through the full pipeline, family budget and all).
 
-### 17.11 US short-interest provider + features (FINRA, free)  `[ ]`
+### 17.11 US short-interest provider + features (FINRA, free)  `[x]`
+
+> **Outcome (2026-10-01).** The probe found two things the card assumed differently, and the user
+> decided both 2026-10-01:
+> - **History starts 2017-12-29, not ~2014.** FINRA's free Query API
+>   (`otcMarket/consolidatedShortInterest`, no key) serves exchange-listed issues (NYSE, Nasdaq,
+>   Arca, BZX, NYSE American) and OTC, but earlier settlement dates return nothing. DEV therefore
+>   holds only 2018–2019. User decision 「做，但不放進 us-f2」: build everything, carry the columns
+>   in the 18.20 rebuild, and **exclude both features from the 18.23 pool** (written into 18.23).
+> - **Past publication dates are not on FINRA's site.** Only the current schedule is listed
+>   (publication 7 business days after settlement). Archived copies exist for some years, and
+>   before 2023 they show an "exchange receipt date" instead. User decision 「固定保守延遲 10
+>   營業日」: every cycle is `available_at` = settlement + **10 weekdays**, never the settlement
+>   date.
+>
+> Built:
+> - **Provider:** `data/providers/finra.py` (`ingest`, `FinraProvider.short_interest`, CLI). It
+>   reads one settlement date at a time in 5,000-record pages (a bulk read per cycle), works
+>   delta-only, keeps the raw records per cycle (`data/finra/raw/<date>.json.gz`), stores
+>   first-published positions without later revisions, and keeps listed issues only.
+> - **Features:** `short_ratio` and `short_ratio_delta_63d` (direction −) live in
+>   `factors/us_features.py` and are called by both the panel builder and the live snapshot
+>   (`live_us_streams`, the build CLI and the Build page), with a panel-row == snapshot-row parity
+>   test.
+>
+> **One deliberate deviation:** days to cover divides by **FINRA's own average daily volume for
+> the same cycle**, not our 21-day median volume. yfinance volume is adjusted backwards for later
+> splits (NVDA's pre-2024-split volume reads 10× the real share count) while a short position is
+> in the shares of its own date, so our volume would be off by the split factor before every
+> split.
+>
+> NaN rules: a cycle with a split inside it, a zero volume, or a newest usable cycle settled more
+> than 35 days before the date. FINRA writes share classes without a separator (`BRKB`), and the
+> provider maps `BRK-B.US` to it.
+>
+> Real data:
+> - 210 cycles (2017-12-29 → 2026-09-15), 2.18M listed rows.
+> - 97.8% of the 3,431-name US snapshot is in the latest cycle.
+> - A 2026-09-30 smoke populated AAPL 2.85, NVDA 2.55, GME 4.29, JPM 3.64 and BRK-B 3.28 days to
+>   cover.
+>
+> **Weekly chain:** the FINRA refresh runs right after the 18.19 Form 4 delta, before the
+> snapshot (a stale table turns the live features NaN after 35 days). This branch sits on 18.19
+> for that reason.
+>
+> Glossary entries added. Tests: `tests/test_finra.py` (golden normalize, availability rule,
+> paging + delta-only ingest, share-class lookup, PIT leak, staleness/split/delta known answers)
+> and the extended `tests/test_live_parity.py`. Columns reach `panel_us` via 18.20.
 
 > **Amendment (2026-10-01, Phase 18 extension):** this card is now a precondition of 18.20
 > (`panel_us` v4). Two additions bind:
@@ -2628,8 +2675,8 @@ Steps: follow the 17.7/18.14 procedure verbatim.
    - (c) Shared months have identical row keys and a 0.0 difference on `fcf_yield`, `ret_12_1`,
      `fwd_6m_rel` and eligibility (the 18.14 check). Insider values on rows dated on or before
      2026-06-30 (the old bulk coverage end) are unchanged; assert this.
-4. **New-column coverage table.** Short interest starts around 2014, so its DEV window is
-   effectively 2014–2019.
+4. **New-column coverage table.** Short interest starts at FINRA's first cycle, 2017-12-29
+   (17.11's probe), so its DEV window is only 2018–2019.
 5. **RESEARCH_LOG entry.**
 
 DoD: reproduction gates exact; log entry committed.
@@ -2737,6 +2784,9 @@ options.
 Steps:
 0. **Live-usability check (18.15 step 0).** Every pool feature must be computed by the live
    snapshot (18.16 parity). Exclude any feature that is structurally NaN live; don't guess.
+   **Also exclude `short_ratio` and `short_ratio_delta_63d`** (user decision 2026-10-01,
+   recorded on 17.11). FINRA's data starts 2017-12, so DEV holds only 24 months of them, which
+   can hardly reach F3 and would only raise N.
 1. **Ask the user to choose the space size before writing the config** (the 18.15 precedent:
    「標準：單因子＋雙因子」). Show the 18.5 F1 trade-off with it: a larger N raises the luck bar every
    trial must clear (in us-f1, N = 2,082 set the luck bar at IR 1.37). Then write

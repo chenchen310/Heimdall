@@ -151,6 +151,7 @@ def _run_in_process(symbols: list[str], *, resume: bool) -> None:
         quarterly_fundamentals=live.quarterly,
         insider=live.insider,
         insider_coverage_end=live.insider_coverage_end,
+        short_interest=live.short_interest,  # 17.11
     ):
         done, built, total, failures = p.done, p.built, p.total, p.failures
         if total:

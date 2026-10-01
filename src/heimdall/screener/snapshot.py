@@ -24,8 +24,10 @@ from heimdall.data.symbols import MARKET_REGION, REGION_BENCHMARK, parse_symbol
 from heimdall.factors.metrics import add_industry_momentum, snapshot_row
 from heimdall.factors.us_features import (
     _INSIDER_KEYS,
+    SHORT_INTEREST_KEYS,
     US_FEATURE_KEYS,
     _insider_features,
+    short_interest_features,
     us_fundamental_features,
 )
 
@@ -33,6 +35,8 @@ from heimdall.factors.us_features import (
 #: plus the year-ago match; rev_accel_q's 9 quarters) — generous so nothing starves.
 _QUARTERLY_LOOKBACK = timedelta(days=365 * 8)
 _INSIDER_LOOKBACK = timedelta(days=180)
+#: FINRA cycles the live short-interest features need: the 63-bar delta + the 10-weekday lag.
+_SHORT_INTEREST_LOOKBACK = timedelta(days=200)
 
 #: Warm-up for TW revenue-momentum: rev_mom_accel needs ~19 known months (mirrors
 #: research.dataset's build warm-up so a snapshot row and a panel row agree).
@@ -160,6 +164,7 @@ def build_row(
     quarterly_fundamentals: Callable[[str, date, date], pd.DataFrame] | None = None,
     insider: Callable[[str, date, date], pd.DataFrame] | None = None,
     insider_coverage_end: pd.Timestamp | None = None,
+    short_interest: Callable[[str, date, date], pd.DataFrame] | None = None,
 ) -> dict[str, object] | None:
     """One snapshot row, or ``None`` if the symbol has no price data.
 
@@ -194,6 +199,9 @@ def build_row(
     strategy using them scores today exactly as it was backtested. US rows only; other rows get
     the columns as NaN (one schema). Insider values past ``insider_coverage_end`` (the bulk
     Form 4 data sets' last filing date) are NaN, never a false "no trades" 0.
+
+    ``short_interest`` (roadmap 17.11) is the FINRA stream; US rows get ``short_ratio`` and
+    ``short_ratio_delta_63d`` from the same function the panel builder calls.
     """
     price_start = as_of - timedelta(days=500)  # enough history for SMA-200
     ohlcv = prices.get_ohlcv(symbol, price_start, as_of)
@@ -237,6 +245,15 @@ def build_row(
             row.update(_insider_features(ins, t, mc, insider_coverage_end))
         else:
             row.update(dict.fromkeys(_INSIDER_KEYS, nan))
+    if short_interest is not None:
+        if region == "US":
+            try:
+                si = short_interest(symbol, as_of - _SHORT_INTEREST_LOOKBACK, as_of)
+            except (ProviderError, NotSupported):
+                si = pd.DataFrame()
+            row.update(short_interest_features(si, ohlcv, t))
+        else:
+            row.update(dict.fromkeys(SHORT_INTEREST_KEYS, nan))
     return row
 
 
@@ -251,19 +268,25 @@ class LiveUsStreams:
     quarterly: Callable[[str, date, date], pd.DataFrame]
     insider: Callable[[str, date, date], pd.DataFrame]
     insider_coverage_end: pd.Timestamp | None
+    short_interest: Callable[[str, date, date], pd.DataFrame]
 
 
 def live_us_streams(fundamentals: DataProvider) -> LiveUsStreams:
-    """Quarterly fundamentals from the same provider, and the Form 4 insider stream served
-    from the bulk data sets with its coverage end (18.16)."""
-    from heimdall.data.providers import Form4Provider  # lazy: provider deps
+    """Quarterly fundamentals from the same provider, the Form 4 insider stream served
+    from the bulk data sets with its coverage end (18.16), and FINRA short interest (17.11)."""
+    from heimdall.data.providers import FinraProvider, Form4Provider  # lazy: provider deps
 
     form4 = Form4Provider()
 
     def quarterly(sym: str, start: date, end: date) -> pd.DataFrame:
         return fundamentals.get_fundamentals(sym, "income", "quarter")
 
-    return LiveUsStreams(quarterly, form4.get_insider_transactions, form4.coverage_end())
+    return LiveUsStreams(
+        quarterly,
+        form4.get_insider_transactions,
+        form4.coverage_end(),
+        FinraProvider().short_interest,
+    )
 
 
 def fetch_benchmarks(prices: DataProvider, symbols: list[str], as_of: date) -> dict[str, pd.Series]:
@@ -294,6 +317,7 @@ def build_snapshot(
     quarterly_fundamentals: Callable[[str, date, date], pd.DataFrame] | None = None,
     insider: Callable[[str, date, date], pd.DataFrame] | None = None,
     insider_coverage_end: pd.Timestamp | None = None,
+    short_interest: Callable[[str, date, date], pd.DataFrame] | None = None,
 ) -> pd.DataFrame:
     """Build the snapshot table for ``symbols`` as known on ``as_of`` (default today)."""
     as_of = as_of or date.today()
@@ -312,6 +336,7 @@ def build_snapshot(
                 quarterly_fundamentals=quarterly_fundamentals,
                 insider=insider,
                 insider_coverage_end=insider_coverage_end,
+                short_interest=short_interest,
             )
         )
         is not None
@@ -346,6 +371,7 @@ def build_snapshot_iter(
     quarterly_fundamentals: Callable[[str, date, date], pd.DataFrame] | None = None,
     insider: Callable[[str, date, date], pd.DataFrame] | None = None,
     insider_coverage_end: pd.Timestamp | None = None,
+    short_interest: Callable[[str, date, date], pd.DataFrame] | None = None,
 ) -> Iterator[BuildProgress]:
     """Resumable, checkpointed build that yields progress after each symbol.
 
@@ -389,6 +415,7 @@ def build_snapshot_iter(
                 quarterly_fundamentals=quarterly_fundamentals,
                 insider=insider,
                 insider_coverage_end=insider_coverage_end,
+                short_interest=short_interest,
             )
         except Exception as exc:  # network/provider hiccup — skip, don't abort the crawl
             prog.failures[type(exc).__name__] = prog.failures.get(type(exc).__name__, 0) + 1

@@ -12,20 +12,22 @@ be running.
 1. **Form 4 daily delta** — `python -m heimdall.data.providers.form4 --delta` stores the insider
    filings made since the bulk data sets' coverage end, so the snapshot reads them live (see
    "Weekly: SEC Form 4 daily delta" below)
-2. **Snapshot refresh** — `python -m heimdall.screener.build`
-3. **Form 4 bulk refresh** — `python -m heimdall.data.providers.form4 --download` (a no-op
+2. **FINRA short interest** — `python -m heimdall.data.providers.finra` fetches any new
+   twice-monthly cycle (see "Weekly: FINRA short interest" below)
+3. **Snapshot refresh** — `python -m heimdall.screener.build`
+4. **Form 4 bulk refresh** — `python -m heimdall.data.providers.form4 --download` (a no-op
    until SEC posts a new quarter; see "Quarterly: SEC Form 4 insider data" below)
-4. **Panel extension** — `python -m heimdall.research.build_dataset --market us` then `--market tw`
-5. **Drift monitor** — `python -m heimdall.research.monitor --apply` (auto-flips a
+5. **Panel extension** — `python -m heimdall.research.build_dataset --market us` then `--market tw`
+6. **Drift monitor** — `python -m heimdall.research.monitor --apply` (auto-flips a
    drifted signal to `under_review`; playbook §9)
-6. **TDCC big-holder cache** — `python -m heimdall.research.tdcc_cache` fetches this
+7. **TDCC big-holder cache** — `python -m heimdall.research.tdcc_cache` fetches this
    week's 集保 shareholding-dispersion file (roadmap 13.9/16.4). **Missed weeks are
    unrecoverable**: the open-data endpoint serves only the current week with no
    backfill, so every skipped run is `tw-bigholder`/15.3 history lost forever, and
    `big_holder_ratio_delta_4w` stays NaN until four real weeks sit on disk. Note that
    `--rebuild` only re-fetches the *current* week's file — it cannot recover a past
    one.
-7. **Cohort freeze** — the certified picks for the current month are frozen in place
+8. **Cohort freeze** — the certified picks for the current month are frozen in place
    (roadmap 16.1). This is **idempotent**: on a weekly cadence only the first run of
    each month actually writes a cohort; later runs are no-ops.
 
@@ -181,3 +183,19 @@ uv run python -m heimdall.data.providers.form4 --delta
   18:00 or 19:00 in Taipei). Features dated later are NaN, never a false "no trades" 0.
 - **Cost.** About 400 filings per business day at ~8 requests per second, so a normal week takes
   about 4 minutes. The first catch-up after a quarter's bulk coverage end takes about an hour.
+
+## Weekly: FINRA short interest (roadmap 17.11)
+
+```bash
+uv run python -m heimdall.data.providers.finra
+```
+
+- FINRA publishes short positions twice a month. Each run asks which settlement dates exist (two
+  small requests) and fetches only cycles not yet under `data/finra/raw/`, so most weeks it adds
+  zero or one cycle (about five requests each). The first run fetched all 210 cycles since
+  2017-12-29 (about 15 minutes).
+- `data/finra/short_interest.parquet` is rebuilt from the raw files; `_short_interest.json`
+  records the cycle count and range.
+- A cycle is used only 10 weekdays after its settlement date. Live features are NaN when the
+  newest usable cycle settled more than 35 days earlier, so a missed refresh shows as missing
+  data, never as a stale value.

@@ -134,6 +134,7 @@ def main(argv: list[str] | None = None) -> int:
     tdcc_weeks = None
     insider = None
     insider_coverage_end = None
+    short_interest = None
     quarterly_fundamentals = None
     # Static symbol→sector map (roadmap 14.1) for within-sector scoring (17.5). Both
     # maps are incrementally disk-cached, so a resume with a warm cache is instant;
@@ -153,7 +154,7 @@ def main(argv: list[str] | None = None) -> int:
         tdcc_weeks = tdcc_provider.load_cached_weeks()
         sector_map = tw_sector_map()
     elif args.market == "us":  # extra US streams: Form 4 insider (12.4/13.3) + quarterly PEAD
-        from heimdall.data.providers import Form4Provider
+        from heimdall.data.providers import FinraProvider, Form4Provider
 
         # Delta-cached per issuer; a real crawl is network-heavy — the sanctioned
         # place to actually populate these columns is the one panel_us rebuild
@@ -166,6 +167,9 @@ def main(argv: list[str] | None = None) -> int:
             form4 = Form4Provider()
             insider = form4.get_insider_transactions
             insider_coverage_end = form4.coverage_end()
+        # 17.11: FINRA short interest from the ingested table (`python -m
+        # heimdall.data.providers.finra` first); cycles start 2017-12, so earlier months are NaN.
+        short_interest = FinraProvider().short_interest
         # Quarterly income rows (re-normalized from the same cached companyfacts
         # JSON as the annual fetch — no extra network) power 13.4's PEAD ``sue``;
         # its presence also switches on 13.5's annual issuance/quality features.
@@ -189,6 +193,7 @@ def main(argv: list[str] | None = None) -> int:
         tdcc_weeks=tdcc_weeks,
         insider=insider,
         insider_coverage_end=insider_coverage_end,
+        short_interest=short_interest,
         quarterly_fundamentals=quarterly_fundamentals,
         sector_map=sector_map,
     )
