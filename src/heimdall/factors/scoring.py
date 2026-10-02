@@ -39,6 +39,28 @@ def _percentile_0_100(s: pd.Series) -> pd.Series:
     return s.rank(pct=True) * 100.0
 
 
+#: Valuation multiples that are only meaningful when positive. "Lower is cheaper" breaks for
+#: a negative P/E or P/S — that is a loss-maker or broken data (a negative market cap), not a
+#: bargain — so those values are treated as missing rather than as the cheapest in the pool.
+_POSITIVE_ONLY: tuple[str, ...] = ("pe", "ps")
+#: Inputs divided by market cap: a row whose market cap is ≤ 0 (bad share data) has none.
+_NEEDS_MARKET_CAP: tuple[str, ...] = ("pe", "ps", "fcf_yield")
+
+
+def _valuation_inputs(cross: pd.DataFrame) -> pd.DataFrame:
+    """A copy with implausible valuation inputs blanked (see the two tuples above)."""
+    clean = cross.copy()
+    for col in _POSITIVE_ONLY:
+        if col in clean.columns:
+            clean[col] = clean[col].where(clean[col] > 0)
+    if "market_cap" in clean.columns:
+        bad_cap = ~(clean["market_cap"] > 0) & clean["market_cap"].notna()
+        for col in _NEEDS_MARKET_CAP:
+            if col in clean.columns:
+                clean.loc[bad_cap, col] = float("nan")
+    return clean
+
+
 def _factor_z(cross: pd.DataFrame, inputs: list[tuple[str, int]]) -> pd.Series:
     """Mean of directional z-scores over a factor's input columns (skips missing)."""
     parts = [direction * _zscore(cross[col]) for col, direction in inputs if col in cross.columns]
@@ -63,10 +85,11 @@ def factor_scores(
     """
     w = weights or DEFAULT_WEIGHTS
     out = cross_section.copy()
+    inputs_frame = _valuation_inputs(cross_section)  # scores only; the output keeps raw values
 
     factor_z: dict[str, pd.Series] = {}
     for name, inputs in FACTORS.items():
-        z = _factor_z(out, inputs)
+        z = _factor_z(inputs_frame, inputs)
         factor_z[name] = z
         out[f"{name}_score"] = _percentile_0_100(z)
 
