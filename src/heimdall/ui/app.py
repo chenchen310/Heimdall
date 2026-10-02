@@ -30,6 +30,7 @@ from heimdall.ui import (  # noqa: E402  (after set_page_config)
     today_page,
     workbench_page,
 )
+from heimdall.ui._nav import NAV  # noqa: E402
 
 PAGES = {
     "Guide": help_page.render,
@@ -47,25 +48,6 @@ PAGES = {
     "TW Chips": chips_page.render,
     "Sector Focus": sector_page.render,
     "TW Market Flows": flows_page.render,
-}
-
-# Pages grouped by purpose — one labelled section each in the sidebar. Chart,
-# Fundamental, Technical, Risk, and Earnings are no longer separate entries: they
-# are tabs inside Stock Workbench (one shared symbol instead of five copies of it).
-NAV: dict[str, list[str]] = {
-    "Help": ["Guide", "Glossary"],
-    "Data": ["Build data"],
-    "Stock picking": ["Today's Picks", "Stock Workbench", "Screener", "Strategy Lab"],
-    "Backtest": ["Backtest"],
-    "Analyst lenses": [
-        "Rotation",
-        "Factors",
-        "ETF Portfolio",
-        "Macro",
-        "TW Chips",
-        "Sector Focus",
-        "TW Market Flows",
-    ],
 }
 
 st.sidebar.title("🛡️ Heimdall")

@@ -45,8 +45,8 @@ from heimdall.research.rebalance import (
     weighted_plan,
 )
 from heimdall.research.spec import SignalSpec, load_spec
-from heimdall.research.today import freshness, todays_picks
-from heimdall.screener.snapshot import MONETARY_FIELDS
+from heimdall.research.today import eligibility, freshness, todays_picks
+from heimdall.screener.snapshot import MONETARY_FIELDS, split_by_region
 from heimdall.ui import _glossary
 from heimdall.ui._data import get_ohlcv, snapshot
 from heimdall.ui._freshness import freshness_word
@@ -350,6 +350,7 @@ def _evidence_box(region: str, report: dict[str, object]) -> None:
         f"{cast('float', report['portfolio_beat_rate']):.0%}",
         f"95% CI {lo:.0%}–{hi:.0%}",
         delta_color="off",
+        delta_arrow="off",  # a confidence interval, not a change — no ↑/↓
         help=_glossary.help("beat_rate_book"),
     )
     c2.metric(
@@ -357,6 +358,7 @@ def _evidence_box(region: str, report: dict[str, object]) -> None:
         f"{cast('float', report['selection_alpha_mean']):+.1%}",
         f"NW-t {cast('float', report['selection_alpha_t']):+.1f}",
         delta_color="off",
+        delta_arrow="off",
         help=_glossary.help("selection_skill"),
     )
     c3.metric("IC", f"{_gate_value(report, 'G1_ic'):+.3f}", help=_glossary.help("ic"))
@@ -415,17 +417,24 @@ def render() -> None:
     except FileNotFoundError:
         no_snapshot_cta(key="today_nosnap")
         return
-    word = freshness_word(snap)
-    if word:
-        st.caption(word)
-    stale = freshness(snap)
-    if stale > _STALE_BDAYS:
+    # Freshness and coverage are judged on *this* market's rows: a whole-market US snapshot
+    # says nothing about whether Taiwan can be ranked today.
+    market_rows = split_by_region(snap).get(region)
+    has_rows = market_rows is not None and not market_rows.empty
+    if has_rows:
+        _freshness_notice(cast("pd.DataFrame", market_rows))
+    else:
         st.warning(
-            t("Snapshot is {n} business days old — refresh it on the Build data page.").format(
-                n=stale
-            )
+            t(
+                "The snapshot has no {market} stocks yet, so today's ranking can't be computed. "
+                "The certified evidence and live track record below still apply."
+            ).format(market=t(region))
         )
-        switch_to("Build data", key="today_stale_cta", label="🗂 " + t("Refresh it now"))
+        switch_to(
+            "Build data",
+            key="today_nomarket_cta",
+            label="🗂 " + t("Build {market} data").format(market=t(region)),
+        )
 
     currency = REGION_CURRENCY[region]
     for spec, entry in specs:
@@ -438,35 +447,78 @@ def render() -> None:
         _evidence_box(region, report)
         _monitoring_line(spec)
 
-        prev = (
-            latest_members(spec.name, spec.version, _root()) if spec.exit_rank is not None else None
-        )
-        if spec.exit_rank is not None and prev is None:
-            st.caption(
-                t("No frozen cohort yet — plain top-N shown; the rank buffer starts next month.")
-            )
-        try:
-            picks = todays_picks(spec, snap, prev)
-        except ValueError as exc:  # e.g. a snapshot predating the 7.1 fields
-            st.error(str(exc))
-            continue
-        if picks.empty:
-            st.info(t("No eligible names to rank right now."))
-            continue
-        raw = composites.columns(list(spec.features))  # composites show their members (18.22)
-        lead = ["symbol", "signal_score", *(f"z_{f}" for f in spec.features), *raw]
-        cols = [c for c in [*lead, "price", "market_cap"] if c in picks.columns]
-        display = picks[cols].rename(
-            columns={c: f"{c} ({currency})" for c in cols if c in MONETARY_FIELDS}
-        )
-        st.dataframe(
-            display,
-            width="stretch",
-            hide_index=True,
-            column_config={"symbol": st.column_config.Column(pinned=True)},
-        )
-        st.caption(
-            t("z = strength vs today's eligible pool; the score is the weighted sum of z columns.")
-        )
+        picks = _ranking(spec, snap, currency) if has_rows else None
+        # The track record is the signal's own frozen history — it never depends on whether
+        # today's snapshot can produce a ranking, so it always renders.
         _track_record(spec, report)
-        _rebalance(spec, snap, picks)
+        if picks is not None and not picks.empty:
+            _rebalance(spec, snap, picks)
+
+
+def _freshness_notice(market_rows: pd.DataFrame) -> None:
+    word = freshness_word(market_rows)
+    if word:
+        st.caption(word)
+    stale = freshness(market_rows)
+    if stale > _STALE_BDAYS:
+        st.warning(
+            t("Snapshot is {n} business days old — refresh it on the Build data page.").format(
+                n=stale
+            )
+        )
+        switch_to("Build data", key="today_stale_cta", label="🗂 " + t("Refresh it now"))
+
+
+def _ranking(spec: SignalSpec, snap: pd.DataFrame, currency: str) -> pd.DataFrame | None:
+    """Today's ranked picks table (or an explained empty state); ``None`` when unrankable."""
+    prev = latest_members(spec.name, spec.version, _root()) if spec.exit_rank is not None else None
+    if spec.exit_rank is not None and prev is None:
+        st.caption(
+            t("No frozen cohort yet — plain top-N shown; the rank buffer starts next month.")
+        )
+    try:
+        picks = todays_picks(spec, snap, prev)
+    except ValueError as exc:  # e.g. a snapshot predating the 7.1 fields
+        st.error(str(exc))
+        return None
+    if picks.empty:
+        st.info(t("No eligible names to rank right now."))
+        _ineligible_breakdown(spec, snap)
+        return picks
+    raw = composites.columns(list(spec.features))  # composites show their members (18.22)
+    lead = ["symbol", "signal_score", *(f"z_{f}" for f in spec.features), *raw]
+    cols = [c for c in [*lead, "price", "market_cap"] if c in picks.columns]
+    display = picks[cols].rename(
+        columns={c: f"{c} ({currency})" for c in cols if c in MONETARY_FIELDS}
+    )
+    st.dataframe(
+        display,
+        width="stretch",
+        hide_index=True,
+        column_config={"symbol": st.column_config.Column(pinned=True)},
+    )
+    st.caption(
+        t("z = strength vs today's eligible pool; the score is the weighted sum of z columns.")
+    )
+    return picks
+
+
+def _ineligible_breakdown(spec: SignalSpec, snap: pd.DataFrame) -> None:
+    """Why nothing ranked: the hygiene failures per reason, so the empty state is actionable."""
+    rows = split_by_region(snap).get(spec.market)
+    if rows is None or rows.empty:
+        return
+    reasons = eligibility(rows, spec.market)["inelig_reason"].value_counts()
+    st.caption(
+        t(
+            "{n} {market} stocks in the snapshot · failed hygiene — history {h}, price {p}, "
+            "liquidity {l}; the rest lack a value for this signal's features or fall outside "
+            "its universe."
+        ).format(
+            n=len(rows),
+            market=t(spec.market),
+            h=int(reasons.get("history", 0)),
+            p=int(reasons.get("price", 0)),
+            l=int(reasons.get("liquidity", 0)),
+        )
+    )

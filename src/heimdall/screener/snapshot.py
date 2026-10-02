@@ -376,6 +376,7 @@ def build_snapshot_iter(
     as_of: date,
     *,
     resume: bool = True,
+    refetch: bool = False,
     checkpoint_every: int = 50,
     root: Path | None = None,
     monthly_revenue: Callable[[str, date, date], pd.DataFrame] | None = None,
@@ -396,6 +397,11 @@ def build_snapshot_iter(
     this, any row present was skipped, so a complete snapshot was never refreshed.) The table
     is flushed to disk every ``checkpoint_every`` symbols and once more at the end.
 
+    ``refetch`` re-fetches **every** listed symbol, even one already built today, and still
+    keeps every other row of the snapshot — the safe "fetch these again" a user means after,
+    say, adding an API key. ``resume=False`` is the different, destructive operation: it
+    starts from an empty table, so any symbol not in ``symbols`` is dropped.
+
     Old rows stay in the table until their replacement is built, so the file on disk is
     complete at every checkpoint. A per-symbol error is tallied, never fatal, and keeps the
     symbol's previous row (its ``as_of`` shows its age). A symbol that now returns no price
@@ -414,7 +420,7 @@ def build_snapshot_iter(
     )
     by_symbol: dict[str, dict[str, object]] = {str(r["symbol"]): r for r in records}
     fresh = {sym for sym, r in by_symbol.items() if _built_on(r, as_of)}
-    todo = [s for s in symbols if s not in fresh]
+    todo = list(symbols) if refetch else [s for s in symbols if s not in fresh]
 
     prog = BuildProgress(total=len(todo))
     yield prog  # initial plan, before any fetch

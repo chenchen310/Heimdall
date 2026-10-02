@@ -27,10 +27,11 @@ _JOB = "_lab_job"
 
 
 def _banner(n_trials: int | None = None) -> None:
-    trials = f" · N = {n_trials} {t('trials')}" if n_trials is not None else ""
-    st.warning(
-        f"🧪 {t('Research results — uncertified.')}{trials} · survivorship: {lab.SURVIVORSHIP}"
-    )
+    parts = [t("Research results — uncertified")]
+    if n_trials is not None:
+        parts.append(f"N = {n_trials} {t('trials')}")
+    parts.append(f"survivorship: {lab.SURVIVORSHIP}")
+    st.warning("🧪 " + " · ".join(parts))
 
 
 def render() -> None:
@@ -174,8 +175,11 @@ def _leaderboard_tab(run_id: str | None) -> None:
                 t("DEV IR vs EW universe"), format="%.2f", help=glossary.help("ir")
             ),
             "dsr": st.column_config.NumberColumn("DSR", format="%.3f", help=glossary.help("dsr")),
-            "alpha_mean": st.column_config.NumberColumn(t("Selection alpha (6m)"), format="%.2%%"),
-            "turnover": st.column_config.NumberColumn(t("Turnover"), format="%.0%%"),
+            # "percent" multiplies by 100 (0.0465 -> 4.65%); a printf "%.2%%" is not applied.
+            "alpha_mean": st.column_config.NumberColumn(
+                t("Selection alpha (6m)"), format="percent"
+            ),
+            "turnover": st.column_config.NumberColumn(t("Turnover"), format="percent"),
         },
     )
     st.caption(

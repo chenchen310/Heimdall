@@ -11,6 +11,26 @@ import streamlit as st
 
 from heimdall.ui.i18n import t
 
+# Pages grouped by purpose — one labelled section each in the sidebar. Chart,
+# Fundamental, Technical, Risk, and Earnings are no longer separate entries: they
+# are tabs inside Stock Workbench (one shared symbol instead of five copies of it).
+# Lives here, not in ``app.py``, so the Guide can mirror it without importing the app.
+NAV: dict[str, list[str]] = {
+    "Help": ["Guide", "Glossary"],
+    "Data": ["Build data"],
+    "Stock picking": ["Today's Picks", "Stock Workbench", "Screener", "Strategy Lab"],
+    "Backtest": ["Backtest"],
+    "Analyst lenses": [
+        "Rotation",
+        "Factors",
+        "ETF Portfolio",
+        "Macro",
+        "TW Chips",
+        "Sector Focus",
+        "TW Market Flows",
+    ],
+}
+
 
 def switch_to(page: str, *, key: str, label: str | None = None) -> None:
     """A button that, when clicked, navigates to another sidebar page.

@@ -133,7 +133,14 @@ def _overview_fundamental(symbol: str) -> None:
     price = float(px["adj_close"].iloc[-1]) if not px.empty else float("nan")
     rep = fundamental_report(symbol, fund, price)
     sub = f"{rep.rating_score:.0f}/100" if pd.notna(rep.rating_score) else None
-    st.metric("Rating", rep.rating, sub, delta_color="off", help=_glossary.help("rating_score"))
+    st.metric(
+        "Rating",
+        rep.rating,
+        sub,
+        delta_color="off",
+        delta_arrow="off",  # a score, not a change — no ↑/↓
+        help=_glossary.help("rating_score"),
+    )
 
 
 def _overview_technical(symbol: str) -> None:
@@ -161,6 +168,7 @@ def _overview_risk(symbol: str) -> None:
         f"{r.beta:.2f}",
         f"{r.annual_vol:.0%} vol",
         delta_color="off",
+        delta_arrow="off",
         help=_glossary.help("beta"),
     )
 

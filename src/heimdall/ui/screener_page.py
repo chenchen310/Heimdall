@@ -200,23 +200,41 @@ def _preview_text(rows: list[dict[str, object]], currency: str) -> str:
 
 
 def _pool_stats(field: str, snap: pd.DataFrame, currency: str) -> dict[str, str]:
-    """One field's min/median/max across the current pool — context for picking a
-    threshold instead of guessing it blind."""
+    """One field's typical range across the current pool — context for picking a
+    threshold instead of guessing it blind. P10/P90 rather than min/max: a whole-market
+    pool always has a few broken outliers (a −1,977,815% net margin) that make min/max
+    useless as a guide."""
     icon = _CATEGORY_ICON.get(_glossary.category(field), "")
     prefix = f"{icon} " if icon else ""
     col = snap[field].dropna() if field in snap.columns else pd.Series(dtype=float)
     if col.empty:
         lo = med = hi = "—"
     else:
-        lo = _format_value(field, float(col.min()), currency)
+        lo = _format_value(field, float(col.quantile(0.1)), currency)
         med = _format_value(field, float(col.median()), currency)
-        hi = _format_value(field, float(col.max()), currency)
+        hi = _format_value(field, float(col.quantile(0.9)), currency)
     return {
         t("Field"): f"{prefix}{_glossary.label(field)}",
-        t("Min"): lo,
+        t("P10 (low end)"): lo,
         t("Median"): med,
-        t("Max"): hi,
+        t("P90 (high end)"): hi,
     }
+
+
+def _result_column(field: str, currency: str) -> object:
+    """Result-table column config: the same readable name the field picker shows and the
+    same units the editor uses — a percent field typed as 15 reads back as 15%, not 0.15."""
+    label = _glossary.label(field)
+    if field in MONETARY_FIELDS:
+        label = f"{label} ({currency})"
+    help_text = _glossary.help(field) or None
+    if field in PERCENT_FIELDS:
+        return st.column_config.NumberColumn(label, help=help_text, format="percent")
+    if field in MULTIPLE_FIELDS:
+        return st.column_config.NumberColumn(label, help=help_text, format="%.2f×")
+    if field in _SCORE_FIELDS:
+        return st.column_config.NumberColumn(label, help=help_text, format="%.0f")
+    return st.column_config.Column(label, help=help_text)
 
 
 def render() -> None:
@@ -349,11 +367,12 @@ def render() -> None:
         key="predicates",
     )
 
-    # A threshold shouldn't be a blind guess: show this pool's min/median/max for
+    # A threshold shouldn't be a blind guess: show this pool's typical range for
     # whatever fields are currently in play, right where you're about to type a number.
     active_fields = sorted({f for f in edited["field"] if pd.notna(f) and f in snap.columns})
     if active_fields:
-        with st.expander(t("📏 Pool context for your fields (min / median / max)"), expanded=True):
+        title = t("📏 Typical range in this pool (P10 / median / P90 — outliers trimmed)")
+        with st.expander(title, expanded=True):
             st.dataframe(
                 pd.DataFrame([_pool_stats(f, snap, currency) for f in active_fields]),
                 width="stretch",
@@ -448,6 +467,7 @@ def render() -> None:
         t("+ Show more columns"),
         other_cols,
         format_func=_field_option_label,
+        placeholder=t("Pick columns to add…"),
         key="screener_extra_cols",
     )
     show_cols = [*default_cols, *[c for c in extra_cols if c not in default_cols]]
@@ -463,18 +483,16 @@ def render() -> None:
     # Label money columns with the currency; pin `symbol` (and the ➕ marker) so they stay
     # put when the wide table scrolls sideways.
     display = results[show_cols].rename(columns={c: f"{c} ({currency})" for c in money})
-    colcfg: dict[str, object] = {"symbol": st.column_config.Column(pinned=True)}
+    colcfg: dict[str, object] = {"symbol": st.column_config.Column(t("Symbol"), pinned=True)}
     if added_mask is not None:
         display.insert(1, "added", added_mask.to_numpy())
         colcfg["added"] = st.column_config.CheckboxColumn(
             "➕", pinned=True, help=t("Appears only because a condition is off")
         )
-    for col in display.columns:  # hover help for every field the glossary knows
-        if col in colcfg:
-            continue
-        text = _glossary.help(col.split(" (")[0])  # strip a currency suffix like " (USD)"
-        if text:
-            colcfg[col] = st.column_config.Column(help=text)
+    for col in display.columns:  # readable header, matching units, and glossary hover help
+        if col not in colcfg:
+            colcfg[col] = _result_column(col.split(" (")[0], currency)  # strip " (USD)"
+    st.caption("👆 " + t("Tick a row's left-hand box to open that stock in Stock Workbench."))
     event = st.dataframe(
         display,
         width="stretch",

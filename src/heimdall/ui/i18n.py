@@ -128,15 +128,20 @@ _ZH: dict[str, str] = {
     "All-around (composite)": "全能型（綜合分數）",
     'Apply "{name}"': "套用「{name}」",
     "(no conditions)": "（無條件）",
-    "📏 Pool context for your fields (min / median / max)": (
-        "📏 你選的欄位在這個池子裡的數值範圍（最小／中位數／最大）"
+    "📏 Typical range in this pool (P10 / median / P90 — outliers trimmed)": (
+        "📏 你選的欄位在這個池子裡的常見範圍（P10／中位數／P90，已排除極端值）"
     ),
-    "Min": "最小",
+    "P10 (low end)": "P10（偏低端）",
     "Median": "中位數",
-    "Max": "最大",
+    "P90 (high end)": "P90（偏高端）",
     "+ Show more columns": "＋ 顯示更多欄位",
+    "Pick columns to add…": "選擇要加入的欄位…",
+    "Tick a row's left-hand box to open that stock in Stock Workbench.": (
+        "勾選任一列最左側的方框，就能在個股工作台開啟該股票。"
+    ),
     # --- user guide ---
     "📖 User guide": "📖 使用說明",
+    "Three levels of trust": "三種可信度",
     "Quick start": "快速上手",
     "Reading the numbers — conventions": "看數字的通則",
     "How to read each page": "如何閱讀各分頁的指標",
@@ -179,6 +184,17 @@ _ZH: dict[str, str] = {
     ),
     "survivorship: current universe (optimistic upper bound)": ("存活者偏差:現今成分股(樂觀上限)"),
     "No eligible names to rank right now.": "目前沒有符合資格可排名的股票。",
+    "The snapshot has no {market} stocks yet, so today's ranking can't be computed. "
+    "The certified evidence and live track record below still apply.": (
+        "快照裡還沒有{market}的股票，所以算不出今天的排名。下方的認證證據與實盤追蹤紀錄不受影響。"
+    ),
+    "Build {market} data": "建立{market}資料",
+    "{n} {market} stocks in the snapshot · failed hygiene — history {h}, price {p}, "
+    "liquidity {l}; the rest lack a value for this signal's features or fall outside "
+    "its universe.": (
+        "快照中有 {n} 檔{market}股票 · 未通過基本篩選——歷史不足 {h}、股價過低 {p}、流動性不足 {l}；"
+        "其餘缺少這個訊號需要的特徵值，或不在它的股票池內。"
+    ),
     "No frozen cohort yet — plain top-N shown; the rank buffer starts next month.": (
         "尚未凍結任何一期持股——目前顯示一般的前 N 名；換股緩衝從下個月開始生效。"
     ),
@@ -201,8 +217,11 @@ _ZH: dict[str, str] = {
     ),
     # --- build data ---
     "🗂 Data — build snapshot": "🗂 資料 — 建立快照",
-    "The snapshot is the data behind the Screener and Factors pages. Build or refresh it here.": (
-        "快照是「選股器」與「多因子」頁面的資料來源,可在此建立或更新。"
+    "The snapshot is one table of every stock's latest price, fundamentals and "
+    "indicators. Today's Picks, the Screener, Factors, Stock Workbench, Sector Focus "
+    "and the order plans all read it. Build or refresh it here.": (
+        "快照是一張表，存放每檔股票最新的股價、財報與指標。今日候選、選股器、多因子、個股工作台、"
+        "產業焦點與下單計畫都讀它。可在此建立或更新。"
     ),
     "No snapshot yet — build one below.": "尚無快照——請在下方建立。",
     "Current snapshot": "目前快照",
@@ -222,8 +241,12 @@ _ZH: dict[str, str] = {
     "Symbols (comma / space / newline, e.g. AAPL.US 2330.TW)": (
         "代號(以逗號 / 空白 / 換行分隔,例如 AAPL.US 2330.TW)"
     ),
-    "Re-fetch symbols already in the snapshot": "重新抓取已在快照中的代號",
-    "refresh all": "全部更新",
+    "Re-fetch these symbols even if already built today": "即使今天已建立，也重新抓取這些代號",
+    "Every other symbol in the snapshot is kept either way. Without this, symbols "
+    "already built today are skipped and older rows are refreshed.": (
+        "無論開不開，快照裡的其他代號都會保留。不開時，今天已建立的代號會略過，較舊的資料會更新。"
+    ),
+    "re-fetch all of them; other symbols are kept": "全部重新抓取；其他代號保留",
     "new + not yet built today": "新增＋今天尚未更新的",
     "Build now": "立即建立",
     "Starting…": "開始中…",
@@ -236,7 +259,18 @@ _ZH: dict[str, str] = {
         "啟動背景爬取。耗時且為一次性——可離開此頁,會持續執行且可續跑。價格已快取,之後更新會快很多。"
     ),
     "Background build finished.": "背景建構完成。",
-    "Rebuild from scratch (re-fetch everything)": "從頭重建(全部重新抓取)",
+    "A normal build already refreshes every row that wasn't built today — "
+    "rebuilding from scratch is rarely needed.": (
+        "一般建構就會更新所有不是今天建立的資料——很少需要從頭重建。"
+    ),
+    "Rebuild from scratch — empty the whole snapshot first": "從頭重建——先清空整個快照",
+    "This empties the current snapshot ({n} symbols, every market) before fetching "
+    "{universe}. Anything outside that universe is gone until you build it again, "
+    "and pages show a partial snapshot while it runs.": (
+        "這會先清空目前的快照（{n} 檔，所有市場），再抓取「{universe}」。不在這個股票池裡的代號"
+        "會消失，直到你再建一次；建構期間各頁看到的是不完整的快照。"
+    ),
+    "I understand — empty the snapshot and rebuild": "我了解——清空快照並重建",
     "Start background build": "開始背景建構",
     "Building in the background — safe to switch pages; come back any time.": (
         "背景建構中——可安全切換頁面,隨時回來查看。"
@@ -586,7 +620,8 @@ _ZH: dict[str, str] = {
     "Strategy Lab": "策略實驗室",
     "🧪 Strategy Lab": "🧪 策略實驗室",
     "trials": "個試驗",
-    "Research results — uncertified.": "研究結果・未認證。",
+    "Research results — uncertified": "研究結果・未認證",
+    "No snapshot yet — build one on the Build data page.": "尚無快照——請到「建立資料」頁建立。",
     (
         "The Strategy Factory searches, backtests and ranks strategies by itself. Nothing"
         " here is a recommendation: only certified signals appear on Today's Picks."
@@ -597,7 +632,7 @@ _ZH: dict[str, str] = {
     "Search runs": "搜尋批次",
     "Leaderboard": "排行榜",
     "Strategy detail": "策略詳情",
-    "Walk-forward": "走動式驗證",
+    "Walk-forward": "滾動前推驗證",
     "Incubating": "孵化中",
     "Technical research": "技術策略研究",
     "Factory run": "工廠批次",
@@ -617,7 +652,7 @@ _ZH: dict[str, str] = {
     "Job": "工作",
     "Run the declared search (DEV only)": "執行已宣告的搜尋（只用 DEV 期）",
     "Cache daily-engine backtests of the top 10": "替前 10 名建立每日引擎回測",
-    "Walk-forward meta-backtest (top 1)": "走動式驗證（第 1 名）",
+    "Walk-forward meta-backtest (top 1)": "滾動前推驗證（第 1 名）",
     "RESEARCH_LOG entry id (search only)": "RESEARCH_LOG 條目編號（僅搜尋需要）",
     "Start": "開始",
     "A search needs its declared RESEARCH_LOG entry id.": (
@@ -661,7 +696,7 @@ _ZH: dict[str, str] = {
     ),
     "Mode": "模式",
     "No walk-forward yet — run the 'walkforward' job for this run.": (
-        "還沒有走動式驗證——請對這個批次執行「walkforward」工作。"
+        "還沒有滾動前推驗證——請對這個批次執行「walkforward」工作。"
     ),
     "EW universe CAGR": "等權池年化報酬",
     (
