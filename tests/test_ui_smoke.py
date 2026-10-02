@@ -150,6 +150,56 @@ def test_build_page_renders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     assert not at.exception
     assert [h.value for h in at.header] == ["🗂 Data — build snapshot"]
     assert at.radio  # the quick-tab Universe picker rendered
+    # Every market is counted, an absent one as 0 — what explains an empty Taiwan ranking.
+    assert any("(US 2 · Taiwan 0)" in c.value for c in at.caption)
+
+
+def test_build_page_quick_refetch_keeps_the_rest_of_the_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The quick tab's re-fetch toggle used to mean ``resume=False`` — a fresh table holding
+    only the listed names, so one click shrank a 3,431-name snapshot to the 15 defaults.
+    It now only forces those names to be fetched again; the build path can't drop rows."""
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_snapshot(tmp_path)
+    st.cache_data.clear()
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        "heimdall.ui.build_page._run_in_process",
+        lambda symbols, **kw: calls.append({"n": len(symbols), **kw}),
+    )
+
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Build data")
+    [tg for tg in at.toggle if tg.label.startswith("Re-fetch these symbols")][0].set_value(
+        True
+    ).run()
+    [b for b in at.button if b.label == "Build now"][0].click().run()
+    assert not at.exception
+    assert calls == [{"n": 15, "refetch": True}]
+
+
+def test_build_page_rebuild_from_scratch_requires_confirmation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_snapshot(tmp_path)
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Build data")
+
+    def start() -> object:
+        return [b for b in at.button if b.label == "Start background build"][0]
+
+    assert not start().disabled  # a normal (resuming) whole-market build needs no confirmation
+    [tg for tg in at.toggle if tg.label.startswith("Rebuild from scratch")][0].set_value(True).run()
+    assert any("empties the current snapshot (2 symbols" in w.value for w in at.warning)
+    assert start().disabled
+    [c for c in at.checkbox if c.label.startswith("I understand")][0].check().run()
+    assert not start().disabled
 
 
 def _write_money_snapshot(data_dir: Path, symbols: list[str]) -> None:
@@ -263,13 +313,15 @@ def test_screener_default_columns_are_narrow_but_include_filtered_fields(
     assert "rsi_14" not in cols and "pct_above_sma_200" not in cols  # not filtered on — hidden
 
 
-def test_screener_pool_stats_panel_shows_min_median_max(
+def test_screener_pool_stats_panel_shows_p10_median_p90(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """P10/P90, not min/max: a whole-market pool's broken outliers (a −1,977,815% net
+    margin in the real snapshot) made min/max useless as a threshold guide."""
     from heimdall.ui import _glossary
 
     monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
-    _write_snapshot(tmp_path)  # pe = [10.0, 40.0] -> median 25
+    _write_snapshot(tmp_path)  # pe = [10.0, 40.0] -> P10 13, median 25, P90 37
     st.cache_data.clear()
 
     _force_english(monkeypatch)
@@ -278,9 +330,9 @@ def test_screener_pool_stats_panel_shows_min_median_max(
     stats = at.dataframe[1].value  # editor is [0]; pool-stats panel is [1]
     row = stats[stats["Field"].str.endswith(_glossary.label("pe"))]
     assert not row.empty
-    assert row.iloc[0]["Min"] == "10.00×"
+    assert row.iloc[0]["P10 (low end)"] == "13.00×"
     assert row.iloc[0]["Median"] == "25.00×"
-    assert row.iloc[0]["Max"] == "40.00×"
+    assert row.iloc[0]["P90 (high end)"] == "37.00×"
 
 
 def test_screener_switching_preset_without_apply_does_not_touch_editor(
@@ -594,9 +646,13 @@ def test_today_page_renders_certified_evidence_then_picks(
 
 
 def _certify_us_signal(
-    tmp_path: Path, *, name: str = "us-mom", generated_at: str = "2024-01-02T00:00:00+00:00"
+    tmp_path: Path,
+    *,
+    name: str = "us-mom",
+    generated_at: str = "2024-01-02T00:00:00+00:00",
+    market: str = "US",
 ) -> None:
-    """Set up a certified US signal (spec + immutable report + registry) via the real lifecycle."""
+    """Set up a certified signal (spec + immutable report + registry) via the real lifecycle."""
     from heimdall.research import registry as reg
     from heimdall.research.spec import SignalSpec
 
@@ -604,7 +660,7 @@ def _certify_us_signal(
         {
             "name": name,
             "family": name,
-            "market": "US",
+            "market": market,
             "version": 1,
             "features": {"ret_12_1": 1.0},
             "top_n": 3,
@@ -694,6 +750,56 @@ def test_today_page_track_record_empty_state_without_cohorts(
     assert not at.exception
     assert any(s.value == "Live track record" for s in at.subheader)
     assert any("No frozen cohorts yet" in i.value for i in at.info)
+
+
+def test_today_page_market_missing_from_snapshot_says_so_and_keeps_track_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The real-world case: a certified Taiwan signal over a US-only snapshot used to say
+    "No eligible names to rank" — a wrong diagnosis — and its `continue` also hid the
+    live track record, which never depended on today's snapshot."""
+    _force_english(monkeypatch)
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_today_snapshot(tmp_path)  # US rows only
+    _point_registry_at(tmp_path, monkeypatch)
+    _certify_us_signal(tmp_path, name="tw-mom", market="Taiwan")
+    st.cache_data.clear()
+
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Today's Picks")
+    at.radio(key="today_market").set_value("Taiwan").run()
+    assert not at.exception
+    assert any("no Taiwan stocks yet" in w.value for w in at.warning)
+    assert any(b.label == "🗂 Build Taiwan data" for b in at.button)
+    assert not any("No eligible names" in i.value for i in at.info)  # not the wrong diagnosis
+    assert any(m.value == "72%" for m in at.metric)  # the evidence box still renders
+    assert any(s.value == "Live track record" for s in at.subheader)
+    assert not any("signal_score" in df.value.columns for df in at.dataframe)  # no ranking
+    # The freshness badge belongs to the market on screen — no US "fresh/stale" word here.
+    assert not any("business days old" in w.value for w in at.warning)
+
+
+def test_today_page_no_eligible_names_explains_why_and_keeps_track_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _force_english(monkeypatch)
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_today_snapshot(tmp_path)
+    snap = pd.read_parquet(tmp_path / "snapshot.parquet")
+    snap["price"] = 0.5  # every row fails the price floor
+    snap.to_parquet(tmp_path / "snapshot.parquet")
+    _point_registry_at(tmp_path, monkeypatch)
+    _certify_us_signal(tmp_path)
+    _write_us_panel(tmp_path)
+    st.cache_data.clear()
+
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Today's Picks")
+    assert not at.exception
+    assert any("No eligible names" in i.value for i in at.info)
+    assert any("history 0, price 5, liquidity 0" in c.value for c in at.caption)
+    assert any(s.value == "Live track record" for s in at.subheader)  # no longer hidden
+    assert not any(s.value == "Rebalance helper" for s in at.subheader)  # nothing to trade into
 
 
 def test_today_page_track_record_renders_with_frozen_cohorts(
@@ -922,8 +1028,13 @@ def test_guide_page_renders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     _nav(at, "Guide")
     assert not at.exception
     assert [h.value for h in at.header] == ["📖 User guide"]
-    # one collapsible guide per page (12) + the conventions expander
-    assert len(at.expander) >= 12
+    # The three trust levels come before the quick start.
+    assert [s.value for s in at.subheader][:2] == ["Three levels of trust", "Quick start"]
+    # one collapsible guide per documented page + the conventions expander
+    from heimdall.ui.help_page import _sections
+
+    n_pages = sum(len(keys) for keys in _sections().values())
+    assert len(at.expander) == n_pages + 1
 
 
 def _write_sector_snapshot(data_dir: Path) -> None:

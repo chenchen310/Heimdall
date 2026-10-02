@@ -24,7 +24,7 @@ import streamlit as st
 
 from heimdall.data import router
 from heimdall.data.cache import CachedProvider
-from heimdall.data.symbols import SymbolError, parse_symbol
+from heimdall.data.symbols import REGION_CURRENCY, SymbolError, parse_symbol
 from heimdall.screener.snapshot import (
     LIVE_EDGAR_MAX_AGE_DAYS,
     UNIVERSES,
@@ -48,14 +48,16 @@ _BIG: dict[str, tuple[str, int]] = {
     "VTI — whole US market (~3,400)": ("vti", 3400),
     "All TWSE + TPEX (~2,100)": ("tw-all", 2100),
 }
+_MARKETS: tuple[str, ...] = tuple(REGION_CURRENCY)  # ("US", "Taiwan")
 
 
 def render() -> None:
     st.header(t("🗂 Data — build snapshot"))
     st.caption(
         t(
-            "The snapshot is the data behind the Screener and Factors pages. "
-            "Build or refresh it here."
+            "The snapshot is one table of every stock's latest price, fundamentals and "
+            "indicators. Today's Picks, the Screener, Factors, Stock Workbench, Sector Focus "
+            "and the order plans all read it. Build or refresh it here."
         )
     )
     _current_status()
@@ -73,7 +75,10 @@ def _current_status() -> None:
     except FileNotFoundError:
         st.info(t("No snapshot yet — build one below."))
         return
-    parts = " · ".join(f"{r} {len(g)}" for r, g in split_by_region(snap).items())
+    groups = split_by_region(snap)
+    # Every market is listed, a missing one as 0 — "Taiwan 0" is exactly what explains an
+    # empty Taiwan ranking on Today's Picks.
+    parts = " · ".join(f"{t(r)} {len(groups.get(r, ()))}" for r in _MARKETS)
     as_of = pd.to_datetime(snap["as_of"]).max().date() if "as_of" in snap else "n/a"
     st.caption(f"{t('Current snapshot')}: {len(snap)} ({parts}) · {t('as of')} {as_of}")
 
@@ -121,17 +126,28 @@ def _quick_tab() -> None:
     else:
         symbols = list(UNIVERSES[_SMALL[choice]])
 
-    rebuild = st.toggle(t("Re-fetch symbols already in the snapshot"), value=False)
+    refetch = st.toggle(
+        t("Re-fetch these symbols even if already built today"),
+        value=False,
+        help=t(
+            "Every other symbol in the snapshot is kept either way. Without this, symbols "
+            "already built today are skipped and older rows are refreshed."
+        ),
+    )
     st.caption(
         f"{len(symbols)} {t('symbols')} — "
-        + (t("refresh all") if rebuild else t("new + not yet built today"))
+        + (
+            t("re-fetch all of them; other symbols are kept")
+            if refetch
+            else t("new + not yet built today")
+        )
     )
 
     if st.button(t("Build now"), type="primary", disabled=not symbols):
-        _run_in_process(symbols, resume=not rebuild)
+        _run_in_process(symbols, refetch=refetch)
 
 
-def _run_in_process(symbols: list[str], *, resume: bool) -> None:
+def _run_in_process(symbols: list[str], *, refetch: bool) -> None:
     from heimdall.data.providers import FinMindProvider
 
     prices = CachedProvider(router.price_provider())
@@ -146,7 +162,7 @@ def _run_in_process(symbols: list[str], *, resume: bool) -> None:
         prices,
         funds,
         date.today(),
-        resume=resume,
+        refetch=refetch,  # always resume: a quick build never drops other symbols
         monthly_revenue=monthly_revenue,
         benchmarks=fetch_benchmarks(prices, symbols, date.today()),
         quarterly_fundamentals=live.quarterly,
@@ -192,10 +208,37 @@ def _whole_tab() -> None:
 
     choice = st.selectbox(t("Universe"), list(_BIG))
     market, approx = _BIG[choice]
-    rebuild = st.toggle(t("Rebuild from scratch (re-fetch everything)"), value=False, key="big_reb")
-    if st.button(t("Start background build"), type="primary"):
+    st.caption(
+        t(
+            "A normal build already refreshes every row that wasn't built today — "
+            "rebuilding from scratch is rarely needed."
+        )
+    )
+    rebuild = st.toggle(
+        t("Rebuild from scratch — empty the whole snapshot first"), value=False, key="big_reb"
+    )
+    confirmed = True
+    if rebuild:
+        st.warning(
+            t(
+                "This empties the current snapshot ({n} symbols, every market) before fetching "
+                "{universe}. Anything outside that universe is gone until you build it again, "
+                "and pages show a partial snapshot while it runs."
+            ).format(n=_snapshot_size(), universe=choice)
+        )
+        confirmed = st.checkbox(
+            t("I understand — empty the snapshot and rebuild"), key="big_reb_confirm"
+        )
+    if st.button(t("Start background build"), type="primary", disabled=not confirmed):
         _start_background(market, rebuild, approx)
         st.rerun()
+
+
+def _snapshot_size() -> int:
+    try:
+        return len(load_snapshot())
+    except FileNotFoundError:
+        return 0
 
 
 def _start_background(market: str, rebuild: bool, approx: int) -> None:

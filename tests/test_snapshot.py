@@ -557,6 +557,29 @@ def test_resume_rebuilds_rows_from_an_earlier_day_in_place(tmp_path: Path) -> No
     assert again.total == 0
 
 
+def test_refetch_rebuilds_todays_rows_and_keeps_every_other_symbol(tmp_path: Path) -> None:
+    """The Build data page's "re-fetch" toggle: fetch the listed symbols again even though
+    they were built today, without dropping the rest of the snapshot (the old toggle meant
+    ``resume=False``, which silently shrank a whole-market snapshot to the listed names)."""
+    prices, nofund = _Prices(_ohlcv()), _NoFundamentals()
+    day = date(2024, 4, 1)
+    for _ in build_snapshot_iter(["A.US", "B.US", "X.US"], prices, nofund, day, root=tmp_path):
+        pass
+
+    plan_total = next(
+        iter(build_snapshot_iter(["A.US", "B.US"], prices, nofund, day, root=tmp_path))
+    ).total
+    assert plan_total == 0  # plain resume: built today, nothing to do
+
+    for i, p in enumerate(
+        build_snapshot_iter(["A.US", "B.US"], prices, nofund, day, refetch=True, root=tmp_path)
+    ):
+        if i == 0:
+            plan_total = p.total
+    assert plan_total == 2  # refetch: both listed symbols are fetched again
+    assert sorted(load_snapshot(tmp_path)["symbol"]) == ["A.US", "B.US", "X.US"]  # X.US kept
+
+
 def test_resume_keeps_the_old_row_on_error_and_drops_a_symbol_without_prices(
     tmp_path: Path,
 ) -> None:
