@@ -63,10 +63,19 @@ METRIC_SPECS: list[MetricSpec] = [
     ),
     ("cash", "balance", ["CashAndCashEquivalentsAtCarryingValue"], "USD"),
     ("long_term_debt", "balance", ["LongTermDebtNoncurrent", "LongTermDebt"], "USD"),
+    # Dual-class filers (HOOD, LYFT, DDOG, PINS…) report the plain share tags as 0 after their
+    # IPO — the real counts are per class, which companyfacts omits — and many filers stop
+    # tagging them at all (CASH last 2020, HLI 2015), leaving a years-stale count. Diluted
+    # weighted-average shares is tagged by every filer, every year; it is the per-period
+    # fallback (the same figure FMP's mapping uses). Non-positive counts are dropped below.
     (
         "shares_outstanding",
         "balance",
-        ["CommonStockSharesOutstanding", "CommonStockSharesIssued"],
+        [
+            "CommonStockSharesOutstanding",
+            "CommonStockSharesIssued",
+            "WeightedAverageNumberOfDilutedSharesOutstanding",
+        ],
         "shares",
     ),
     ("cfo", "cashflow", ["NetCashProvidedByUsedInOperatingActivities"], "USD"),
@@ -247,6 +256,8 @@ def _normalize_companyfacts(facts: dict[str, Any], sym: Symbol) -> pd.DataFrame:
             for fact in node.get("units", {}).get(unit, []):
                 filed, end, val = fact.get("filed"), fact.get("end"), fact.get("val")
                 if filed is None or end is None or val is None:
+                    continue
+                if unit == "shares" and val <= 0:  # a placeholder, never a real share count
                     continue
                 period = "annual" if fact.get("fp") == "FY" else "quarter"
                 if not _is_discrete_duration(period, fact.get("start"), end):

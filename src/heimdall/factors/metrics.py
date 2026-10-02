@@ -314,7 +314,9 @@ def snapshot_row(
     cash, long_term_debt = g("cash", nan), g("long_term_debt", nan)
     dep_amort, interest_expense = g("dep_amort", nan), g("interest_expense", nan)
     fcf = g("cfo", nan) - g("capex", nan)
-    market_cap = tech["price"] * shares if pd.notna(shares) else nan
+    # A share count ≤ 0 is never real (a vendor placeholder or a bad derivation) — no market
+    # cap rather than a 0 that reads as P/E 0.00× or a negative one that reads as "cheapest".
+    market_cap = tech["price"] * shares if pd.notna(shares) and shares > 0 else nan
 
     # Enterprise value & leverage. Missing debt/cash tags are treated as zero
     # (a debt-free filer simply reports no debt concept) — see `_or0`.
