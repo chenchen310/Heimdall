@@ -251,9 +251,18 @@ Zhu 2016); F6 bounds the run so its N stays interpretable. Changing any of them 
    `research/dataset.py` feature table, the `_technicals` comments, or cited literature — never
    inferred from data; directions are never searched), the weight menu, the construction menus,
    the universes, the stages, and the seed. Nothing is added mid-run; a changed config is a new run.
-3. **Every** evaluated candidate is a **trial**, appended to `signals/search/<run_id>/trials.parquet`
-   (append-only: trial id, spec hash, DEV metrics, and the monthly series F1/F2 need). N = its row
+3. **Every** evaluated candidate is a **trial**, appended to the run's trial ledger
+   `data/research/factory/<run_id>/trials.parquet` (append-only: trial id, spec hash, DEV metrics,
+   and the monthly series F1/F2 need, in the `series*.parquet` files beside it). N = its row
    count. N, DSR and PBO travel with every number the run shows (see *trial amnesia*, §10).
+   The ledger lives in the shared data root, beside the run's engine outputs, so every checkout
+   sees the same N; only the declaration (`config.json`) and the VAL record (`val_looks.json`)
+   are committed under `signals/search/<run_id>/`. *(Relocated 2026-10-03: a ledger in
+   `signals/search/` is gitignored and existed only in the checkout that ran it. The factory
+   still reads that old location as a fallback, carries it forward append-only on the next
+   write, and refuses to read a copy that would lose trials;
+   `python -m heimdall.research.factory migrate <run_id> --from <dir>` copies an old ledger
+   across and verifies N.)*
 4. Search reads **DEV rows only**. VAL is one look per finalist (≤ 5 per run, F4). The OOS vault
    stays `certify`'s alone (§4).
 
