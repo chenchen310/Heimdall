@@ -2712,7 +2712,28 @@ DoD: tests and quality gates green; a 5-name real-data smoke showing non-NaN
 **Don't:** bring back the per-issuer submissions crawl for history (the bulk path owns history);
 change the insider feature math; rebuild the panel (that is 18.20).
 
-### 18.20 `panel_us` v4 rebuild (carries 17.11 + 18.19)  `[ ]`
+### 18.20 `panel_us` v4 rebuild (carries 17.11 + 18.19)  `[x]`
+
+> **Outcome (2026-10-02, RESEARCH_LOG 025).**
+> - **Procedure:** governance passed (no US `certified` or `incubating` strategy), v3 was archived
+>   as `panel_us.v3.parquet`, and the panel was rebuilt with the Form 4 bulk data + 18.19 delta,
+>   FINRA short interest, quarterly fundamentals, sector and benchmark. Result: **509,954 rows,
+>   201 months (2010-01 → 2026-09-30), 0 dropped**.
+> - **Reproduction (a) and (b) are exact:**
+>   - `{fcf_yield}` DEV +0.0220 / t 2.84 / α +2.99% t 3.92; VAL +0.0576 / α +7.90%;
+>   - us-f1 t148 DEV IR 1.4464, α +4.6525%.
+> - **Check (c):** the 200 shared months have identical row keys, `ret_12_1` and eligibility.
+>   `fwd_6m_rel` only gained 3,322 newly completed labels. **Two deviations are explained and
+>   disclosed**, both in 2026 rows, with v4 correct in each case:
+>   - MSFT `fcf_yield` for 2026-07/08: its EDGAR cache was refreshed by the 18.16 smoke after v3
+>     was built.
+>   - GOAI insider for 2026-01 → 06: a 2026 listing whose first Form 4 arrived through the delta,
+>     so NaN became a true 0.
+>
+>   Strictly, the card's "insider unchanged on or before 2026-06-30" assert fails on these 6
+>   cells.
+> - **New columns:** `short_ratio` from 2018-01 (DEV 2018–19 92.8%, 2023+ 98.2%) and
+>   `short_ratio_delta_63d` from 2018-04; insider features now cover 2026-07 → 09.
 
 **Goal:** one rebuild that carries 17.11's short interest and 18.19's insider tail, extended to
 the latest month. This is the panel 18.23 runs on.

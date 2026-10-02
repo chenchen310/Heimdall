@@ -1217,3 +1217,64 @@ contributions sum to the book's G3 α.
   - Inside a factory run, each run is its own family (§12.3). A composite evaluated by hand outside
     the factory belongs to a new `us-composite-…` family (the 13.6 rule).
 - OOS attempts: 0. Cumulative US vault touches: still 2.
+
+## 025 — panel_us v4 rebuild (2026-10-02, model: Claude Code)
+
+- Card: ROADMAP 18.20. Not a research card: no spec registered, 0 OOS. The 17.7 / 18.14
+  procedure verbatim: governance guard, archive, rebuild, reproduction gates, coverage table.
+- **Governance (printed):** no US signal is `certified`, so the in-place rebuild was sanctioned.
+  No US strategy is `incubating`, so no track record needed recomputing. **Archive:** the
+  2026-09-30 panel was copied to `panel_us.v3.parquet` (+ meta) before being overwritten.
+- **Build:** `python -m heimdall.research.build_dataset --market us --start 2010-01 --end
+  2026-09-30 --rebuild`. Streams:
+  - **Form 4:** bulk data sets plus the **18.19 delta** (coverage now through 2026-09-30).
+  - **FINRA short interest (17.11):** new in this panel.
+  - **Also included:** quarterly fundamentals, the static sector map, and the benchmark.
+
+  EDGAR used `max_age_days=None` (research builds never refresh mid-build). Universe: VTI current
+  constituents (3,436; `current_universe (optimistic)`). 2 symbols were skipped (SchemaError, the
+  same as v2/v3). **509,954 rows, 201 months, 2010-01-29 → 2026-09-30, 0 dropped months.**
+- **Reproduction gates:**
+  - (a) `{fcf_yield}`, **exact**:
+
+    | window | v4 IC (t) | 015 / 020 | v4 selection alpha (NW-t) | 015 / 020 |
+    | --- | --- | --- | --- | --- |
+    | dev 2010–2019 | +0.0220 (+2.84) | +0.0220 (+2.84) | +2.99% (+3.92) | +2.99% (+3.92) |
+    | val 2020–2022 | +0.0576 (+2.71) | +0.0576 (+2.71) | +7.90% (+2.98) | +7.90% (+2.98) |
+
+  - (b) us-f1 trial 148 (`−ps +fcf_yield`, all eligible, top 20, EW; canonical hash checked
+    against the ledger), **exact**. DEV objective IR **1.4464** and α **+4.6525%** (NW-t 5.05)
+    match entry 022 (1.45 / +4.65%).
+  - (c) The **200 shared months** have **identical row keys** (506,525). Values:
+    - `ret_12_1` and `eligible`: identical.
+    - `fwd_6m_rel`: identical wherever both panels have it. 3,322 labels went from NaN to a
+      value, because the extra 2026-09-30 bar completed six-month windows.
+    - **Two explained deviations, both in 2026 rows (the vault period; DEV and VAL are
+      untouched), and in both cases v4 is the correct one:**
+      1. **`fcf_yield`, MSFT only (2026-07-31, 2026-08-31).** MSFT's EDGAR `companyfacts` cache
+         was refreshed at 2026-09-30 23:59 by the 18.16 live-snapshot smoke, after v3 was built
+         (2026-09-30 12:35). v4 therefore sees the FY2026 10-K filed 2026-07-29, while v3 used a
+         stale cache. Point-in-time: the filing is dated before both rows.
+      2. **Insider features on rows on or before 2026-06-30: GOAI only (6 rows, 2026-01 →
+         06).** GOAI is a 2026 listing with no Form 4 in the bulk data sets, so v3 had an empty
+         stream and NaN by convention. Its first Form 4s were filed 2026-09-21 → 28 and arrived
+         through the 18.19 delta. The stream is now non-empty, so those rows read 0.0 ("no
+         trades"), which is true because the bulk data covers those dates. Every other symbol's
+         insider value on or before 2026-06-30 is unchanged.
+
+    The card asked to *assert* "insider unchanged on or before 2026-06-30". Strictly that fails
+    on these 6 GOAI rows, and it is disclosed here, not hidden.
+- **New columns** (eligible rows):
+
+  | column | first value | DEV 2018–19 | whole DEV | 2023+ |
+  | --- | --- | --- | --- | --- |
+  | `short_ratio` | 2018-01-31 | 92.8% | 23.4% | 98.2% |
+  | `short_ratio_delta_63d` | 2018-04-30 | 81.2% | 20.5% | 97.9% |
+
+  - `short_ratio` DEV 2018–19 quantiles: 10% 1.87, median 4.29, 90% 11.99 days to cover.
+  - The FINRA history starts 2017-12-29 and each cycle is used 10 weekdays after settlement
+    (17.11), hence the first value in January 2018. Both features stay out of the 18.23 pool by
+    the 17.11 user decision.
+  - Insider features now cover the 2026-07 → 09 months (previously NaN): `insider_net_buy_90d`
+    89%, `insider_cluster_buy` 99.7%.
+- Registry status change: none. OOS attempts spent: 0. Cumulative US vault touches: still 2.
