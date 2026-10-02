@@ -10,7 +10,7 @@ certified strategy links to Today's Picks instead (no tier leakage, playbook §1
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
 
@@ -32,6 +32,28 @@ class RunInfo:
     n_trials: int
     val_spent: bool  # promote() has run — the run's VAL budget is closed
     config_path: Path
+    #: Ledger files this run must have but this checkout can't see (see ``missing_ledger``).
+    missing: list[Path] = field(default_factory=list)
+
+
+def missing_ledger(run_id: str) -> list[Path]:
+    """The trial-ledger files a run that has evidently **run** is missing on this disk.
+
+    The ledger (``trials.parquet`` + the per-month series) is gitignored, so a run executed in
+    another checkout leaves this one with its config and ``val_looks.json`` but no trials. A
+    run whose VAL look was spent, or whose engine outputs exist, cannot have zero trials — so
+    reporting "N = 0" there would misstate N, the number every factory claim is judged by.
+    A declared run that simply hasn't started returns ``[]``.
+    """
+    ran = factory.val_looks_path(run_id).exists() or any(
+        factory.engine_dir(run_id).glob("engine_*.parquet")
+    )
+    if not ran:
+        return []
+    paths = [factory.ledger_path(run_id)] + [
+        factory.series_path(run_id, kind=k) for k in factory.SERIES_KINDS
+    ]
+    return [p for p in paths if not p.exists()]
 
 
 def list_runs() -> list[RunInfo]:
@@ -43,7 +65,15 @@ def list_runs() -> list[RunInfo]:
     for cfg in sorted(base.glob("*/config.json"), key=lambda p: p.stat().st_mtime, reverse=True):
         run_id = cfg.parent.name
         trials = factory.load_trials(run_id)
-        out.append(RunInfo(run_id, len(trials), factory.val_looks_path(run_id).exists(), cfg))
+        out.append(
+            RunInfo(
+                run_id,
+                len(trials),
+                factory.val_looks_path(run_id).exists(),
+                cfg,
+                missing_ledger(run_id),
+            )
+        )
     return out
 
 

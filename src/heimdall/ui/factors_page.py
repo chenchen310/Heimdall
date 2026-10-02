@@ -83,9 +83,19 @@ def _ranking_tab(region: str) -> None:
     st.caption(t("Composite of value / quality / momentum / growth, each scored 0–100."))
     weights = _weights("rank")
     scored = factor_scores(snap, weights).sort_values("composite_score", ascending=False)
+    n_active = sum(1 for v in weights.values() if v > 0)
+    unscored = int(scored["composite_score"].isna().sum())
+    st.caption(
+        t(
+            "A composite needs at least 2 of the weighted factors; {n} stocks lack the data "
+            "and are listed last without one. “Factors used” shows how many of the {k} each score "
+            "is built from."
+        ).format(n=unscored, k=n_active)
+    )
     cols = [
         "symbol",
         "composite_score",
+        "factors_covered",
         *[f"{f}_score" for f in FACTOR_NAMES],
         "pe",
         "roe",
@@ -100,7 +110,10 @@ def _ranking_tab(region: str) -> None:
             max_value=100,
             format="%d",
             help=_glossary.help("composite_score"),
-        )
+        ),
+        "factors_covered": st.column_config.NumberColumn(
+            t("Factors used"), format=f"%d/{n_active}", help=t("Factors this score is built from")
+        ),
     }
     for col in show:
         if col in colcfg:

@@ -22,6 +22,9 @@ FACTORS: dict[str, list[tuple[str, int]]] = {
 }
 FACTOR_NAMES: list[str] = list(FACTORS)
 DEFAULT_WEIGHTS: dict[str, float] = {"value": 1.0, "quality": 1.0, "momentum": 1.0, "growth": 1.0}
+#: A composite needs at least this many of its (positively weighted) factors to exist. Without
+#: it, a price-only name scored on momentum alone could top a "4-factor" ranking at 100.
+MIN_FACTORS = 2
 
 
 def _zscore(s: pd.Series) -> pd.Series:
@@ -47,10 +50,16 @@ def _factor_z(cross: pd.DataFrame, inputs: list[tuple[str, int]]) -> pd.Series:
 def factor_scores(
     cross_section: pd.DataFrame, weights: dict[str, float] | None = None
 ) -> pd.DataFrame:
-    """Add ``{factor}_score`` (0–100) and ``composite_score`` to one cross-section.
+    """Add ``{factor}_score`` (0–100), ``composite_score`` and ``factors_covered``.
 
     Normalization is *within this cross-section* (one date's universe), so call it
     per rebalance date for a panel. Returns a copy.
+
+    The composite is the weighted mean ``Σ wᵢ·zᵢ / Σ wᵢ`` over the factors a row actually
+    has — a 0-weight factor neither counts nor dilutes. A row with fewer than
+    :data:`MIN_FACTORS` of the weighted factors (or all of them, if fewer are weighted)
+    gets no composite at all: missing data excludes, it never ranks first by default.
+    ``factors_covered`` is that count, so a ranking can show how complete each score is.
     """
     w = weights or DEFAULT_WEIGHTS
     out = cross_section.copy()
@@ -61,7 +70,18 @@ def factor_scores(
         factor_z[name] = z
         out[f"{name}_score"] = _percentile_0_100(z)
 
-    weighted = [w.get(name, 0.0) * z for name, z in factor_z.items()]
-    composite_z = pd.concat(weighted, axis=1).mean(axis=1, skipna=True)
+    active = [name for name in FACTOR_NAMES if w.get(name, 0.0) > 0]
+    if not active:
+        out["factors_covered"] = 0
+        out["composite_score"] = float("nan")
+        return out
+    zs = pd.concat([factor_z[name] for name in active], axis=1, keys=active)
+    weights_row = pd.Series({name: w[name] for name in active})
+    present = zs.notna()
+    covered = present.sum(axis=1)
+    weight_sum = present.mul(weights_row, axis=1).sum(axis=1)
+    composite_z = zs.mul(weights_row, axis=1).sum(axis=1, min_count=1) / weight_sum
+    composite_z[covered < min(MIN_FACTORS, len(active))] = float("nan")
+    out["factors_covered"] = covered.astype(int)
     out["composite_score"] = _percentile_0_100(composite_z)
     return out

@@ -41,7 +41,9 @@ _SCORE_FIELDS: frozenset[str] = frozenset({f"{name}_score" for name in FACTOR_NA
 
 _PRESETS: dict[str, list[dict[str, object]]] = {
     "Cheap & profitable": [
-        {"field": "pe", "op": "<", "value": 25.0},
+        # A floor, not just "< 25": a P/E under ~5× is almost always a data error (EPS in the
+        # wrong unit, a one-off gain), and sorted cheapest-first those rows topped the list.
+        {"field": "pe", "op": "between", "value": [5.0, 25.0]},
         {"field": "roe", "op": ">", "value": 0.15},
         {"field": "net_margin", "op": ">", "value": 0.10},
     ],

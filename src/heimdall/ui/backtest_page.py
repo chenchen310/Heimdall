@@ -13,7 +13,7 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from heimdall.backtest.costs import Costs
-from heimdall.backtest.engine import run_backtest
+from heimdall.backtest.engine import run_backtest, run_buy_and_hold
 from heimdall.backtest.report import (
     drawdown_series,
     equity_curve,
@@ -67,6 +67,12 @@ def _frange(p: Param, lo: float, hi: float, step: float) -> list[float]:
 
 def render() -> None:
     st.header(t("🧪 Backtest"))
+    st.caption(
+        t(
+            "A single-stock sandbox, outside certification: test an entry/exit rule on one "
+            "stock's history and compare it with simply holding that stock."
+        )
+    )
     c1, c2, c3 = st.columns([1, 1, 1])
     symbol = c1.text_input(t("Symbol (TICKER.MARKET)"), "AAPL.US")
     years = c2.slider(t("Years of history"), 1, 15, 8)
@@ -101,19 +107,45 @@ def render() -> None:
         return
     pf = run_backtest(ohlcv, entries, exits, costs=costs)
     m = summary_metrics(pf)
+    # The baseline: the same stock bought once and held, through the same engine and costs.
+    # A rule with a positive return can still be worse than doing nothing clever at all.
+    bh = run_buy_and_hold(ohlcv, costs=costs)
+    b = summary_metrics(bh)
 
     # --- headline metrics ---------------------------------------------------
+    vs = t("vs buy & hold")
     cols = st.columns(6)
-    cols[0].metric("Total return", f"{m['total_return']:.1%}", help=_glossary.help("total_return"))
-    cols[1].metric("CAGR", f"{m['cagr']:.1%}", help=_glossary.help("cagr"))
-    cols[2].metric("Sharpe", f"{m['sharpe']:.2f}", help=_glossary.help("sharpe"))
-    cols[3].metric("Max drawdown", f"{m['max_drawdown']:.1%}", help=_glossary.help("max_drawdown"))
+    cols[0].metric(
+        "Total return",
+        f"{m['total_return']:.1%}",
+        f"{m['total_return'] - b['total_return']:+.1%} {vs}",
+        help=_glossary.help("total_return"),
+    )
+    cols[1].metric(
+        "CAGR",
+        f"{m['cagr']:.1%}",
+        f"{m['cagr'] - b['cagr']:+.1%} {vs}",
+        help=_glossary.help("cagr"),
+    )
+    cols[2].metric(
+        "Sharpe",
+        f"{m['sharpe']:.2f}",
+        f"{m['sharpe'] - b['sharpe']:+.2f} {vs}",
+        help=_glossary.help("sharpe"),
+    )
+    cols[3].metric(
+        "Max drawdown",
+        f"{m['max_drawdown']:.1%}",
+        f"{m['max_drawdown'] - b['max_drawdown']:+.1%} {vs}",  # less negative = better = green
+        help=_glossary.help("max_drawdown"),
+    )
     cols[4].metric("Win rate", f"{m['win_rate']:.0%}", help=_glossary.help("win_rate"))
     cols[5].metric("Trades", f"{int(m['n_trades'])}", help=_glossary.help("n_trades"))
+    _verdict(symbol, m, b)
     st.caption(t("Costs and next-bar-open fills applied — treat as an optimistic upper bound."))
 
     # --- equity + drawdown --------------------------------------------------
-    eq, dd = equity_curve(pf), drawdown_series(pf)
+    eq, dd, eq_bh = equity_curve(pf), drawdown_series(pf), equity_curve(bh)
     fig = make_subplots(
         rows=2,
         cols=1,
@@ -122,18 +154,59 @@ def render() -> None:
         vertical_spacing=0.04,
         subplot_titles=("Growth of $1", "Drawdown"),
     )
-    fig.add_trace(go.Scatter(x=eq.index, y=eq, name="equity", line={"color": "#2962ff"}), 1, 1)
+    fig.add_trace(go.Scatter(x=eq.index, y=eq, name=t("Strategy"), line={"color": "#2962ff"}), 1, 1)
     fig.add_trace(
-        go.Scatter(x=dd.index, y=dd, name="drawdown", fill="tozeroy", line={"color": "#ef5350"}),
+        go.Scatter(
+            x=eq_bh.index,
+            y=eq_bh,
+            name=t("Buy & hold"),
+            line={"color": "#9e9e9e", "dash": "dot"},
+        ),
+        1,
+        1,
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=dd.index,
+            y=dd,
+            name="drawdown",
+            fill="tozeroy",
+            line={"color": "#ef5350"},
+            showlegend=False,
+        ),
         2,
         1,
     )
-    fig.update_layout(height=460, showlegend=False, margin={"l": 0, "r": 0, "t": 30, "b": 0})
+    fig.update_layout(
+        height=460,
+        legend={"orientation": "h", "y": 1.08, "x": 0},
+        margin={"l": 0, "r": 0, "t": 30, "b": 0},
+    )
     st.plotly_chart(fig, width="stretch")
 
     _trade_setup_panel(ohlcv)
     _sweep_panel(ohlcv, strat_key, strat, params, costs)
     _tear_sheet_download(pf, symbol, strat.label)
+
+
+def _verdict(symbol: str, m: dict[str, float], b: dict[str, float]) -> None:
+    """One plain sentence answering "was this rule worth it?" against buy-and-hold."""
+    fmt = {"s": f"{m['cagr']:.1%}", "b": f"{b['cagr']:.1%}", "symbol": symbol}
+    if m["cagr"] < b["cagr"]:
+        st.warning(
+            t(
+                "This rule trailed simply holding {symbol} — {s} vs {b} a year. Over this "
+                "window it added no value."
+            ).format(**fmt)
+        )
+    else:
+        st.info(
+            t(
+                "This rule beat simply holding {symbol} — {s} vs {b} a year — on this one "
+                "in-sample window. Check it holds across other windows and stocks before "
+                "trusting it."
+            ).format(**fmt)
+        )
 
 
 def _trade_setup_panel(ohlcv: object) -> None:

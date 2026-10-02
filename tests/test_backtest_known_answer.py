@@ -60,3 +60,25 @@ def test_costs_reduce_performance() -> None:
     fees = costed.trades.records_readable
     assert (fees["Entry Fees"] + fees["Exit Fees"]).sum() > 0
     assert zero.trades.records_readable["Entry Fees"].sum() == pytest.approx(0.0)
+
+
+def test_buy_and_hold_fills_at_second_bar_open_and_never_exits() -> None:
+    """The Backtest page's baseline: same next-open convention and costs as any strategy.
+
+    Bought at bar 1's open (9.5), held to the last adjusted close (10.0) — by hand,
+    10.0 / 9.5 − 1 before costs; costs make it strictly worse.
+    """
+    from heimdall.backtest.engine import run_buy_and_hold
+
+    ohlcv, _, _ = _fixture()
+    pf = run_buy_and_hold(ohlcv, costs=ZERO_COSTS)
+    trade = pf.trades.records_readable.iloc[0]
+    assert len(pf.trades.records_readable) == 1
+    assert pd.Timestamp(trade["Entry Timestamp"]).date() == date(2024, 1, 2)
+    assert trade["Avg Entry Price"] == pytest.approx(9.5)
+    assert trade["Status"] == "Open"  # never sold
+    total = float((1 + pf.returns()).prod()) - 1
+    assert total == pytest.approx(10.0 / 9.5 - 1)
+
+    costed = float((1 + run_buy_and_hold(ohlcv, costs=DEFAULT_COSTS).returns()).prod()) - 1
+    assert costed < total

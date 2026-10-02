@@ -1430,3 +1430,61 @@ def test_chips_page_renders_without_fetching(
     from heimdall.ui.i18n import _ZH
 
     assert "台股籌碼" in _ZH.values()  # zh strings present
+
+
+def test_screener_cheap_preset_drops_implausible_pe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A P/E of 0.18× is a data error, not a bargain — sorted cheapest-first, such rows
+    used to fill the top of the default "Cheap & profitable" preset."""
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    pd.DataFrame(
+        {
+            "symbol": ["BAD.US", "OK.US"],
+            "as_of": [pd.Timestamp("2024-01-01")] * 2,
+            "pe": [0.18, 12.0],
+            "roe": [0.30, 0.30],
+            "net_margin": [0.20, 0.20],
+        }
+    ).to_parquet(tmp_path / "snapshot.parquet")
+    st.cache_data.clear()
+
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Screener")
+    assert not at.exception
+    results = at.dataframe[-1].value
+    assert results["symbol"].tolist() == ["OK.US"]
+
+
+def test_backtest_page_compares_with_buy_and_hold(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without a baseline, AAPL's SMA crossover read as +190% / 14% CAGR — while simply
+    holding it returned +527% / 25.8% over the same 8 years. The page must say which won."""
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    st.cache_data.clear()
+    dates = pd.bdate_range(end="2024-06-28", periods=600)
+    wave = 100 + 0.1 * np.arange(600) + 8 * np.sin(np.arange(600) / 15)  # rising, choppy
+
+    def _ohlcv(symbol: str, start: object, end: object) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                "date": dates,
+                "open": wave,
+                "high": wave + 1,
+                "low": wave - 1,
+                "close": wave,
+                "adj_close": wave,
+                "volume": 1e6,
+            }
+        )
+
+    monkeypatch.setattr("heimdall.ui.backtest_page.get_ohlcv", _ohlcv)
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    _nav(at, "Backtest")
+    assert not at.exception
+    assert any("vs buy & hold" in str(m.delta) for m in at.metric)
+    verdicts = [w.value for w in at.warning] + [i.value for i in at.info]
+    assert any("simply holding AAPL.US" in v for v in verdicts)
