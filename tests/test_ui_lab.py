@@ -73,7 +73,7 @@ def _fixture_run(tmp_path: Path) -> None:
         cfg, _panel(n_syms=40, end="2013-12-31"), log_entry="031", log_path=log, root=tmp_path
     )
     d = factory.engine_dir("lab1", tmp_path)
-    d.mkdir(parents=True)
+    d.mkdir(parents=True, exist_ok=True)  # the run's ledger already lives here
     days = pd.bdate_range("2011-01-03", "2013-12-31")
     rng = np.random.default_rng(0)
     rets = pd.DataFrame(
@@ -158,12 +158,13 @@ def test_lab_run_with_missing_ledger_never_reports_zero_trials(
     N is what every factory number is judged against; it must never be misstated."""
     _setup(tmp_path, monkeypatch)
     _fixture_run(tmp_path)
-    run = factory.run_dir("lab1", tmp_path)
-    for name in ["trials.parquet", *factory.SERIES_KINDS.values()]:
-        (run / name).unlink(missing_ok=True)
+    for name in factory.LEDGER_FILES:  # gone from both the shared and the legacy location
+        (factory.ledger_dir("lab1", tmp_path) / name).unlink(missing_ok=True)
+        (factory.run_dir("lab1", tmp_path) / name).unlink(missing_ok=True)
 
     at = _open_lab(tmp_path)
     assert not at.exception  # the leaderboard no longer KeyErrors on a half-present ledger
     assert not any("N = 0" in w for w in _warnings(at))
     assert any("trial ledger missing" in w for w in _warnings(at))
     assert any("trials.parquet" in e.value for e in at.error)
+    assert any("factory migrate lab1" in c.value for c in at.code)  # the fix, ready to run

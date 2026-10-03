@@ -35,8 +35,10 @@ import math
 import os
 import re
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import numpy.typing as npt
@@ -567,10 +569,6 @@ def run_dir(run_id: str, root: Path | None = None) -> Path:
     return _signals_root(root) / "signals" / "search" / run_id
 
 
-def ledger_path(run_id: str, root: Path | None = None) -> Path:
-    return run_dir(run_id, root) / "trials.parquet"
-
-
 #: Per-month series kept for every trial (months × trial_id), so any window can be re-scored
 #: without re-evaluating: the F1 net alpha, the G1 monthly IC, the G3 6m cohort alpha.
 SERIES_KINDS: dict[str, str] = {
@@ -578,20 +576,99 @@ SERIES_KINDS: dict[str, str] = {
     "ic": "series_ic.parquet",
     "alpha6": "series_alpha6.parquet",
 }
+#: Every file of a run's trial ledger — the record N is counted from.
+LEDGER_FILES: tuple[str, ...] = ("trials.parquet", *SERIES_KINDS.values())
 
 
-def series_path(run_id: str, root: Path | None = None, kind: str = "net") -> Path:
+class LedgerConflict(RuntimeError):
+    """Two copies of one run's ledger disagree — never silently prefer one (N would change)."""
+
+
+# Where the ledger lives (2026-10-03): under the shared data root, beside the run's engine
+# outputs — ``data/research/factory/<run_id>/``. It used to sit in ``signals/search/<run_id>/``
+# with the committed ``config.json``/``val_looks.json``, but as gitignored parquet it then
+# existed only in the checkout that ran the search (us-f1's 2,082 trials were invisible to the
+# main checkout). The declaration files stay in ``signals/search/``; the panel a search reads
+# already comes from the data root, so any session able to run a search shares this location.
+# The old location is still *read* (``legacy_*``) so nothing breaks before ``migrate``; writes
+# go only to the new one, and two disagreeing copies raise :class:`LedgerConflict`.
+
+
+def ledger_dir(run_id: str, data: Path | None = None) -> Path:
+    return (data if data is not None else data_root()) / "research" / "factory" / run_id
+
+
+def ledger_path(run_id: str, root: Path | None = None, *, data: Path | None = None) -> Path:
+    """Where the trial table is written (``root`` — the signals root — only matters for the
+    read-only legacy fallback, see :func:`legacy_ledger_path`)."""
+    return ledger_dir(run_id, data) / "trials.parquet"
+
+
+def series_path(
+    run_id: str, root: Path | None = None, kind: str = "net", *, data: Path | None = None
+) -> Path:
+    return ledger_dir(run_id, data) / SERIES_KINDS[kind]
+
+
+def legacy_ledger_path(run_id: str, root: Path | None = None) -> Path:
+    return run_dir(run_id, root) / "trials.parquet"
+
+
+def legacy_series_path(run_id: str, root: Path | None = None, kind: str = "net") -> Path:
     return run_dir(run_id, root) / SERIES_KINDS[kind]
 
 
-def load_trials(run_id: str, root: Path | None = None) -> pd.DataFrame:
-    path = ledger_path(run_id, root)
-    return pd.read_parquet(path) if path.exists() else pd.DataFrame()
+def _trial_ids(path: Path) -> set[int]:
+    return {int(t) for t in pd.read_parquet(path, columns=["trial_id"])["trial_id"]}
 
 
-def load_series(run_id: str, root: Path | None = None, kind: str = "net") -> pd.DataFrame:
-    path = series_path(run_id, root, kind)
-    return pd.read_parquet(path) if path.exists() else pd.DataFrame()
+def _series_columns(path: Path) -> set[str]:
+    return {str(c) for c in pd.read_parquet(path).columns}  # one column per trial id
+
+
+def _resolve(new: Path, legacy: Path, key: Callable[[Path], set[Any]]) -> Path | None:
+    """The copy to read: the new location, else the legacy one.
+
+    With both present, the new copy must contain every trial of the legacy one — append-only
+    carry-forward makes it a superset. A legacy copy holding trials the new one lacks means the
+    new copy is stale or partial, and reading it would silently shrink N: that raises.
+    """
+    if new.exists() and legacy.exists() and not key(legacy) <= key(new):
+        raise LedgerConflict(
+            f"{legacy} holds trials missing from {new} — reconcile the two copies by hand "
+            "before reading or appending (never let N shrink)"
+        )
+    if new.exists():
+        return new
+    return legacy if legacy.exists() else None
+
+
+def load_trials(run_id: str, root: Path | None = None, *, data: Path | None = None) -> pd.DataFrame:
+    path = _resolve(ledger_path(run_id, data=data), legacy_ledger_path(run_id, root), _trial_ids)
+    return pd.read_parquet(path) if path is not None else pd.DataFrame()
+
+
+def load_series(
+    run_id: str, root: Path | None = None, kind: str = "net", *, data: Path | None = None
+) -> pd.DataFrame:
+    path = _resolve(
+        series_path(run_id, kind=kind, data=data),
+        legacy_series_path(run_id, root, kind),
+        _series_columns,
+    )
+    return pd.read_parquet(path) if path is not None else pd.DataFrame()
+
+
+def ledger_files_missing(
+    run_id: str, root: Path | None = None, *, data: Path | None = None
+) -> list[Path]:
+    """Ledger files present in neither location (reported at the new one)."""
+    out = []
+    for name in LEDGER_FILES:
+        new, legacy = ledger_dir(run_id, data) / name, run_dir(run_id, root) / name
+        if not new.exists() and not legacy.exists():
+            out.append(new)
+    return out
 
 
 def _atomic_parquet(frame: pd.DataFrame, path: Path) -> None:
@@ -607,17 +684,76 @@ def _append(
     series: dict[str, dict[str, list[float]]],
     months: list[pd.Timestamp],
     root: Path | None,
+    data: Path | None = None,
 ) -> None:
-    """Append-only: existing rows are re-written unchanged, new rows go after them."""
-    old = load_trials(run_id, root)
+    """Append-only: existing rows are re-written unchanged, new rows go after them.
+
+    Reads resolve through the legacy location, writes go to the new one — so the first append
+    after the relocation carries every earlier trial across and N never resets.
+    """
+    old = load_trials(run_id, root, data=data)
     new = pd.DataFrame(rows)
     trials = pd.concat([old, new], ignore_index=True) if len(old) else new
-    _atomic_parquet(trials, ledger_path(run_id, root))
+    _atomic_parquet(trials, ledger_path(run_id, data=data))
     for kind in SERIES_KINDS:
-        old_s = load_series(run_id, root, kind)
+        old_s = load_series(run_id, root, kind, data=data)
         s_new = pd.DataFrame(series[kind], index=pd.DatetimeIndex(months, name="month"))
         ser = pd.concat([old_s, s_new], axis=1) if len(old_s) else s_new
-        _atomic_parquet(ser, series_path(run_id, root, kind))
+        _atomic_parquet(ser, series_path(run_id, kind=kind, data=data))
+
+
+@dataclass
+class MigrationReport:
+    run_id: str
+    source: Path
+    dest: Path
+    n_trials: int
+    copied: list[str]
+    already_present: bool
+
+
+def migrate_ledger(run_id: str, source: Path, *, data: Path | None = None) -> MigrationReport:
+    """Copy a run's ledger from ``source`` (a ``signals/search/<run_id>/`` directory of any
+    checkout) to the shared location, then prove N survived.
+
+    Copies, never moves or deletes the source. Every ledger file must be present in
+    ``source``. An existing destination must already equal the source (same trial ids, same
+    series columns) — anything else raises :class:`LedgerConflict` rather than overwrite.
+    After copying, the destination's trial-id set and every series' columns must equal the
+    source's, or the copy is removed and the call raises.
+    """
+    import shutil
+
+    missing = [name for name in LEDGER_FILES if not (source / name).exists()]
+    if missing:
+        raise FileNotFoundError(f"{source} is missing ledger files: {missing}")
+    dest = ledger_dir(run_id, data)
+    src_ids = _trial_ids(source / "trials.parquet")
+    src_cols = {k: _series_columns(source / f) for k, f in SERIES_KINDS.items()}
+
+    def _matches() -> bool:
+        return _trial_ids(dest / "trials.parquet") == src_ids and all(
+            _series_columns(dest / f) == src_cols[k] for k, f in SERIES_KINDS.items()
+        )
+
+    present = [name for name in LEDGER_FILES if (dest / name).exists()]
+    if present:
+        if len(present) == len(LEDGER_FILES) and _matches():
+            return MigrationReport(run_id, source, dest, len(src_ids), [], already_present=True)
+        raise LedgerConflict(
+            f"{dest} already holds ledger files {present} that differ from {source}; "
+            "refusing to overwrite — reconcile by hand"
+        )
+    dest.mkdir(parents=True, exist_ok=True)
+    for name in LEDGER_FILES:
+        tmp = dest / f"{name}.{os.getpid()}.tmp"
+        shutil.copy2(source / name, tmp)
+        os.replace(tmp, dest / name)
+    if not _matches():
+        for name in LEDGER_FILES:
+            (dest / name).unlink(missing_ok=True)
+        raise LedgerConflict(f"copy of {source} → {dest} did not verify; nothing kept")
+    return MigrationReport(run_id, source, dest, len(src_ids), list(LEDGER_FILES), False)
 
 
 def _row(trial_id: int, stage: int, spec: SignalSpec, met: TrialMetrics) -> dict[str, object]:
@@ -652,6 +788,7 @@ def run_search(
     log_entry: str,
     log_path: Path,
     root: Path | None = None,
+    data: Path | None = None,
     batch: int = 50,
     progress: bool = False,
 ) -> pd.DataFrame:
@@ -675,7 +812,9 @@ def run_search(
     dp = prepare(panel, config)
 
     def _evaluate(specs: list[SignalSpec], stage: int) -> None:
-        done = set(load_trials(config.run_id, root).get("spec_hash", pd.Series(dtype=str)))
+        done = set(
+            load_trials(config.run_id, root, data=data).get("spec_hash", pd.Series(dtype=str))
+        )
         todo = [s for s in specs if s.canonical_hash() not in done]
         t0 = time.time()
         for lo in range(0, len(todo), batch):
@@ -688,21 +827,21 @@ def run_search(
                 series["net"][str(tid)] = met.net_alpha
                 series["ic"][str(tid)] = met.ic_by_month
                 series["alpha6"][str(tid)] = met.alpha6_by_month
-            _append(config.run_id, rows, series, dp.months, root)
+            _append(config.run_id, rows, series, dp.months, root, data)
             if progress:
                 n = lo + len(rows)
                 print(f"stage {stage}: {n}/{len(todo)} ({n / max(time.time() - t0, 1e-9):.1f}/s)")
 
     s1 = config.stage1()
     _evaluate(s1, 1)
-    trials = load_trials(config.run_id, root)
+    trials = load_trials(config.run_id, root, data=data)
     s1_rows = trials[trials["stage"] == 1].sort_values(
         "objective", ascending=False, na_position="last"
     )
     by_id = {int(s.name.rsplit("-t", 1)[1]): s for s in s1}
     winners = [by_id[int(t)] for t in s1_rows["trial_id"].head(config.stage2_top_k)]
     _evaluate(config.stage2(winners, first_id=len(s1)), 2)
-    return load_trials(config.run_id, root)
+    return load_trials(config.run_id, root, data=data)
 
 
 # --- the leaderboard -------------------------------------------------------------------
@@ -753,8 +892,9 @@ def leaderboard(run_id: str, root: Path | None = None) -> Leaderboard:
 
 
 def engine_dir(run_id: str, data: Path | None = None) -> Path:
-    """Derived daily backtests (large, regenerable) live under the gitignored data root."""
-    return (data if data is not None else data_root()) / "research" / "factory" / run_id
+    """Derived daily backtests (large, regenerable) live under the gitignored data root —
+    the same directory as the run's trial ledger (:func:`ledger_dir`)."""
+    return ledger_dir(run_id, data)
 
 
 def cache_engine_backtests(
@@ -1078,7 +1218,27 @@ def main(argv: list[str] | None = None) -> int:
     en = sub.add_parser("engine", help="cache DEV daily-engine backtests of the top trials")
     en.add_argument("run_id")
     en.add_argument("--top", type=int, default=10)
+    mg = sub.add_parser(
+        "migrate", help="copy a run's trial ledger into the shared data root (never deletes)"
+    )
+    mg.add_argument("run_id")
+    mg.add_argument(
+        "--from",
+        dest="source",
+        default=None,
+        help="directory holding the ledger (default: this checkout's signals/search/<run_id>)",
+    )
     args = p.parse_args(argv)
+
+    if args.cmd == "migrate":
+        source = Path(args.source) if args.source else run_dir(args.run_id)
+        mig = migrate_ledger(args.run_id, source)
+        if mig.already_present:
+            print(f"{mig.dest} already holds this ledger — N = {mig.n_trials}, nothing copied")
+        else:
+            print(f"copied {len(mig.copied)} files {mig.source} → {mig.dest}")
+            print(f"verified: N = {mig.n_trials} trials before and after; series columns equal")
+        return 0
 
     if args.cmd == "promote":
         cfg = load_config(run_dir(args.run_id) / "config.json")

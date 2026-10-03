@@ -64,12 +64,12 @@ def render() -> None:
     missing = current.missing if current else []
     with tabs[0]:
         _banner(n_trials, ledger_missing=bool(missing))
-        _missing_notice(missing)
+        _missing_notice(run_id, missing)
         _runs_tab(runs)
     with tabs[1]:
         _banner(n_trials, ledger_missing=bool(missing))
         if missing:
-            _missing_notice(missing)
+            _missing_notice(run_id, missing)
         else:
             _leaderboard_tab(run_id)
     with tabs[2]:
@@ -86,19 +86,26 @@ def render() -> None:
         _tech_tab()
 
 
-def _missing_notice(missing: list[Path]) -> None:
+def _missing_notice(run_id: str | None, missing: list[Path]) -> None:
     """The run has evidently run (VAL look spent / engine outputs exist) but its gitignored
-    trial ledger isn't in this checkout — say so instead of showing an empty "0 trials" run."""
+    trial ledger isn't on this disk — say so instead of showing an empty "0 trials" run."""
     if not missing:
         return
     st.error(
         t(
-            "This run has already run, but its trial ledger isn't in this checkout — it was "
-            "probably produced in another worktree (the ledger is gitignored). Copy these files "
-            "here to see the leaderboard:"
+            "This run has already run, but its trial ledger isn't on this disk — it was "
+            "probably produced in another worktree before the ledger moved to the shared data "
+            "folder. Expected:"
         )
         + "\n\n"
         + "\n".join(f"- `{p}`" for p in missing)
+        + "\n\n"
+        + t("Copy it here (the source is never deleted, N is verified):")
+    )
+    st.code(
+        f"uv run python -m heimdall.research.factory migrate {run_id} "
+        "--from <that worktree>/signals/search/" + str(run_id),
+        language="bash",
     )
 
 

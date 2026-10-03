@@ -646,11 +646,14 @@ _ZH: dict[str, str] = {
     "trials": "個試驗",
     "Research results — uncertified": "研究結果・未認證",
     "N unknown — trial ledger missing": "N 未知——試驗紀錄檔遺失",
-    "This run has already run, but its trial ledger isn't in this checkout — it was "
-    "probably produced in another worktree (the ledger is gitignored). Copy these files "
-    "here to see the leaderboard:": (
-        "這個批次已經跑過，但它的試驗紀錄檔不在這個 checkout 裡——多半是在另一個 worktree 產生的"
-        "（紀錄檔不進 git）。把下列檔案複製到這裡，才能看到排行榜："
+    "This run has already run, but its trial ledger isn't on this disk — it was "
+    "probably produced in another worktree before the ledger moved to the shared data "
+    "folder. Expected:": (
+        "這個批次已經跑過，但它的試驗紀錄檔不在這台磁碟上——多半是紀錄檔改放共用資料夾之前，"
+        "在另一個 worktree 產生的。預期位置："
+    ),
+    "Copy it here (the source is never deleted, N is verified):": (
+        "用下列指令複製過來（不會刪除來源，並會核對試驗數 N）："
     ),
     "No snapshot yet — build one on the Build data page.": "尚無快照——請到「建立資料」頁建立。",
     (

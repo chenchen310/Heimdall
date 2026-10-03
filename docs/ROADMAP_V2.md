@@ -1782,6 +1782,7 @@ Steps:
    - **Every** evaluated candidate is a trial, appended to `signals/search/<run_id>/trials.parquet`
      (append-only: trial id, spec hash, DEV metrics, and the monthly series F1/F2 need). N = its row
      count, used by F1 and disclosed wherever the run's results appear.
+     *(2026-10-03: the ledger moved to `data/research/factory/<run_id>/` — playbook §12.2.)*
    - Search reads DEV only; VAL is one look per finalist (≤ 5 per run); the vault stays
      `certify`'s alone, unchanged.
    - Each run is its own family `us-factory-<run_id>`; at most **one** finalist per run may be
@@ -2010,7 +2011,8 @@ DoD: tests + gates green.
 > ineligible rows dropped, the panel's within-month row order kept so tie-breaks match, z-scores
 > precomputed per universe × neutralization × feature with the real `_zscore`/`_sector_zscore`),
 > `evaluate_fast` (numpy G1/G2/G3/G6 + the F1 net-selection-alpha series + a G4-style view),
-> append-only `trials.parquet` + `series.parquet` under `signals/search/<run_id>/` (resumable by
+> append-only `trials.parquet` + `series.parquet` under `signals/search/<run_id>/` (since 2026-10-03
+> under `data/research/factory/<run_id>/`, playbook §12.2) (resumable by
 > spec hash; a different config under the same run id is refused), `leaderboard` (DSR per trial
 > with N = ledger rows and V = cross-trial per-period Sharpe variance; run PBO over S = 16; F1/F3/F5
 > flags; `candidate` = all + run passes F2), `cache_engine_backtests` (18.3 engine, DEV only, into

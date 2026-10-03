@@ -39,8 +39,9 @@ class RunInfo:
 def missing_ledger(run_id: str) -> list[Path]:
     """The trial-ledger files a run that has evidently **run** is missing on this disk.
 
-    The ledger (``trials.parquet`` + the per-month series) is gitignored, so a run executed in
-    another checkout leaves this one with its config and ``val_looks.json`` but no trials. A
+    The ledger (``trials.parquet`` + the per-month series) is gitignored; it now lives in the
+    shared data root, but a run executed before that move left it only in the checkout that ran
+    it (``signals/search/<run_id>/``) — fixable with ``factory migrate --from``. A
     run whose VAL look was spent, or whose engine outputs exist, cannot have zero trials — so
     reporting "N = 0" there would misstate N, the number every factory claim is judged by.
     A declared run that simply hasn't started returns ``[]``.
@@ -50,10 +51,7 @@ def missing_ledger(run_id: str) -> list[Path]:
     )
     if not ran:
         return []
-    paths = [factory.ledger_path(run_id)] + [
-        factory.series_path(run_id, kind=k) for k in factory.SERIES_KINDS
-    ]
-    return [p for p in paths if not p.exists()]
+    return factory.ledger_files_missing(run_id)  # absent from both the new and legacy place
 
 
 def list_runs() -> list[RunInfo]:

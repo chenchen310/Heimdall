@@ -356,3 +356,90 @@ def test_engine_backtests_for_the_lab_are_dev_only(tmp_path: Path) -> None:
         rets = pd.read_parquet(path)
         assert set(rets.columns) == {"strategy", "benchmark", "universe"}
         assert rets.index.max() <= pd.Timestamp(factory.DEV_END)
+
+
+# --- the ledger lives in the shared data root (2026-10-03 relocation) --------------------
+
+
+def _small(tmp_path: Path) -> tuple[factory.SearchConfig, Path, pd.DataFrame]:
+    cfg = _config(
+        universes=[""], neutralize_menu=[""], weighting_menu=[""], exit_rank_multiples=[None]
+    )
+    return cfg, _declare(tmp_path, cfg), _panel(end="2012-12-31")
+
+
+def test_ledger_is_written_to_the_data_root_not_signals_search(tmp_path: Path) -> None:
+    signals, data = tmp_path / "repo", tmp_path / "data"
+    cfg, log, panel = _small(tmp_path)
+    trials = factory.run_search(cfg, panel, log_entry="019", log_path=log, root=signals, data=data)
+    assert factory.ledger_path("t1", data=data).exists()
+    assert factory.ledger_path("t1", data=data).parent == factory.engine_dir("t1", data)
+    for name in factory.LEDGER_FILES:
+        assert (data / "research" / "factory" / "t1" / name).exists()
+        assert not (factory.run_dir("t1", signals) / name).exists()  # nothing in the checkout
+    assert (factory.run_dir("t1", signals) / "config.json").exists()  # the declaration stays
+    assert len(factory.load_trials("t1", signals, data=data)) == len(trials)
+
+
+def test_a_legacy_ledger_is_read_and_carried_across_without_changing_n(tmp_path: Path) -> None:
+    """A ledger written before the move (in signals/search) must stay readable, and resuming
+    the run must carry every old trial to the new location — N never resets."""
+    signals, data = tmp_path / "repo", tmp_path / "data"
+    cfg, log, panel = _small(tmp_path)
+    full = factory.run_search(cfg, panel, log_entry="019", log_path=log, root=signals, data=data)
+    legacy = factory.run_dir("t1", signals)
+    for name in factory.LEDGER_FILES:  # simulate the pre-move layout: ledger only in the checkout
+        (factory.ledger_dir("t1", data) / name).rename(legacy / name)
+    # Drop the last trial from the legacy copy so the resume has one trial left to do.
+    kept = full.iloc[:-1]
+    kept.to_parquet(legacy / "trials.parquet")
+    for name in factory.SERIES_KINDS.values():
+        ser = pd.read_parquet(legacy / name)
+        ser[[str(int(t)) for t in kept["trial_id"]]].to_parquet(legacy / name)
+
+    assert len(factory.load_trials("t1", signals, data=data)) == len(kept)  # legacy fallback
+    again = factory.run_search(cfg, panel, log_entry="019", log_path=log, root=signals, data=data)
+    assert sorted(again["trial_id"]) == sorted(full["trial_id"])  # old trials + the missing one
+    assert factory.ledger_path("t1", data=data).exists()  # written to the new place
+
+
+def test_disagreeing_copies_raise_instead_of_silently_shrinking_n(tmp_path: Path) -> None:
+    signals, data = tmp_path / "repo", tmp_path / "data"
+    cfg, log, panel = _small(tmp_path)
+    full = factory.run_search(cfg, panel, log_entry="019", log_path=log, root=signals, data=data)
+    # A fuller legacy copy beside a partial new one: reading "new" would shrink N.
+    full.to_parquet(factory.legacy_ledger_path("t1", signals))
+    full.iloc[:1].to_parquet(factory.ledger_path("t1", data=data))
+    with pytest.raises(factory.LedgerConflict):
+        factory.load_trials("t1", signals, data=data)
+    # The legitimate state after carry-forward — new ⊇ legacy — reads the new copy.
+    full.to_parquet(factory.ledger_path("t1", data=data))
+    full.iloc[:1].to_parquet(factory.legacy_ledger_path("t1", signals))
+    assert len(factory.load_trials("t1", signals, data=data)) == len(full)
+
+
+def test_migrate_copies_verifies_and_never_deletes_the_source(tmp_path: Path) -> None:
+    signals, data, other = tmp_path / "repo", tmp_path / "data", tmp_path / "other-data"
+    cfg, log, panel = _small(tmp_path)
+    full = factory.run_search(cfg, panel, log_entry="019", log_path=log, root=signals, data=other)
+    source = factory.ledger_dir("t1", other)  # e.g. another worktree's copy
+
+    rep = factory.migrate_ledger("t1", source, data=data)
+    assert rep.n_trials == len(full) and not rep.already_present
+    assert all((source / name).exists() for name in factory.LEDGER_FILES)  # source untouched
+    pd.testing.assert_frame_equal(factory.load_trials("t1", data=data), full)
+
+    again = factory.migrate_ledger("t1", source, data=data)  # idempotent
+    assert again.already_present and again.copied == []
+
+    full.iloc[:1].to_parquet(factory.ledger_path("t1", data=data))  # destination now differs
+    with pytest.raises(factory.LedgerConflict):
+        factory.migrate_ledger("t1", source, data=data)  # refuses to overwrite
+
+
+def test_migrate_refuses_an_incomplete_source(tmp_path: Path) -> None:
+    src = tmp_path / "partial"
+    src.mkdir()
+    pd.DataFrame({"trial_id": [0]}).to_parquet(src / "trials.parquet")  # no series files
+    with pytest.raises(FileNotFoundError, match="missing ledger files"):
+        factory.migrate_ledger("t1", src, data=tmp_path / "data")
