@@ -148,3 +148,22 @@ def test_lab_incubating_tier_is_labeled_and_isolated(
     # Today's Picks must not render it: incubating is not certified.
     at2 = AppTest.from_file(APP).run(timeout=60)
     assert not any("lab1-t00000" in s.value for s in at2.subheader)
+
+
+def test_lab_run_with_missing_ledger_never_reports_zero_trials(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The real-world case: us-f1 ran in another worktree, so this checkout had its config
+    and engine outputs but not the gitignored ledger — and the Lab showed "N = 0 trials".
+    N is what every factory number is judged against; it must never be misstated."""
+    _setup(tmp_path, monkeypatch)
+    _fixture_run(tmp_path)
+    run = factory.run_dir("lab1", tmp_path)
+    for name in ["trials.parquet", *factory.SERIES_KINDS.values()]:
+        (run / name).unlink(missing_ok=True)
+
+    at = _open_lab(tmp_path)
+    assert not at.exception  # the leaderboard no longer KeyErrors on a half-present ledger
+    assert not any("N = 0" in w for w in _warnings(at))
+    assert any("trial ledger missing" in w for w in _warnings(at))
+    assert any("trials.parquet" in e.value for e in at.error)

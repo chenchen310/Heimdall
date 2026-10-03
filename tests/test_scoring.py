@@ -53,3 +53,36 @@ def test_missing_metric_is_tolerated() -> None:
     cross.loc[0, "pe"] = np.nan  # A loses one value input
     out = factor_scores(cross)
     assert out["composite_score"].notna().any()  # no raise; still scores from other inputs
+
+
+def test_single_factor_row_gets_no_composite() -> None:
+    """A price-only name (momentum alone) used to top the 4-factor ranking at 100."""
+    cross = _cross()
+    for col in ["pe", "ps", "fcf_yield", "roe", "net_margin", "gross_margin"]:
+        cross.loc[0, col] = np.nan
+    cross.loc[0, ["debt_to_equity", "revenue_growth_yoy"]] = np.nan  # A: momentum only
+    out = factor_scores(cross).set_index("symbol")
+    assert out.loc["A", "factors_covered"] == 1
+    assert np.isnan(out.loc["A", "composite_score"])
+    assert out.drop(index="A")["composite_score"].notna().all()
+    assert (out.drop(index="A")["factors_covered"] == 4).all()
+
+
+def test_zero_weight_factor_neither_counts_nor_dilutes() -> None:
+    """Momentum alone at weight 1 (others 0) must rank exactly like the momentum score —
+    the old mean over all four columns averaged in three zeros."""
+    weights = {"value": 0.0, "quality": 0.0, "momentum": 1.0, "growth": 0.0}
+    cross = _cross()
+    cross["ret_3m"] = [0.0, 0.3, 0.1, 0.2]  # an order that disagrees with the other factors
+    cross["ret_6m"] = cross["ret_3m"]
+    cross["ret_12m"] = cross["ret_3m"]
+    out = factor_scores(cross, weights)
+    assert out["composite_score"].tolist() == out["momentum_score"].tolist()
+    assert (out["factors_covered"] == 1).all()  # only momentum is weighted, and it's present
+
+
+def test_composite_is_a_weighted_mean() -> None:
+    cross = _cross()
+    a = factor_scores(cross, {"value": 2.0, "quality": 2.0, "momentum": 2.0, "growth": 2.0})
+    b = factor_scores(cross)
+    assert a["composite_score"].tolist() == b["composite_score"].tolist()  # scale-free

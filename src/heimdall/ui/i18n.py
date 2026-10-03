@@ -336,6 +336,30 @@ _ZH: dict[str, str] = {
     # --- backtest ---
     "🧪 Backtest": "🧪 回測",
     "Strategy": "策略",
+    "A single-stock sandbox, outside certification: test an entry/exit rule on one "
+    "stock's history and compare it with simply holding that stock.": (
+        "單一股票的策略沙盒，不在認證範圍內：在一檔股票的歷史上測試進出場規則，並和直接買進持有比較。"
+    ),
+    "vs buy & hold": "相對買進持有",
+    "A composite needs at least 2 of the weighted factors; {n} stocks lack the data "
+    "and are listed last without one. “Factors used” shows how many of the {k} each score "
+    "is built from.": (
+        "綜合分數至少要有 2 個（有權重的）因子；{n} 檔資料不足，沒有綜合分數，排在最後。"
+        "「因子數」顯示每個分數是由 {k} 個因子中的幾個算出來的。"
+    ),
+    "Factors used": "因子數",
+    "Factors this score is built from": "這個分數用到的因子數",
+    "Buy & hold": "買進持有",
+    "This rule trailed simply holding {symbol} — {s} vs {b} a year. Over this "
+    "window it added no value.": (
+        "這個規則輸給直接持有 {symbol}——年化 {s}，買進持有 {b}。在這段期間它沒有加分。"
+    ),
+    "This rule beat simply holding {symbol} — {s} vs {b} a year — on this one "
+    "in-sample window. Check it holds across other windows and stocks before "
+    "trusting it.": (
+        "這個規則在這段樣本內期間贏過直接持有 {symbol}——年化 {s}，買進持有 {b}。"
+        "相信它之前，先確認換一段期間、換其他股票也成立。"
+    ),
     "Parameters": "參數",
     "Commission (bps)": "手續費（bps）",
     "Slippage (bps)": "滑價（bps）",
@@ -621,6 +645,13 @@ _ZH: dict[str, str] = {
     "🧪 Strategy Lab": "🧪 策略實驗室",
     "trials": "個試驗",
     "Research results — uncertified": "研究結果・未認證",
+    "N unknown — trial ledger missing": "N 未知——試驗紀錄檔遺失",
+    "This run has already run, but its trial ledger isn't in this checkout — it was "
+    "probably produced in another worktree (the ledger is gitignored). Copy these files "
+    "here to see the leaderboard:": (
+        "這個批次已經跑過，但它的試驗紀錄檔不在這個 checkout 裡——多半是在另一個 worktree 產生的"
+        "（紀錄檔不進 git）。把下列檔案複製到這裡，才能看到排行榜："
+    ),
     "No snapshot yet — build one on the Build data page.": "尚無快照——請到「建立資料」頁建立。",
     (
         "The Strategy Factory searches, backtests and ranks strategies by itself. Nothing"

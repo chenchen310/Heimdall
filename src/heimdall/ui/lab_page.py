@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -26,9 +27,11 @@ _PROC = "_lab_proc"
 _JOB = "_lab_job"
 
 
-def _banner(n_trials: int | None = None) -> None:
+def _banner(n_trials: int | None = None, *, ledger_missing: bool = False) -> None:
     parts = [t("Research results — uncertified")]
-    if n_trials is not None:
+    if ledger_missing:  # never print "N = 0" for a run that evidently ran (lab.missing_ledger)
+        parts.append(t("N unknown — trial ledger missing"))
+    elif n_trials is not None:
         parts.append(f"N = {n_trials} {t('trials')}")
     parts.append(f"survivorship: {lab.SURVIVORSHIP}")
     st.warning("🧪 " + " · ".join(parts))
@@ -56,18 +59,24 @@ def render() -> None:
     run_id = runs[0].run_id if runs else None
     if runs and len(runs) > 1:
         run_id = st.sidebar.selectbox(t("Factory run"), [r.run_id for r in runs], key="lab_run")
-    n_trials = next((r.n_trials for r in runs if r.run_id == run_id), None)
+    current = next((r for r in runs if r.run_id == run_id), None)
+    n_trials = current.n_trials if current else None
+    missing = current.missing if current else []
     with tabs[0]:
-        _banner(n_trials)
+        _banner(n_trials, ledger_missing=bool(missing))
+        _missing_notice(missing)
         _runs_tab(runs)
     with tabs[1]:
-        _banner(n_trials)
-        _leaderboard_tab(run_id)
+        _banner(n_trials, ledger_missing=bool(missing))
+        if missing:
+            _missing_notice(missing)
+        else:
+            _leaderboard_tab(run_id)
     with tabs[2]:
-        _banner(n_trials)
+        _banner(n_trials, ledger_missing=bool(missing))
         _detail_tab(run_id)
     with tabs[3]:
-        _banner(n_trials)
+        _banner(n_trials, ledger_missing=bool(missing))
         _walkforward_tab(run_id)
     with tabs[4]:
         _banner()
@@ -75,6 +84,22 @@ def render() -> None:
     with tabs[5]:
         _banner()
         _tech_tab()
+
+
+def _missing_notice(missing: list[Path]) -> None:
+    """The run has evidently run (VAL look spent / engine outputs exist) but its gitignored
+    trial ledger isn't in this checkout — say so instead of showing an empty "0 trials" run."""
+    if not missing:
+        return
+    st.error(
+        t(
+            "This run has already run, but its trial ledger isn't in this checkout — it was "
+            "probably produced in another worktree (the ledger is gitignored). Copy these files "
+            "here to see the leaderboard:"
+        )
+        + "\n\n"
+        + "\n".join(f"- `{p}`" for p in missing)
+    )
 
 
 # --- search runs ------------------------------------------------------------------------
@@ -93,7 +118,7 @@ def _runs_tab(runs: list[lab.RunInfo]) -> None:
         pd.DataFrame(
             {
                 t("Run"): [r.run_id for r in runs],
-                t("Trials"): [r.n_trials for r in runs],
+                t("Trials"): [("?" if r.missing else str(r.n_trials)) for r in runs],
                 t("VAL looks spent"): [r.val_spent for r in runs],
             }
         ),

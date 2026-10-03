@@ -57,3 +57,19 @@ def run_backtest(
         init_cash=init_cash,
         freq="1D",
     )
+
+
+def run_buy_and_hold(
+    ohlcv: pd.DataFrame, costs: Costs = DEFAULT_COSTS, init_cash: float = 10_000.0
+) -> vbt.Portfolio:
+    """The baseline every single-stock strategy must beat: buy once and never sell.
+
+    Runs through :func:`run_backtest` with a single entry decision on the first bar, so it
+    fills on the second bar's open with the same costs — identical conventions to the
+    strategy it is compared against, never a frictionless close-to-close shortcut.
+    """
+    idx = pd.DatetimeIndex(ohlcv["date"])
+    entries = pd.Series(False, index=idx)
+    if len(idx):
+        entries.iloc[0] = True
+    return run_backtest(ohlcv, entries, pd.Series(False, index=idx), costs, init_cash)
