@@ -506,3 +506,24 @@ def test_chip_normalizers_empty() -> None:
     assert _merge_chips(
         _normalize_institutional([]), _normalize_shareholding([]), _normalize_margin([]), _TW
     ).empty
+
+
+def test_derived_shares_skip_sign_mismatch_and_tiny_eps() -> None:
+    """5321.TWO: consolidated net income +13.9M but parent EPS −0.28 gave −49.6M "shares",
+    hence a negative market cap and a P/E of −245. Such a year must yield no share count."""
+    stmts = _statements()
+    for row in stmts["income"]:
+        if str(row["date"]).startswith("2024") and row["type"] == "EPS":
+            row["value"] = -0.1  # 2024: net income +50, EPS −0.4 → sign mismatch
+    df = _normalize_fundamentals(stmts, _TW)
+    shares = df[df["metric"] == "shares_outstanding"].set_index("fiscal_end")["value"]
+    assert pd.Timestamp("2024-12-31") not in shares.index  # skipped, not fabricated
+    assert shares[pd.Timestamp("2023-12-31")] == 10  # 40 / 4: the sane year survives
+    assert (shares > 0).all()
+
+    for row in stmts["income"]:
+        if str(row["date"]).startswith("2024") and row["type"] == "EPS":
+            row["value"] = 0.01  # 2024: EPS 0.04 — below the 0.1 rounding floor
+    df = _normalize_fundamentals(stmts, _TW)
+    shares = df[df["metric"] == "shares_outstanding"].set_index("fiscal_end")["value"]
+    assert pd.Timestamp("2024-12-31") not in shares.index

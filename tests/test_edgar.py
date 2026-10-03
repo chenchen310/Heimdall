@@ -106,3 +106,43 @@ def test_normalize_companyfacts_drops_ytd_and_mistagged_duration_facts() -> None
     # The FY-tagged but quarter-length "mirror trap" fact is dropped entirely — not kept as
     # an annual row (wrong span) and not reclassified as a quarter row (wrong bucket).
     assert not (gp["fiscal_end"] == pd.Timestamp("2021-12-31")).any()
+
+
+def test_shares_drop_zero_placeholders_and_fall_back_to_diluted_weighted_average() -> None:
+    """The real HOOD pattern: after its dual-class IPO the plain share tag is 0 (the per-class
+    counts are dimensional, absent from companyfacts) and then stops; only the diluted
+    weighted-average tag continues. A 0 made market cap 0 and P/E 0.00×; a stale tag made
+    HLI's P/E 0.18× (2015 shares × today's price)."""
+    facts: dict[str, Any] = {
+        "facts": {
+            "us-gaap": {
+                "CommonStockSharesOutstanding": {
+                    "units": {
+                        "shares": [
+                            _fact("2020-12-31", 229_031_546, "FY", "2021-03-01"),
+                            _fact("2021-12-31", 0, "FY", "2022-02-01"),
+                        ]
+                    }
+                },
+                "WeightedAverageNumberOfDilutedSharesOutstanding": {
+                    "units": {
+                        "shares": [
+                            _fact(
+                                "2021-12-31", 840_000_000, "FY", "2022-02-01", start="2021-01-01"
+                            ),
+                            _fact(
+                                "2025-12-31", 918_781_846, "FY", "2026-02-01", start="2025-01-01"
+                            ),
+                        ]
+                    }
+                },
+            }
+        }
+    }
+    df = _normalize_companyfacts(facts, Symbol("HOOD", "US"))
+    shares = df[(df["metric"] == "shares_outstanding") & (df["period"] == "annual")]
+    by_end = shares.set_index("fiscal_end")["value"]
+    assert (by_end > 0).all()  # the 0 placeholder never becomes a share count
+    assert by_end[pd.Timestamp("2021-12-31")] == 840_000_000  # fallback fills the 0's year
+    assert by_end[pd.Timestamp("2025-12-31")] == 918_781_846  # and every later year
+    assert by_end[pd.Timestamp("2020-12-31")] == 229_031_546  # the plain tag still wins

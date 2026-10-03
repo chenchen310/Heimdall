@@ -88,6 +88,9 @@ _DATASET: dict[str, str] = {
 # FinMind reports capex as a negative cash outflow; canonical capex is a positive
 # magnitude (EDGAR convention) so ``fcf = cfo - capex`` is consistent everywhere.
 _ABS_METRICS = frozenset({"capex"})
+# Smallest |annual EPS| (TWD, reported to 2 decimals) from which shares = net income / EPS is
+# trusted: below it the rounding alone is a ≥5% error in the share count.
+_MIN_EPS_FOR_SHARES = 0.1
 
 _PRICE_RENAME: dict[str, str] = {
     "max": "high",
@@ -400,10 +403,14 @@ def _normalize_fundamentals(
         for year, by_month in _by_year(series).items():
             if 12 in by_month:
                 rows.append(_annual_row(sym, metric, "balance", year, by_month[12], fetched_at))
-    # Derived shares outstanding = annual net income / annual EPS (par-independent).
+    # Derived shares outstanding = annual net income / annual EPS (par-independent). Only when
+    # the ratio can be a share count: net income is consolidated while EPS is the parent's
+    # share, so near break-even they can disagree in sign (5321.TWO: +13.9M / −0.28 → −49.6M
+    # "shares"), and a 2-decimal EPS below 0.1 carries a ≥5% rounding error. Such a year is
+    # skipped rather than fabricated (canonical-schema: never invent data).
     for year, net_income in annual_income.get("net_income", {}).items():
         eps = annual_income.get("eps_diluted", {}).get(year)
-        if eps:
+        if eps and abs(eps) >= _MIN_EPS_FOR_SHARES and net_income / eps > 0:
             shares = net_income / eps
             rows.append(_annual_row(sym, "shares_outstanding", "balance", year, shares, fetched_at))
 

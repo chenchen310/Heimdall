@@ -607,3 +607,17 @@ def test_resume_keeps_the_old_row_on_error_and_drops_a_symbol_without_prices(
     assert sorted(snap.index) == ["A.US", "BAD.US"]
     days = pd.to_datetime(snap["as_of"]).dt.date
     assert days["A.US"] == date(2024, 4, 1) and days["BAD.US"] == date(2024, 3, 25)
+
+
+@pytest.mark.parametrize("shares", [0.0, -49_582_140.0])
+def test_snapshot_row_non_positive_shares_give_no_market_cap(shares: float) -> None:
+    """A 0 share count made market cap 0 and P/E 0.00× (EDGAR dual-class placeholder); a
+    negative one made P/E −245 (FinMind sign mismatch). Neither may produce a valuation."""
+    fund = _fund_two_years()
+    fund.loc[
+        (fund["metric"] == "shares_outstanding") & (fund["fiscal_end"] == "2023-12-31"), "value"
+    ] = shares
+    m = snapshot_row("X.US", _ohlcv_at(40.0), fund, date(2024, 6, 1))
+    for key in ("market_cap", "pe", "ps", "fcf_yield", "ev"):
+        assert np.isnan(m[key]), key
+    assert m["net_margin"] == pytest.approx(0.10)  # non-valuation metrics are unaffected
