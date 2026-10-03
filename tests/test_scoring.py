@@ -86,3 +86,24 @@ def test_composite_is_a_weighted_mean() -> None:
     a = factor_scores(cross, {"value": 2.0, "quality": 2.0, "momentum": 2.0, "growth": 2.0})
     b = factor_scores(cross)
     assert a["composite_score"].tolist() == b["composite_score"].tolist()  # scale-free
+
+
+def test_negative_multiple_is_not_the_cheapest() -> None:
+    """5321.TWO (P/E −245, P/S −1.2, market cap −3.4e9 from bad share data) ranked #1 on
+    value: "lower is cheaper" read a negative multiple as the ultimate bargain."""
+    cross = _cross()
+    cross["market_cap"] = [1e9, 1e9, 1e9, 1e9]
+    cross.loc[3, ["pe", "ps", "market_cap"]] = [-245.0, -1.2, -3.4e9]  # D: broken share data
+    out = factor_scores(cross).set_index("symbol")
+    assert out.loc["D", "value_score"] != out["value_score"].max()
+    assert np.isnan(out.loc["D", "value_score"])  # pe, ps and fcf_yield all blanked
+    assert out.loc["A", "value_score"] == out["value_score"].max()
+    assert out.loc["D", "pe"] == -245.0  # the raw value is kept for display, only scoring skips it
+
+
+def test_loss_maker_pe_is_missing_not_cheap() -> None:
+    cross = _cross()
+    cross.loc[3, "pe"] = -5.0  # D: a loss-maker's negative P/E (no market_cap column at all)
+    out = factor_scores(cross).set_index("symbol")
+    assert out.loc["A", "value_score"] == out["value_score"].max()
+    assert out.loc["D", "value_score"] == out["value_score"].min()  # still scored on ps/fcf
