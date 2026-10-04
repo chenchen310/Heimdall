@@ -146,6 +146,29 @@ def _sections() -> dict[str, list[str]]:
 
 # Per-page guide, focused on *reading* the indicators. {page: {icon, en, zh}}.
 _PAGES: dict[str, dict[str, str]] = {
+    "Home": {
+        "icon": "🏠",
+        "en": (
+            "Where every visit starts — what needs your attention today, read from live state.\n\n"
+            "- **One card per market** — its certified signals (or that there are none, by "
+            "design), any under review, and whether the snapshot has fresh data for it. When a "
+            "certified signal can't be ranked because the data is missing or stale, the card "
+            "says so and links to **Build data**.\n"
+            "- **Strategy research** — incubating strategies (watch only) and the latest "
+            "factory run's trial count N.\n"
+            "- **I want to…** — a shortcut to the page for each common question.\n"
+            "- The home page ranks nothing itself; rankings live on Today's Picks."
+        ),
+        "zh": (
+            "每次使用的起點——從目前的實際狀態，告訴你今天需要注意什麼。\n\n"
+            "- **每個市場一張卡** — 它的已認證訊號（或刻意沒有）、審查中的訊號，以及快照裡有沒有"
+            "它的最新資料。已認證訊號因為缺資料或資料過期而排不出名單時，卡片會直接說明，並連到"
+            "「**建立資料**」。\n"
+            "- **策略研究** — 孵化中的策略（只供觀察）與最近一次工廠批次的試驗數 N。\n"
+            "- **我想要…** — 常見問題各自對應的頁面捷徑。\n"
+            "- 首頁本身不做任何排名；排名只在「今日候選」。"
+        ),
+    },
     "Build data": {
         "icon": "🗂",
         "en": (

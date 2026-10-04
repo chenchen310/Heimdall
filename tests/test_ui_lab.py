@@ -43,7 +43,12 @@ def _setup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _open_lab(tmp_path: Path) -> AppTest:
     at = AppTest.from_file(APP).run(timeout=60)
-    [b for b in at.sidebar.button if b.label == "Strategy Lab"][0].click().run(timeout=60)
+    from streamlit.util import calc_hash
+
+    from heimdall.ui._nav import PAGE_META
+
+    at._page_hash = calc_hash(PAGE_META["Strategy Lab"][1])  # see test_ui_smoke._nav
+    at.run(timeout=60)
     return at
 
 

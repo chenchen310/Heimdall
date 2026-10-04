@@ -39,8 +39,18 @@ def _force_english(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _nav(at: AppTest, label: str) -> AppTest:
-    """Click a grouped sidebar nav button by its (English) label, then rerun."""
-    [b for b in at.sidebar.button if b.label == label][0].click().run()
+    """Open a page by its (English) key, then rerun.
+
+    ``st.navigation`` keeps the current page in the browser URL; AppTest has no URL, so it
+    keeps the page hash itself (``AppTest.switch_page`` sets it, but only for file pages).
+    Our pages are callables whose hash is ``calc_hash(url_path)`` — pin it the same way, so
+    later widget reruns stay on this page like a reload of ``/<slug>`` would."""
+    from streamlit.util import calc_hash
+
+    from heimdall.ui._nav import PAGE_META
+
+    at._page_hash = calc_hash(PAGE_META[label][1])
+    at.run()
     return at
 
 
@@ -78,7 +88,8 @@ def test_default_language_is_traditional_chinese(
 
     at = AppTest.from_file(APP).run(timeout=60)
     assert not at.exception
-    assert [h.value for h in at.header] == ["🎯 今日候選"]  # the new default landing page
+    assert [h.value for h in at.header] == ["🛡️ Heimdall"]  # Home, the landing page
+    assert any(s.value == "今天" for s in at.subheader)  # translated, not English
     lang_select = [s for s in at.sidebar.selectbox if "Language" in s.label][0]
     assert lang_select.value == "繁體中文"
 
@@ -952,40 +963,38 @@ def test_today_page_shows_drift_banner_for_under_review(
     assert not at.dataframe  # an under-review signal's ranking is withheld
 
 
-def test_sidebar_nav_is_grouped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_nav_groups_pages_by_task_and_every_page_renders(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every page is reachable by its key and renders without an exception; groups follow the
+    user's task (Taiwan pages under their paused group, Help last)."""
+    from heimdall.ui._nav import NAV, PAGE_META
+
     monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
     _write_snapshot(tmp_path)
-    _point_registry_at(tmp_path, monkeypatch)  # isolate the default (Today's Picks) landing page
+    _point_registry_at(tmp_path, monkeypatch)
     st.cache_data.clear()
+    assert list(NAV)[0] == "Start here" and list(NAV)[-1] == "Help"
+    assert NAV["Taiwan (paused)"] == ["TW Chips", "TW Market Flows"]
+    pages = [p for keys in NAV.values() for p in keys]
+    assert sorted(pages) == sorted(PAGE_META)  # one entry each, nothing orphaned
+    assert "Chart" not in pages  # folded into Stock Workbench
+    assert len({slug for _, slug, _ in PAGE_META.values()}) == len(PAGE_META)  # unique URLs
 
     _force_english(monkeypatch)
     at = AppTest.from_file(APP).run(timeout=60)
-    assert not at.exception
-    # Every page is a sidebar button…
-    labels = {b.label for b in at.sidebar.button}
-    assert {
-        "Guide",
-        "Glossary",
-        "Today's Picks",
-        "Stock Workbench",
-        "Build data",
-        "Screener",
-        "Backtest",
-        "Factors",
-        "Macro",
-    } <= labels
-    assert "Chart" not in labels  # folded into Stock Workbench, no longer its own page
-    # …under its group header.
-    headers = " ".join(m.value for m in at.sidebar.markdown)
-    for group in ("Help", "Data", "Stock picking", "Backtest", "Analyst lenses"):
-        assert group in headers
+    # Pages that only fetch on a button press (or render an empty state offline) are safe to
+    # open with no network; the rest have their own focused tests.
+    for page in ["Home", "Today's Picks", "Screener", "Factors", "Strategy Lab", "Build data",
+                 "Guide", "Glossary", "Rotation", "ETF Portfolio", "TW Chips", "TW Market Flows",
+                 "Sector Focus"]:  # fmt: skip
+        _nav(at, page)
+        assert not at.exception, page
 
 
-def test_default_landing_page_is_todays_picks(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The north-star page renders first, with no navigation — the Phase 1 fix for a new
-    user's first paint being a dead-end "no snapshot" warning on the Screener."""
+def test_default_landing_page_is_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Home renders first: it states each market's certified status and links to Today's
+    Picks — never a dead-end first paint (the Phase 1 concern), and no ranking of its own."""
     monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
     _write_snapshot(tmp_path)
     _point_registry_at(tmp_path, monkeypatch)
@@ -994,7 +1003,70 @@ def test_default_landing_page_is_todays_picks(
     _force_english(monkeypatch)
     at = AppTest.from_file(APP).run(timeout=60)
     assert not at.exception
-    assert [h.value for h in at.header] == ["🎯 Today's Picks"]
+    assert [h.value for h in at.header] == ["🛡️ Heimdall"]
+    assert not at.dataframe  # Home ranks nothing
+
+
+def test_trust_badge_heads_each_page(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_snapshot(tmp_path)
+    _point_registry_at(tmp_path, monkeypatch)
+    st.cache_data.clear()
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+
+    def badge() -> str:
+        return str(at.main.caption[0].value)
+
+    _nav(at, "Today's Picks")
+    assert badge().startswith("🟢")
+    _nav(at, "Strategy Lab")
+    assert badge().startswith("🟡")
+    _nav(at, "Screener")
+    assert badge().startswith("⚪") and "not a buy/sell signal" in badge()
+
+
+def test_sidebar_shows_data_status_per_market(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_snapshot(tmp_path)  # US rows only
+    _point_registry_at(tmp_path, monkeypatch)
+    st.cache_data.clear()
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    status = " ".join(c.value for c in at.sidebar.caption)
+    assert "US · 2 symbols" in status
+    assert "Taiwan · no data" in status
+    assert "uv run" not in status  # the old CLI hint is gone
+
+
+def test_home_flags_a_certified_market_without_data(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The landing page must point at what blocks today's ranking — here a certified Taiwan
+    signal over a US-only snapshot — instead of leaving the user to discover it."""
+    monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
+    _write_today_snapshot(tmp_path)  # US rows only
+    _point_registry_at(tmp_path, monkeypatch)
+    _certify_us_signal(tmp_path, name="tw-mom", market="Taiwan")
+    st.cache_data.clear()
+    _force_english(monkeypatch)
+    at = AppTest.from_file(APP).run(timeout=60)
+    assert not at.exception
+    assert [h.value for h in at.header] == ["🛡️ Heimdall"]
+    text = " ".join(m.value for m in at.markdown)
+    assert "Certified signals: tw-mom v1" in text
+    assert "No Taiwan stocks in the snapshot." in text
+    assert any("needs fresh Taiwan data" in w.value for w in at.warning)
+    [b for b in at.button if b.label == "🗂 Build Taiwan data"][0].click().run()
+    assert [h.value for h in at.header] == ["🗂 Data — build snapshot"]  # the link works
+
+
+def test_workbench_overview_trend_reads_as_arrows() -> None:
+    from heimdall.ui.technical_page import trend_arrows
+
+    assert trend_arrows({"short": "sideways", "medium": "up", "long": "down"}) == "↔ / ↑ / ↓"
 
 
 def test_stock_workbench_invalid_symbol_stops_before_any_tab(
@@ -1010,7 +1082,7 @@ def test_stock_workbench_invalid_symbol_stops_before_any_tab(
 
     _force_english(monkeypatch)
     at = AppTest.from_file(APP)
-    at.session_state["page"] = "Stock Workbench"
+    at.session_state["_goto"] = "Stock Workbench"
     at.session_state["wb_symbol"] = "not-a-symbol"
     at.run(timeout=60)
 

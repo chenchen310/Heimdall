@@ -20,6 +20,14 @@ from heimdall.ui._data import get_ohlcv
 from heimdall.ui._personas import ai_report
 from heimdall.ui.i18n import t
 
+_ARROW = {"up": "↑", "down": "↓", "sideways": "↔"}
+
+
+def trend_arrows(trend: dict[str, str]) -> str:
+    """``{"short": "sideways", "medium": "up", "long": "up"}`` → ``"↔ / ↑ / ↑"`` (S/U/U read
+    as nothing to a newcomer; arrows read at a glance)."""
+    return " / ".join(_ARROW.get(trend[k], "?") for k in ("short", "medium", "long"))
+
 
 def _plan_row(label: str, plan: EntryPlan, rr: list[float]) -> None:
     """One structural entry (pullback / breakout) as a row of tiles: entry, stop, targets."""
@@ -53,8 +61,9 @@ def render(symbol: str) -> None:
     )
     ctx = st.columns(2)
     ctx[0].metric("Price", f"{tr.price:.2f}")
-    trend = "/".join(tr.trend[k][0].upper() for k in ("short", "medium", "long"))
-    ctx[1].metric("Trend S/M/L", trend, help=_glossary.help("trend_sml"))
+    ctx[1].metric(
+        t("Trend (short / mid / long)"), trend_arrows(tr.trend), help=_glossary.help("trend_sml")
+    )
     _plan_row(t("⤵ Pullback (buy the dip)"), s.pullback, s.rr)
     _plan_row(t("⤴ Breakout (buy strength)"), s.breakout, s.rr)
     row = st.columns(4)
