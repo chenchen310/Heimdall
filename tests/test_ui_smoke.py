@@ -1026,19 +1026,23 @@ def test_trust_badge_heads_each_page(tmp_path: Path, monkeypatch: pytest.MonkeyP
     assert badge().startswith("⚪") and "not a buy/sell signal" in badge()
 
 
-def test_sidebar_shows_data_status_per_market(
+def test_every_page_shows_data_status_per_market(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """One line under the trust badge on every page — not in the sidebar, where 16 nav links
+    push anything below them off-screen."""
     monkeypatch.setenv("HEIMDALL_DATA_DIR", str(tmp_path))
     _write_snapshot(tmp_path)  # US rows only
     _point_registry_at(tmp_path, monkeypatch)
     st.cache_data.clear()
     _force_english(monkeypatch)
     at = AppTest.from_file(APP).run(timeout=60)
-    status = " ".join(c.value for c in at.sidebar.caption)
-    assert "US · 2 symbols" in status
-    assert "Taiwan · no data" in status
-    assert "uv run" not in status  # the old CLI hint is gone
+    for page in ["Home", "Screener", "Guide"]:
+        _nav(at, page)
+        status = " ".join(c.value for c in at.main.caption)
+        assert "US · 2 symbols" in status, page
+        assert "Taiwan · no data" in status, page
+    assert not any("uv run" in c.value for c in at.sidebar.caption)  # the old CLI hint is gone
 
 
 def test_home_flags_a_certified_market_without_data(

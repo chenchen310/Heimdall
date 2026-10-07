@@ -76,7 +76,8 @@ _QUICKSTART = {
         "backtested by itself; only its *Incubating* tab is worth tracking. **Backtest** is a "
         "single-stock sandbox — always compare its result with simply holding the stock, and "
         "treat every figure as an optimistic upper bound.",
-        "Switch **English / 繁體中文** at the top of the sidebar. Every ⓘ next to a metric — "
+        "Switch **English / 繁體中文** in the sidebar, below the page list. Every ⓘ next to a "
+        "metric — "
         "and the **Glossary** page — explains it in plain words.",
     ],
     "zh": [
@@ -94,7 +95,7 @@ _QUICKSTART = {
         "**追蹤研究進度**。「**策略實驗室**」顯示策略工廠自動搜尋、回測的結果，只有「孵化中」"
         "分頁值得持續追蹤。「**回測**」是單一股票的策略沙盒——一定要和「直接買進持有」比較，"
         "而且每個數字都請當成樂觀上限。",
-        "左側欄最上方可隨時切換 **English / 繁體中文**。指標旁的 ⓘ 和「**指標辭典**」頁都有"
+        "左側欄頁面清單下方可隨時切換 **English / 繁體中文**。指標旁的 ⓘ 和「**指標辭典**」頁都有"
         "白話解釋。",
     ],
 }

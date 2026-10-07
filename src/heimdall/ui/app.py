@@ -16,7 +16,7 @@ load_dotenv()
 st.set_page_config(page_title="Heimdall", page_icon="🛡️", layout="wide")
 
 from heimdall.ui import (  # noqa: E402  (after set_page_config)
-    _sidebar,
+    _status,
     backtest_page,
     build_page,
     chips_page,
@@ -62,19 +62,20 @@ def _page(key: str) -> st.Page:
 
     def run() -> None:
         trust_badge(key)  # every page states how far its numbers can be trusted, first
+        _status.data_status()  # …and how fresh each market's data is
         RENDER[key]()
 
     return st.Page(run, title=i18n.t(key), icon=icon, url_path=slug, default=key == DEFAULT_PAGE)
 
 
-# The language selector sits above the navigation: page titles are translated on build.
+# The language choice is read before the pages are built (their titles are translated);
+# Streamlit draws the navigation first, so the selector shows below the page list.
 i18n.language_selector()
 PAGES = {key: _page(key) for keys in NAV.values() for key in keys}
 nav = st.navigation(
     {i18n.t(group): [PAGES[k] for k in keys] for group, keys in NAV.items()},
     expanded=True,  # all 16 pages visible — the task groups are the map, don't hide half of it
 )
-_sidebar.data_status()
 
 pending = st.session_state.pop(GOTO_KEY, None)  # a page's `go(...)` request (or a test's)
 if pending in PAGES:
