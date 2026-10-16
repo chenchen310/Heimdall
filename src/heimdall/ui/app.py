@@ -1,10 +1,13 @@
 """Streamlit entrypoint:  uv run streamlit run src/heimdall/ui/app.py
 
 A thin shell — each page's logic lives in its own module and calls the core
-screener/factors/data packages.
+screener/factors/data packages. Routing is ``st.navigation``: every page has its own
+URL (``/todays-picks``…), so a refresh stays put and the browser's back button works.
 """
 
 from __future__ import annotations
+
+from collections.abc import Callable
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -13,6 +16,7 @@ load_dotenv()
 st.set_page_config(page_title="Heimdall", page_icon="🛡️", layout="wide")
 
 from heimdall.ui import (  # noqa: E402  (after set_page_config)
+    _status,
     backtest_page,
     build_page,
     chips_page,
@@ -21,6 +25,7 @@ from heimdall.ui import (  # noqa: E402  (after set_page_config)
     flows_page,
     glossary_page,
     help_page,
+    home_page,
     i18n,
     lab_page,
     macro_page,
@@ -30,9 +35,10 @@ from heimdall.ui import (  # noqa: E402  (after set_page_config)
     today_page,
     workbench_page,
 )
-from heimdall.ui._nav import NAV  # noqa: E402
+from heimdall.ui._nav import DEFAULT_PAGE, GOTO_KEY, NAV, PAGE_META, trust_badge  # noqa: E402
 
-PAGES = {
+RENDER: dict[str, Callable[[], None]] = {
+    "Home": home_page.render,
     "Guide": help_page.render,
     "Glossary": glossary_page.render,
     "Today's Picks": today_page.render,
@@ -50,24 +56,28 @@ PAGES = {
     "TW Market Flows": flows_page.render,
 }
 
-st.sidebar.title("🛡️ Heimdall")
+
+def _page(key: str) -> st.Page:
+    icon, slug, _trust = PAGE_META[key]
+
+    def run() -> None:
+        trust_badge(key)  # every page states how far its numbers can be trusted, first
+        _status.data_status()  # …and how fresh each market's data is
+        RENDER[key]()
+
+    return st.Page(run, title=i18n.t(key), icon=icon, url_path=slug, default=key == DEFAULT_PAGE)
+
+
+# The language choice is read before the pages are built (their titles are translated);
+# Streamlit draws the navigation first, so the selector shows below the page list.
 i18n.language_selector()
-
-# Render each group as a header + its page buttons; the active page is highlighted.
-st.session_state.setdefault("page", "Today's Picks")
-for _group, _names in NAV.items():
-    st.sidebar.markdown(f"**{i18n.t(_group)}**")
-    for _name in _names:
-        if st.sidebar.button(
-            i18n.t(_name),
-            key=f"nav_{_name}",
-            width="stretch",
-            type="primary" if st.session_state.page == _name else "secondary",
-        ):
-            st.session_state.page = _name
-            st.rerun()
-
-st.sidebar.caption(
-    i18n.t("Rebuild the snapshot any time:\n\n`uv run python -m heimdall.screener.build`")
+PAGES = {key: _page(key) for keys in NAV.values() for key in keys}
+nav = st.navigation(
+    {i18n.t(group): [PAGES[k] for k in keys] for group, keys in NAV.items()},
+    expanded=True,  # all 16 pages visible — the task groups are the map, don't hide half of it
 )
-PAGES[st.session_state.page]()
+
+pending = st.session_state.pop(GOTO_KEY, None)  # a page's `go(...)` request (or a test's)
+if pending in PAGES:
+    st.switch_page(PAGES[pending])
+nav.run()

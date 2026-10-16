@@ -61,7 +61,7 @@ def _root() -> Path:
     return registry.registry_path().parent.parent
 
 
-def _specs_by_status(region: str, status: str) -> list[tuple[SignalSpec, dict[str, object]]]:
+def specs_by_status(region: str, status: str) -> list[tuple[SignalSpec, dict[str, object]]]:
     """(spec, registry entry) for every signal of this market in the given lifecycle status."""
     out: list[tuple[SignalSpec, dict[str, object]]] = []
     for entry in cast("list[dict[str, object]]", registry.load_registry()["signals"]):
@@ -394,8 +394,8 @@ def render() -> None:
     )
     region = market_radio(["US", "Taiwan"], key="today_market")
 
-    specs = _specs_by_status(region, "certified")
-    under_review = _specs_by_status(region, "under_review")
+    specs = specs_by_status(region, "certified")
+    under_review = specs_by_status(region, "under_review")
     if not specs and not under_review:
         st.info(
             t(

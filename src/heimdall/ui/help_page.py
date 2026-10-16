@@ -76,7 +76,8 @@ _QUICKSTART = {
         "backtested by itself; only its *Incubating* tab is worth tracking. **Backtest** is a "
         "single-stock sandbox — always compare its result with simply holding the stock, and "
         "treat every figure as an optimistic upper bound.",
-        "Switch **English / 繁體中文** at the top of the sidebar. Every ⓘ next to a metric — "
+        "Switch **English / 繁體中文** in the sidebar, below the page list. Every ⓘ next to a "
+        "metric — "
         "and the **Glossary** page — explains it in plain words.",
     ],
     "zh": [
@@ -94,7 +95,7 @@ _QUICKSTART = {
         "**追蹤研究進度**。「**策略實驗室**」顯示策略工廠自動搜尋、回測的結果，只有「孵化中」"
         "分頁值得持續追蹤。「**回測**」是單一股票的策略沙盒——一定要和「直接買進持有」比較，"
         "而且每個數字都請當成樂觀上限。",
-        "左側欄最上方可隨時切換 **English / 繁體中文**。指標旁的 ⓘ 和「**指標辭典**」頁都有"
+        "左側欄頁面清單下方可隨時切換 **English / 繁體中文**。指標旁的 ⓘ 和「**指標辭典**」頁都有"
         "白話解釋。",
     ],
 }
@@ -146,6 +147,29 @@ def _sections() -> dict[str, list[str]]:
 
 # Per-page guide, focused on *reading* the indicators. {page: {icon, en, zh}}.
 _PAGES: dict[str, dict[str, str]] = {
+    "Home": {
+        "icon": "🏠",
+        "en": (
+            "Where every visit starts — what needs your attention today, read from live state.\n\n"
+            "- **One card per market** — its certified signals (or that there are none, by "
+            "design), any under review, and whether the snapshot has fresh data for it. When a "
+            "certified signal can't be ranked because the data is missing or stale, the card "
+            "says so and links to **Build data**.\n"
+            "- **Strategy research** — incubating strategies (watch only) and the latest "
+            "factory run's trial count N.\n"
+            "- **I want to…** — a shortcut to the page for each common question.\n"
+            "- The home page ranks nothing itself; rankings live on Today's Picks."
+        ),
+        "zh": (
+            "每次使用的起點——從目前的實際狀態，告訴你今天需要注意什麼。\n\n"
+            "- **每個市場一張卡** — 它的已認證訊號（或刻意沒有）、審查中的訊號，以及快照裡有沒有"
+            "它的最新資料。已認證訊號因為缺資料或資料過期而排不出名單時，卡片會直接說明，並連到"
+            "「**建立資料**」。\n"
+            "- **策略研究** — 孵化中的策略（只供觀察）與最近一次工廠批次的試驗數 N。\n"
+            "- **我想要…** — 常見問題各自對應的頁面捷徑。\n"
+            "- 首頁本身不做任何排名；排名只在「今日候選」。"
+        ),
+    },
     "Build data": {
         "icon": "🗂",
         "en": (

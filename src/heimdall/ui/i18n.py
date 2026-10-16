@@ -42,6 +42,58 @@ _ZH: dict[str, str] = {
     "Rebuild the snapshot any time:\n\n`uv run python -m heimdall.screener.build`": (
         "隨時可重建快照：\n\n`uv run python -m heimdall.screener.build`"
     ),
+    # --- step-4 navigation: task groups, trust badges, home, sidebar status ---
+    "Start here": "從這裡開始",
+    "Research a stock": "研究個股",
+    "Find candidates": "找候選股",
+    "Test strategies": "驗證策略",
+    "Market backdrop": "市場環境",
+    "Taiwan (paused)": "台股（暫停中）",
+    "Home": "首頁",
+    "Certified — the only page to act on": "已認證——唯一可以據以行動的頁面",
+    "Research — incubating strategies are watch-only, nothing here is certified": (
+        "研究中——孵化中的策略只供觀察，這裡沒有任何已認證的內容"
+    ),
+    "Descriptive — helps you understand, but it is not a buy/sell signal": (
+        "描述性——幫你理解，但不是買賣訊號"
+    ),
+    "Data status": "資料狀態",
+    "No snapshot yet — open Build data.": "尚無快照——請到「建立資料」。",
+    "no data": "沒有資料",
+    "A personal stock-picking tool built on one rule: only trust evidence that has been "
+    "validated. Start here — this page shows what needs your attention today.": (
+        "個人選股工具，核心原則只有一條：只相信驗證過的證據。從這裡開始——這頁告訴你今天需要注意什麼。"
+    ),
+    "Today": "今天",
+    "I want to…": "我想要…",
+    "research one stock in depth": "深入研究一檔股票",
+    "find stocks that match my own conditions": "找出符合自己條件的股票",
+    "understand the market backdrop": "了解目前的市場環境",
+    "learn what each page does and how far to trust it": "了解每頁在做什麼、可以信任到什麼程度",
+    "No certified signal — Today's Picks stays empty, by design.": (
+        "沒有已認證訊號——今日候選會刻意留白。"
+    ),
+    "Certified signals: {names}": "已認證訊號：{names}",
+    "{name} v{v} is under review — its ranking is withheld.": "{name} v{v} 審查中——暫停顯示排名。",
+    "No {market} stocks in the snapshot.": "快照裡沒有{market}股票。",
+    "Today's ranking needs fresh {market} data first.": (
+        "要先有最新的{market}資料，才算得出今天的排名。"
+    ),
+    "Open Today's Picks": "開啟今日候選",
+    "Strategy research": "策略研究",
+    "Incubating (watch only): {names}": "孵化中（只供觀察）：{names}",
+    "No incubating strategy right now.": "目前沒有孵化中的策略。",
+    "Latest factory run: {run} · N = {n} trials": "最近一次工廠批次：{run} · N = {n} 個試驗",
+    "Open Strategy Lab": "開啟策略實驗室",
+    "Rating": "評級",
+    "Trend (short / mid / long)": "趨勢（短 / 中 / 長）",
+    "Risk (Beta)": "風險（Beta）",
+    "Next earnings": "下次財報",
+    "Earnings dates are paid data — set FMP_API_KEY in .env to see them.": (
+        "財報日期是付費資料——在 .env 設定 FMP_API_KEY 才看得到。"
+    ),
+    "No fundamentals for this symbol.": "這檔股票沒有財報資料。",
+    "{v} annual volatility": "年化波動 {v}",
     # --- common inputs / buttons ---
     "Symbol (TICKER.MARKET)": "代號（TICKER.MARKET）",
     "Benchmark": "基準",
